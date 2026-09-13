@@ -1,0 +1,128 @@
+diff --git a/renderers/video_renderer.c b/renderers/video_renderer.c
+index ea1c450..4546f3a 100644
+--- a/renderers/video_renderer.c
++++ b/renderers/video_renderer.c
+@@ -23,6 +23,7 @@
+ #include <gst/gst.h>
+ #include <gst/app/gstappsrc.h>
+ #include "video_renderer.h"
++#include "video_status.h"
+ 
+ #define SECOND_IN_NSECS 1000000000UL
+ #define SECOND_IN_MICROSECS 1000000
+@@ -79,6 +80,7 @@ typedef enum {
+ struct video_renderer_s {
+     GstElement *appsrc, *pipeline, *textsrc;
+     GstBus *bus;
++    guint frame_watch;
+     const char *codec;
+     bool autovideo;
+     int id;
+@@ -438,6 +440,9 @@ void video_renderer_init(logger_t *render_logger, const char *server_name, video
+         }
+ #endif
+         renderer_type[i]->bus = gst_element_get_bus(renderer_type[i]->pipeline);	
++        if (!hls_video && i != type_jpeg) {
++            renderer_type[i]->frame_watch = mirrorme_watch_video(renderer_type[i]->pipeline, strcmp(videosink, "fakesink") != 0);
++        }
+         gst_element_set_state (renderer_type[i]->pipeline, GST_STATE_READY);
+         GstState state;
+         GstStateChangeReturn ret = gst_element_get_state (renderer_type[i]->pipeline, &state, NULL, 100 * GST_MSECOND);
+@@ -594,7 +599,10 @@ uint64_t video_renderer_render_buffer(unsigned char* data, int *data_len, int *n
+             return  (uint64_t)  gst_video_pipeline_base_time - pts;
+         }
+     }
+-    g_assert(data_len != 0);
++    if (!data || !data_len || *data_len < 4) {
++        logger_log(logger, LOGGER_ERR, "MIRRORME_RECEIVER_ERROR: Empty or truncated video packet");
++        return 0;
++    }
+     /* first four bytes of valid  h264  video data are 0x00, 0x00, 0x00, 0x01.    *
+      * nal_count is the number of NAL units in the data: short SPS, PPS, SEI NALs *
+      * may  precede a VCL NAL. Each NAL starts with 0x00 0x00 0x00 0x01 and is    *
+@@ -602,10 +610,6 @@ uint64_t video_renderer_render_buffer(unsigned char* data, int *data_len, int *n
+     if (data[0]) {
+         logger_log(logger, LOGGER_ERR, "*** ERROR decryption of video packet failed ");
+     } else {
+-        if (first_packet) {
+-            logger_log(logger, LOGGER_INFO, "Begin streaming to GStreamer video pipeline");
+-            first_packet = false;
+-        }
+         if (!renderer || !(renderer->appsrc)) {
+             logger_log(logger, LOGGER_DEBUG, "*** no video renderer found");
+             return 0;
+@@ -617,7 +621,14 @@ uint64_t video_renderer_render_buffer(unsigned char* data, int *data_len, int *n
+             GST_BUFFER_PTS(buffer) = pts;
+         }
+         gst_buffer_fill(buffer, 0, data, *data_len);
+-        gst_app_src_push_buffer (GST_APP_SRC(renderer->appsrc), buffer);
++        GstFlowReturn flow = gst_app_src_push_buffer(GST_APP_SRC(renderer->appsrc), buffer);
++        if (flow != GST_FLOW_OK) {
++            logger_log(logger, LOGGER_ERR, "MIRRORME_RECEIVER_ERROR: Video buffer was rejected: %s",
++                       gst_flow_get_name(flow));
++        } else if (first_packet) {
++            logger_log(logger, LOGGER_INFO, "MIRRORME_VIDEO_RECEIVED");
++            first_packet = false;
++        }
+ #ifdef X_DISPLAY_FIX
+         if (renderer->gst_window && !(renderer->gst_window->window) && renderer->use_x11) {
+             X11_search_attempts++;
+@@ -638,6 +649,10 @@ uint64_t video_renderer_render_buffer(unsigned char* data, int *data_len, int *n
+ void video_renderer_flush() {
+ }
+ 
++uint64_t video_renderer_frames_rendered() {
++    return renderer ? mirrorme_rendered_frames(renderer->pipeline, TRUE) : 0;
++}
++
+ void video_renderer_hls_ready() {
+     GstState state;
+     GstStateChangeReturn ret;
+@@ -653,6 +668,11 @@ void video_renderer_hls_ready() {
+ 
+ void video_renderer_stop() {
+     if (renderer) {
++        if (renderer->frame_watch) {
++            g_source_remove(renderer->frame_watch);
++            renderer->frame_watch = 0;
++        }
++        logger_log(logger, LOGGER_INFO, "MIRRORME_VIDEO_STOPPED");
+         logger_log(logger, LOGGER_DEBUG,"video_renderer_stop");
+         if (renderer->appsrc) {
+             gst_app_src_end_of_stream (GST_APP_SRC(renderer->appsrc));
+@@ -692,6 +712,10 @@ void video_renderer_set_track_metadata(const char *title, const char *artist, co
+ 
+ static void video_renderer_destroy_instance(video_renderer_t *renderer) {
+     if (renderer) {
++        if (renderer->frame_watch) {
++            g_source_remove(renderer->frame_watch);
++            renderer->frame_watch = 0;
++        }
+         logger_log(logger, LOGGER_DEBUG,"destroying renderer instance %p codec=%s ", renderer, renderer->codec);
+         GstState state;
+         GstStateChangeReturn ret;
+@@ -887,6 +911,12 @@ static gboolean gstreamer_video_pipeline_bus_callback(GstBus *bus, GstMessage *m
+         if (strstr(err->message, "Output window was closed")) {
+             closed_window = TRUE;
+         }
++        if (closed_window) {
++            logger_log(logger, LOGGER_INFO, "MIRRORME_VIDEO_STOPPED");
++        } else {
++            logger_log(logger, LOGGER_ERR, "MIRRORME_RECEIVER_ERROR: Video output failed: %s. Try software decoding in Picture & sound.",
++                       err->message);
++        }
+         if (!hls_video && strstr(err->message,"Internal data stream error")) {
+             logger_log(logger, LOGGER_INFO,
+                      "*** This is a generic GStreamer error that usually means that GStreamer\n"
+diff --git a/renderers/video_renderer.h b/renderers/video_renderer.h
+index fd48415..2f2fe20 100644
+--- a/renderers/video_renderer.h
++++ b/renderers/video_renderer.h
+@@ -66,6 +66,7 @@ bool video_renderer_eos_watch();
+ uint64_t  video_renderer_render_buffer (unsigned char* data, int *data_len, int *nal_count, uint64_t *ntp_time);
+ void video_renderer_display_jpeg(const void *data, int *data_len);
+ void video_renderer_flush ();
++uint64_t video_renderer_frames_rendered();
+ unsigned int video_renderer_listen(void *loop, int id);
+ void video_renderer_destroy ();
+ void video_renderer_size(float *width_source, float *height_source, float *width, float *height);

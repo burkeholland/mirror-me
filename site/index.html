@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en" data-mode="light" data-accent="azure" data-surface="flat">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Meet MirrorMe, an open-source Windows iPhone-mirroring preview. Play with an interactive demo, then download the Windows app.">
+  <meta name="theme-color" content="#f5f7f8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta property="og:title" content="MirrorMe - Your iPhone. More room.">
+  <meta property="og:description" content="An iPhone-mirroring preview that feels at home on Windows. Try the interactive simulation.">
+  <meta property="og:type" content="website">
+  <title>MirrorMe - Your iPhone. More room.</title>
+  <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./assets/postrboard.css">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.mjs" type="module"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></symbol>
+      <symbol id="i-rotate" viewBox="0 0 24 24"><rect x="8" y="4" width="10" height="16" rx="2" transform="rotate(25 13 12)"/><path d="M4 7V3h4M4 3a10 10 0 0 1 16 3"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/></symbol>
+      <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></symbol>
+      <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r=".5"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+      <symbol id="landscape" viewBox="0 0 320 480">
+        <rect width="320" height="480" fill="#dfedf2"/>
+        <circle cx="242" cy="112" r="37" fill="#fbfdfe"/>
+        <path d="m-25 300 103-154 88 81 40-40 145 165v128H-25Z" fill="#b4ccd8"/>
+        <path d="m78 146 31 88-31-17-32 15Z" fill="#f4f9fb"/>
+        <path d="m-30 346 97-87 72 70 69-96 143 128v119H-30Z" fill="#7195aa"/>
+        <path d="m-25 429 89-69 76 27 81-63 124 89v67H-25Z" fill="#38677e"/>
+        <path d="M230 353c-100 56 80 55-11 90s-66 47-66 47h-43c-7-42 124-37 90-69s-16-45 30-68Z" fill="#b6ddea"/>
+        <path d="m35 385 12-34 13 34h-8l12 25H29l13-25Zm231 29 17-47 17 47h-10l16 34h-46l17-34Z" fill="#254e63"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="page-wrap">
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="MirrorMe home"><img src="./assets/mark.svg" width="36" height="36" alt=""><span>MirrorMe</span></a>
+      <nav aria-label="Main navigation">
+        <a href="#demo">Try the demo</a><a href="#setup">Getting started</a>
+        <a href="https://github.com/burkeholland/mirror-me">Source<span aria-hidden="true"> &#8599;</span></a>
+        <button class="theme-button" id="theme" type="button" aria-label="Use dark theme"><svg class="icon"><use href="#i-moon"/></svg></button>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="intro" aria-labelledby="headline">
+        <div><p class="eyebrow">Made for your Windows desktop</p><h1 id="headline">Your iPhone.<br><span>More room.</span></h1></div>
+        <div class="intro-copy">
+          <p class="lead">Put your iPhone screen on your PC. Share a photo, walk through an app, or simply take a closer look.</p>
+          <a class="btn btn-primary download" href="https://github.com/burkeholland/mirror-me/releases/download/v0.1.0-preview.1/MirrorMe-windows-x64.zip"><svg class="icon"><use href="#i-download"/></svg>Download for Windows</a>
+          <p class="release-note">Windows x64 &middot; v0.1.0 preview &middot; Unsigned<br>One-time receiver setup downloads an additional 113 MB.<br>Real-iPhone compatibility is still being verified.</p>
+        </div>
+      </section>
+
+      <section id="demo" class="demo" aria-labelledby="demo-title" data-phase="idle" data-content="photos" data-playing="true" data-landscape="false" data-zoom="false">
+        <div class="demo-heading">
+          <div><h2 id="demo-title">Take it for a spin.</h2><p>Connect, rotate, and make the example your own.</p></div>
+          <div class="demo-header-actions"><span class="simulation-label">Interactive simulation</span><button type="button" id="connect" class="btn btn-primary"><svg class="icon"><use href="#i-play"/></svg><span>Start demo</span></button></div>
+        </div>
+        <div class="stage">
+          <div class="phone-column">
+            <div class="phone" aria-label="Simulated iPhone screen">
+              <div class="phone-glass">
+                <div class="phone-chrome" aria-hidden="true"><span>9:41</span><span class="island"></span><span class="battery"></span></div>
+                <div class="screen-content">
+                  <div class="sample photos"><div class="photo-image"><svg role="img" aria-label="Original blue mountain illustration"><use href="#landscape"/></svg></div><div class="photo-caption"><span>THE QUIETER PLACES</span><strong>A little perspective.</strong><small>Sample illustration</small></div></div>
+                  <div class="sample notes" hidden><span class="sample-eyebrow">A QUICK NOTE</span><h3>Big ideas.<br>Small screen.</h3><p data-note></p><span class="note-foot">Edited right here in the demo.</span></div>
+                  <div class="sample clock" hidden><span class="sample-eyebrow">A MOMENT TO FOCUS</span><div class="clock-face"><span data-clock>00:00</span><small>DEMO STOPWATCH</small></div><p>One thing at a time.</p></div>
+                </div>
+                <div class="home-indicator" aria-hidden="true"></div>
+              </div>
+            </div>
+            <span class="device-caption">Your iPhone <span>Example screen</span></span>
+          </div>
+          <div class="connection-path" aria-hidden="true"><span></span><svg class="icon"><use href="#i-wifi"/></svg><span></span></div>
+          <div class="desktop-column">
+            <div class="desktop">
+              <div class="window-bar"><span><img src="./assets/mark.svg" width="18" height="18" alt="">MirrorMe</span><span class="window-buttons" aria-hidden="true"><i></i><i></i><i></i></span></div>
+              <div class="desktop-workspace">
+                <div class="demo-sidebar" aria-hidden="true"><span class="selected"><svg class="icon"><use href="#i-monitor"/></svg>Mirror</span><span class="sidebar-line"></span><span class="sidebar-caption">One quiet app.<br>A bigger view.</span><span class="sidebar-state"><i></i><span data-sidebar-status>Ready to connect</span></span></div>
+                <div class="desktop-display">
+                  <div class="empty-screen" id="empty-screen"><div class="ready-mark"><svg><use href="#i-monitor"/></svg></div><h3 id="display-title">Ready for your iPhone</h3><p id="display-description">Your screen goes here.<br>Start the demo to see it in action.</p><span class="pc-name">Studio PC</span></div>
+                  <div class="mirrored-screen" id="mirrored-screen" hidden aria-label="Simulated mirrored screen">
+                    <div class="sample photos"><div class="photo-image"><svg role="img" aria-label="The same blue mountain illustration mirrored on the PC"><use href="#landscape"/></svg></div><div class="photo-caption"><span>THE QUIETER PLACES</span><strong>A little perspective.</strong><small>Sample illustration</small></div></div>
+                    <div class="sample notes" hidden><span class="sample-eyebrow">A QUICK NOTE</span><h3>Big ideas.<br>Small screen.</h3><p data-note></p><span class="note-foot">Edited right here in the demo.</span></div>
+                    <div class="sample clock" hidden><span class="sample-eyebrow">A MOMENT TO FOCUS</span><div class="clock-face"><span data-clock>00:00</span><small>DEMO STOPWATCH</small></div><p>One thing at a time.</p></div>
+                  </div>
+                </div>
+              </div>
+              <div class="window-footer"><span><i class="status-light"></i><span id="demo-status" role="status">Ready to try</span></span><span>Simulated &middot; not a live connection</span></div>
+            </div>
+            <span class="device-caption">Your Windows desktop <span>Room for the whole picture</span></span>
+          </div>
+        </div>
+        <div class="demo-controls">
+          <fieldset class="content-switch"><legend class="sr-only">Example content</legend><button type="button" data-content="photos" aria-pressed="true">Photos</button><button type="button" data-content="notes" aria-pressed="false">Notes</button><button type="button" data-content="clock" aria-pressed="false">Stopwatch</button></fieldset>
+          <div class="view-controls"><button type="button" id="rotate" class="btn btn-secondary" aria-pressed="false"><svg class="icon"><use href="#i-rotate"/></svg>Rotate</button><button type="button" id="motion" class="btn btn-secondary" aria-pressed="true"><svg class="icon"><use href="#i-pause"/></svg><span>Pause animation</span></button></div>
+        </div>
+        <div class="note-editor" id="note-editor" hidden><label for="demo-note">Make it your note.<span>What you type appears on both example screens. It stays in this browser.</span></label><textarea id="demo-note" rows="3" maxlength="280" spellcheck="false"></textarea></div>
+        <div class="demo-footnote"><span id="interaction-hint">Try a different screen, or rotate the phone.</span><button type="button" class="text-button" id="reset">Reset demo</button></div>
+      </section>
+      <p class="demo-disclosure">This is a browser simulation, not live AirPlay. No phone, camera, microphone, or account access.</p>
+      <noscript><p class="alert">Enable JavaScript to play with the example. The download and setup instructions still work without it.</p></noscript>
+
+      <section class="setup-section" id="setup" aria-labelledby="setup-title">
+        <div class="section-intro"><p class="eyebrow">From here to your desktop</p><h2 id="setup-title">A small setup.<br>Then, a bigger view.</h2><p>Use the controls you already know on your iPhone. Keep both devices on the same local network.</p><a class="source-link" href="https://github.com/burkeholland/mirror-me#using-mirrorme">Read the full guide <svg class="icon"><use href="#i-arrow"/></svg></a></div>
+        <ol class="setup-steps">
+          <li><span class="step-number">01</span><div><h3>Open MirrorMe.</h3><p>Extract the whole Windows ZIP, open <code>MirrorMe.exe</code>, and choose a name for your PC.</p></div></li>
+          <li><span class="step-number">02</span><div><h3>Get the receiver ready.</h3><p>Approve the one-time 113 MB receiver download from UxPlay Windows on GitHub. MirrorMe checks it before installing. If Bonjour needs setup, Windows will ask for permission separately.</p></div></li>
+          <li><span class="step-number">03</span><div><h3>Pick your PC on your iPhone.</h3><p>Open <strong>Control Center</strong>, tap <strong>Screen Mirroring</strong>, then choose your PC. The actual video opens in its own Windows window.</p></div></li>
+        </ol>
+      </section>
+
+      <section class="details-section" aria-labelledby="details-title">
+        <div><p class="eyebrow">Before you download</p><h2 id="details-title">A few things to know.</h2></div>
+        <div class="questions">
+          <details><summary>How ready is this preview?</summary><p>The Windows interface, local discovery, runtime setup, and generated-video decoding/display have been checked. Physical-iPhone mirroring, audio synchronization, and device compatibility still need confirmation. This is an unsigned preview, not a certified app-store release.</p><a href="https://github.com/burkeholland/mirror-me#real-iphone-release-checklist">See the open device checklist</a></details>
+          <details><summary>What stays on my computer?</summary><p>The app keeps preferences and receiver files locally. Mirroring is designed for your local network, not a cloud relay. This website demo never sends your sample note anywhere. It does not access a real device.</p></details>
+          <details><summary>Do I need another app on my iPhone?</summary><p>No companion iPhone app is required. MirrorMe receives AirPlay screen mirroring through UxPlay. The one-time PC download supplies the media and discovery libraries; the separate UxPlay desktop app is not installed or opened.</p></details>
+          <details><summary>Can I mirror everything?</summary><p>Protected streaming content may block screen mirroring. MirrorMe is a receiver, not remote control of your iPhone. Windows 11 on an x64 PC is the preview target; ARM and every iPhone/iOS combination have not been validated.</p></details>
+          <details><summary>Why might Windows show a warning?</summary><p>The preview is not code-signed. Check the public source and the release's SHA-256 checksums before deciding whether to run it. Do not disable Windows security protections to use this app.</p><a href="https://github.com/burkeholland/mirror-me/releases/tag/v0.1.0-preview.1">Release files and checksums</a></details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><a class="brand" href="./"><img src="./assets/mark.svg" width="28" height="28" alt="">MirrorMe</a><span>A little more space for your screen.</span><div><a href="https://github.com/burkeholland/mirror-me">GitHub</a><a href="https://github.com/burkeholland/mirror-me/blob/main/THIRD-PARTY-NOTICES.md">Open-source credits</a></div></footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,34 @@
+# Optional workflow; copy into .github/workflows with workflow-authorized credentials.
+name: Check application
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Restore frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Check frontend behavior
+        run: npm test --prefix frontend
+      - name: Build embedded assets
+        run: npm run build --prefix frontend
+      - name: Check Go behavior
+        run: go test ./...
+      - name: Check Go diagnostics
+        run: go vet ./...
