@@ -1,50 +1,55 @@
 import { initialState, reduce, formatTime } from './demo.mjs';
 
 const root = document.querySelector('#demo');
+const desk = document.querySelector('#preview-desk');
+const frame = document.querySelector('#app-preview');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const systemTheme = matchMedia('(prefers-color-scheme: dark)');
-const connect = document.querySelector('#connect');
 const motion = document.querySelector('#motion');
 const note = document.querySelector('#demo-note');
+const channel = 'mirrorme-website-preview';
 let state = initialState(reduced.matches);
-let connectionTimer;
 let explicitTheme = false;
+let appReady = false;
+let loadDeadline;
+
+function send(message) {
+  if (appReady) frame.contentWindow.postMessage({ channel, ...message }, location.origin);
+}
 
 function theme(dark) {
-  document.documentElement.dataset.mode = dark ? 'dark' : 'light';
+  const mode = dark ? 'dark' : 'light';
+  document.documentElement.dataset.mode = mode;
   document.querySelector('#theme').setAttribute('aria-label', `Use ${dark ? 'light' : 'dark'} theme`);
   document.querySelector('#theme use').setAttribute('href', dark ? '#i-sun' : '#i-moon');
+  send({ type: 'theme', mode });
 }
 
 function render() {
   root.dataset.phase = state.phase;
   root.dataset.content = state.content;
-  root.dataset.playing = String(state.playing);
+  root.dataset.motion = String(state.motion);
   root.dataset.landscape = String(state.landscape);
   for (const element of root.querySelectorAll('.sample')) element.hidden = !element.classList.contains(state.content);
   for (const button of root.querySelectorAll('button[data-content]')) button.setAttribute('aria-pressed', String(button.dataset.content === state.content));
-  const connected = state.phase === 'mirroring';
-  document.querySelector('#mirrored-screen').hidden = !connected;
-  document.querySelector('#empty-screen').hidden = connected;
-  document.querySelector('#display-title').textContent = state.phase === 'connecting' ? 'Making a little room...' : 'Ready for your iPhone';
-  document.querySelector('#display-description').textContent = state.phase === 'connecting' ? 'Connecting the example screens.\nNo actual device is being accessed.' : 'Your screen goes here.\nStart the demo to see it in action.';
-  document.querySelector('#demo-status').textContent = connected ? 'Mirroring the example' : state.phase === 'connecting' ? 'Connecting the example' : 'Ready to try';
-  document.querySelector('[data-sidebar-status]').textContent = connected ? 'Mirroring' : state.phase === 'connecting' ? 'Connecting' : 'Ready to connect';
-  connect.querySelector('span').textContent = connected ? 'Stop demo' : state.phase === 'connecting' ? 'Cancel' : 'Start demo';
-  connect.querySelector('use').setAttribute('href', state.phase === 'idle' ? '#i-play' : '#i-pause');
+  const visible = state.phase === 'mirroring' && !state.videoMinimised;
+  document.querySelector('#video-window').hidden = !visible;
+  document.querySelector('#video-placeholder').hidden = visible;
+  document.querySelector('#video-placeholder-text').textContent = state.videoMinimised
+    ? 'The video window is minimized. The example is still mirroring.'
+    : state.phase === 'advertising' ? 'The receiver is ready. Reconnect the example iPhone to show video again.'
+      : 'The example session has stopped. Reconnect the example to explore it again.';
+  document.querySelector('#restore-video').textContent = state.videoMinimised ? 'Show video' : 'Reconnect example';
   document.querySelector('#rotate').setAttribute('aria-pressed', String(state.landscape));
-  motion.setAttribute('aria-pressed', String(state.playing));
-  motion.querySelector('span').textContent = state.playing ? 'Pause animation' : 'Play animation';
-  motion.querySelector('use').setAttribute('href', state.playing ? '#i-pause' : '#i-play');
+  motion.checked = state.motion;
   document.querySelector('#note-editor').hidden = state.content !== 'notes';
   if (note.value !== state.note) note.value = state.note;
-  for (const element of root.querySelectorAll('[data-note]')) element.textContent = state.note;
+  document.querySelector('[data-note]').textContent = state.note;
   renderClock();
-  document.querySelector('#interaction-hint').textContent = state.content === 'notes' ? 'Edit the note below the controls. Both example screens update together.' : state.content === 'clock' ? 'Pause the animation to hold the example stopwatch.' : 'Try a different screen, or rotate the phone.';
 }
 
 function renderClock() {
-  for (const element of root.querySelectorAll('[data-clock]')) element.textContent = formatTime(state.seconds);
+  document.querySelector('[data-clock]').textContent = formatTime(state.seconds);
 }
 
 function dispatch(event) {
@@ -52,35 +57,120 @@ function dispatch(event) {
   render();
 }
 
-connect.addEventListener('click', () => {
-  clearTimeout(connectionTimer);
-  if (state.phase !== 'idle') {
-    dispatch({ type: 'stop' });
-    return;
+function showVideo() {
+  dispatch({ type: 'show-video' });
+  const video = document.querySelector('#video-window');
+  video.scrollIntoView({ block: 'nearest', behavior: reduced.matches ? 'instant' : 'smooth' });
+  video.focus({ preventScroll: true });
+}
+
+function showApp() {
+  frame.hidden = false;
+  document.querySelector('#app-placeholder').hidden = true;
+}
+
+function failPreview() {
+  clearTimeout(loadDeadline);
+  appReady = false;
+  root.dataset.ready = 'error';
+  document.querySelector('#preview-error').hidden = false;
+}
+
+window.addEventListener('message', event => {
+  if (event.source !== frame.contentWindow || event.origin !== location.origin || event.data?.channel !== channel) return;
+  const message = event.data;
+  switch (message.type) {
+    case 'ready':
+      appReady = true;
+      clearTimeout(loadDeadline);
+      document.querySelector('#preview-error').hidden = true;
+      root.dataset.ready = 'true';
+      if (['mirroring', 'advertising', 'stopped'].includes(message.status)) dispatch({ type: 'status', value: message.status });
+      send({ type: 'theme', mode: document.documentElement.dataset.mode });
+      break;
+    case 'error': failPreview(); break;
+    case 'status':
+      if (['mirroring', 'advertising', 'stopped'].includes(message.status)) dispatch({ type: 'status', value: message.status });
+      break;
+    case 'window':
+      if (message.action === 'show-video') showVideo();
+      else if (message.action === 'show-app') showApp();
+      else if (['hide', 'minimise', 'quit'].includes(message.action)) {
+        frame.hidden = true;
+        document.querySelector('#app-placeholder').hidden = false;
+        document.querySelector('#app-placeholder-text').textContent = message.action === 'quit'
+          ? 'The example app is closed. You can reopen it without leaving this page.'
+          : message.action === 'minimise' ? 'MirrorMe is minimized. The separate video window stays open.'
+            : 'MirrorMe is in the system tray. The separate video window stays open.';
+        document.querySelector('#restore-app').focus({ preventScroll: true });
+      } else if (message.action === 'maximise' || message.action === 'restore') {
+        desk.dataset.appExpanded = String(message.action === 'maximise');
+      }
+      break;
   }
-  dispatch({ type: 'start' });
-  connectionTimer = setTimeout(() => dispatch({ type: 'connected' }), reduced.matches ? 250 : 1100);
+});
+
+frame.addEventListener('error', failPreview);
+const greetPreview = () => frame.contentWindow.postMessage({ channel, type: 'hello' }, location.origin);
+frame.addEventListener('load', greetPreview);
+document.querySelector('#reload-preview').addEventListener('click', () => {
+  document.querySelector('#preview-error').hidden = true;
+  appReady = false;
+  root.dataset.ready = 'false';
+  frame.src = new URL('./preview/index.html', location.href).href;
+  clearTimeout(loadDeadline);
+  loadDeadline = setTimeout(failPreview, 15000);
+  greetPreview();
 });
 for (const button of root.querySelectorAll('button[data-content]')) button.addEventListener('click', () => dispatch({ type: 'content', value: button.dataset.content }));
 document.querySelector('#rotate').addEventListener('click', () => dispatch({ type: 'rotate' }));
-motion.addEventListener('click', () => dispatch({ type: 'motion' }));
+motion.addEventListener('change', () => dispatch({ type: 'motion', value: motion.checked }));
 note.addEventListener('input', () => dispatch({ type: 'note', value: note.value }));
+document.querySelector('#minimise-video').addEventListener('click', () => {
+  dispatch({ type: 'minimise-video' });
+  document.querySelector('#restore-video').focus({ preventScroll: true });
+});
+document.querySelector('#maximise-video').addEventListener('click', event => {
+  const expanded = desk.dataset.videoExpanded !== 'true';
+  desk.dataset.videoExpanded = String(expanded);
+  event.currentTarget.setAttribute('aria-pressed', String(expanded));
+  event.currentTarget.setAttribute('aria-label', `${expanded ? 'Restore' : 'Maximize'} example video window`);
+});
+document.querySelector('#close-video').addEventListener('click', () => {
+  send({ type: 'close-video' });
+  dispatch({ type: 'status', value: 'advertising' });
+  document.querySelector('#restore-video').focus({ preventScroll: true });
+});
+document.querySelector('#restore-video').addEventListener('click', () => {
+  if (state.phase !== 'mirroring') {
+    if (!appReady) { failPreview(); return; }
+    send({ type: 'connect' });
+  } else showVideo();
+});
+document.querySelector('#restore-app').addEventListener('click', () => {
+  showApp();
+  frame.focus();
+});
 document.querySelector('#reset').addEventListener('click', () => {
-  clearTimeout(connectionTimer);
   state = initialState(reduced.matches);
+  showApp();
+  desk.dataset.appExpanded = desk.dataset.videoExpanded = 'false';
+  document.querySelector('#maximise-video').setAttribute('aria-pressed', 'false');
+  document.querySelector('#maximise-video').setAttribute('aria-label', 'Maximize example video window');
+  send({ type: 'reset', mode: document.documentElement.dataset.mode });
   render();
 });
 document.querySelector('#theme').addEventListener('click', () => {
   explicitTheme = true;
   theme(document.documentElement.dataset.mode !== 'dark');
 });
-reduced.addEventListener('change', event => { if (event.matches) dispatch({ type: 'pause' }); });
+reduced.addEventListener('change', event => { if (event.matches) dispatch({ type: 'motion', value: false }); });
 systemTheme.addEventListener('change', event => { if (!explicitTheme) theme(event.matches); });
 setInterval(() => {
-  if (document.hidden || !state.playing) return;
+  if (document.hidden || !state.motion) return;
   state = reduce(state, { type: 'tick' });
   renderClock();
 }, 1000);
 theme(systemTheme.matches);
 render();
-root.dataset.ready = 'true';
+loadDeadline = setTimeout(failPreview, 15000);
