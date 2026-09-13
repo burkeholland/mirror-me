@@ -1,4 +1,4 @@
-import { initialState, reduce, formatTime } from './demo.mjs';
+import { initialState, reduce } from './demo.mjs';
 
 const root = document.querySelector('#demo');
 const desk = document.querySelector('#preview-desk');
@@ -6,7 +6,6 @@ const frame = document.querySelector('#app-preview');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const systemTheme = matchMedia('(prefers-color-scheme: dark)');
 const motion = document.querySelector('#motion');
-const note = document.querySelector('#demo-note');
 const channel = 'mirrorme-website-preview';
 let state = initialState(reduced.matches);
 let explicitTheme = false;
@@ -27,11 +26,8 @@ function theme(dark) {
 
 function render() {
   root.dataset.phase = state.phase;
-  root.dataset.content = state.content;
   root.dataset.motion = String(state.motion);
   root.dataset.landscape = String(state.landscape);
-  for (const element of root.querySelectorAll('.sample')) element.hidden = !element.classList.contains(state.content);
-  for (const button of root.querySelectorAll('button[data-content]')) button.setAttribute('aria-pressed', String(button.dataset.content === state.content));
   const visible = state.phase === 'mirroring' && !state.videoMinimised;
   document.querySelector('#video-window').hidden = !visible;
   document.querySelector('#video-placeholder').hidden = visible;
@@ -42,14 +38,6 @@ function render() {
   document.querySelector('#restore-video').textContent = state.videoMinimised ? 'Show video' : 'Reconnect example';
   document.querySelector('#rotate').setAttribute('aria-pressed', String(state.landscape));
   motion.checked = state.motion;
-  document.querySelector('#note-editor').hidden = state.content !== 'notes';
-  if (note.value !== state.note) note.value = state.note;
-  document.querySelector('[data-note]').textContent = state.note;
-  renderClock();
-}
-
-function renderClock() {
-  document.querySelector('[data-clock]').textContent = formatTime(state.seconds);
 }
 
 function dispatch(event) {
@@ -122,10 +110,8 @@ document.querySelector('#reload-preview').addEventListener('click', () => {
   loadDeadline = setTimeout(failPreview, 15000);
   greetPreview();
 });
-for (const button of root.querySelectorAll('button[data-content]')) button.addEventListener('click', () => dispatch({ type: 'content', value: button.dataset.content }));
 document.querySelector('#rotate').addEventListener('click', () => dispatch({ type: 'rotate' }));
 motion.addEventListener('change', () => dispatch({ type: 'motion', value: motion.checked }));
-note.addEventListener('input', () => dispatch({ type: 'note', value: note.value }));
 document.querySelector('#minimise-video').addEventListener('click', () => {
   dispatch({ type: 'minimise-video' });
   document.querySelector('#restore-video').focus({ preventScroll: true });
@@ -166,11 +152,6 @@ document.querySelector('#theme').addEventListener('click', () => {
 });
 reduced.addEventListener('change', event => { if (event.matches) dispatch({ type: 'motion', value: false }); });
 systemTheme.addEventListener('change', event => { if (!explicitTheme) theme(event.matches); });
-setInterval(() => {
-  if (document.hidden || !state.motion) return;
-  state = reduce(state, { type: 'tick' });
-  renderClock();
-}, 1000);
 theme(systemTheme.matches);
 render();
 loadDeadline = setTimeout(failPreview, 15000);
