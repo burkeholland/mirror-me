@@ -63,7 +63,7 @@
         </div>
       </section>
 
-      <section id="demo" class="demo" aria-labelledby="demo-title" data-phase="mirroring" data-content="photos" data-motion="true" data-landscape="false">
+      <section id="demo" class="demo" aria-labelledby="demo-title" data-phase="mirroring" data-motion="true" data-landscape="false">
         <div class="demo-heading">
           <div><h2 id="demo-title">MirrorMe, in your browser.</h2><p>Open Settings, change the theme, or explore the example screen. Everything is ready to use.</p></div>
           <span class="simulation-label">Real interface &middot; Example data</span>
@@ -100,8 +100,6 @@
                 <div class="video-display">
                   <div class="mirrored-screen" id="mirrored-screen" aria-label="Example iPhone content">
                     <div class="sample photos"><div class="photo-image"><svg role="img" aria-label="Original blue mountain illustration"><use href="#landscape"/></svg></div><div class="photo-caption"><span>THE QUIETER PLACES</span><strong>A little perspective.</strong><small>Sample illustration</small></div></div>
-                    <div class="sample notes" hidden><span class="sample-eyebrow">A QUICK NOTE</span><h3>Big ideas.<br>Small screen.</h3><p data-note></p><span class="note-foot">Sample content, not your phone.</span></div>
-                    <div class="sample clock" hidden><span class="sample-eyebrow">A MOMENT TO FOCUS</span><div class="clock-face"><span data-clock>00:00</span><small>EXAMPLE STOPWATCH</small></div><p>One thing at a time.</p></div>
                   </div>
                 </div>
               </div>
@@ -115,11 +113,9 @@
           </div>
         </div>
         <div class="demo-controls">
-          <span class="controls-label">Example screen</span>
-          <fieldset class="content-switch"><legend class="sr-only">Example content</legend><button type="button" data-content="photos" aria-pressed="true">Photos</button><button type="button" data-content="notes" aria-pressed="false">Notes</button><button type="button" data-content="clock" aria-pressed="false">Stopwatch</button></fieldset>
+          <span class="controls-label">Example photo</span>
           <div class="view-controls"><button type="button" id="rotate" class="btn btn-secondary" aria-pressed="false"><svg class="icon"><use href="#i-rotate"/></svg>Rotate</button><label class="motion-control" for="motion"><input type="checkbox" id="motion" checked><span>Motion</span></label></div>
         </div>
-        <div class="note-editor" id="note-editor" hidden><label for="demo-note">Edit the example note.<span id="note-privacy">This changes only the browser example. The installed app displays your iPhone; it does not control it.</span></label><textarea id="demo-note" rows="3" maxlength="280" spellcheck="false" aria-describedby="note-privacy"></textarea></div>
         <div class="demo-footnote"><span id="interaction-hint" role="status">Use the real app controls. Changes stay in this page, not on your PC.</span><button type="button" class="text-button" id="reset">Reset example</button></div>
       </section>
       <p class="demo-disclosure">The same interface code as the Windows app, with a simulated receiver. No live AirPlay, downloads, saved settings, or device access.</p>
@@ -138,7 +134,7 @@
         <div><p class="eyebrow">Before you download</p><h2 id="details-title">A few things to know.</h2></div>
         <div class="questions">
           <details><summary>How ready is this preview?</summary><p>The Windows interface, local discovery, runtime setup, and generated-video decoding/display have been checked. Physical-iPhone mirroring can be intermittent; reliable reconnection, audio synchronization, and device compatibility still need further device checks. This is an unsigned preview, not a certified app-store release.</p><a href="https://github.com/burkeholland/mirror-me#real-iphone-release-checklist">See the open device checklist</a></details>
-          <details><summary>What stays on my computer?</summary><p>The app keeps preferences and receiver files locally. Mirroring is designed for your local network, not a cloud relay. This website demo never sends your sample note anywhere. It does not access a real device.</p></details>
+          <details><summary>What stays on my computer?</summary><p>The app keeps preferences and receiver files locally. Mirroring is designed for your local network, not a cloud relay. The website preview keeps example settings in memory and does not access a real device.</p></details>
           <details><summary>Do I need another app on my iPhone?</summary><p>No companion iPhone app is required. MirrorMe receives AirPlay screen mirroring through UxPlay. The one-time PC download supplies the media and discovery libraries; the separate UxPlay desktop app is not installed or opened.</p></details>
           <details><summary>Can I mirror everything?</summary><p>Protected streaming content may block screen mirroring. MirrorMe is a receiver, not remote control of your iPhone. Windows 11 on an x64 PC is the preview target; ARM and every iPhone/iOS combination have not been validated.</p></details>
           <details><summary>Why might Windows show a warning?</summary><p>The preview is not code-signed. Check the public source and the release's SHA-256 checksums before deciding whether to run it. Do not disable Windows security protections to use this app.</p><a href="https://github.com/burkeholland/mirror-me/releases/tag/v0.1.0-preview.1">Release files and checksums</a></details>

@@ -137,6 +137,9 @@ try {
         assert.equal(await evaluate('document.querySelector("#demo").dataset.phase'), 'mirroring');
         assert.equal(await evaluate('document.querySelector("#video-window").hidden'), false);
         assert.equal(await evaluate('document.querySelector("#connect")'), null);
+        assert.equal(await evaluate('document.querySelectorAll(".sample").length'), 1);
+        assert.equal(await evaluate('document.querySelector(".sample").classList.contains("photos")'), true);
+        assert.equal(await evaluate('document.querySelector("[data-content], #demo-note, .note-editor, .notes, .clock")'), null);
         assert.match(await app('document.querySelector("#connection-title").textContent'), /mirroring/i);
         assert.equal(await app('getComputedStyle(document.querySelector("#page-title")).fontSize'), '26px');
         assert.equal(await app('document.querySelector("#nav-settings").textContent.includes("Settings")'), true);
@@ -166,25 +169,22 @@ try {
         await inspect(`${prefix}-real-settings`);
         if (width === 1440) await screenshot(`${prefix}-settings`);
         await click('#rotate');
+        assert.equal(await evaluate('document.querySelector("#rotate").getAttribute("aria-pressed")'), 'true');
         await inspect(`${prefix}-separate-landscape-video`);
-        await click('[data-content="notes"][type="button"]');
-        await evaluate(`(() => { const e = document.querySelector('#demo-note'); e.focus(); e.value = '<script>not markup</script>\\nMy example'; e.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-        assert.equal(await evaluate('document.querySelector("[data-note]").textContent'), '<script>not markup</script>\nMy example');
-        assert.equal(await evaluate('document.querySelector("[data-note] script")'), null);
-        assert.equal(await evaluate('document.activeElement.id'), 'demo-note');
-        await inspect(`${prefix}-edited-note`);
+        const ratio = await evaluate('(() => { const r = document.querySelector("#mirrored-screen").getBoundingClientRect(); return r.width / r.height; })()');
+        assert.ok(Math.abs(ratio - 2) < 0.01, 'the photo rotates to landscape');
+        await click('#motion');
+        assert.equal(await evaluate('getComputedStyle(document.querySelector(".photo-image svg")).animationPlayState'), 'paused');
+        await click('#motion');
+        assert.equal(await evaluate('getComputedStyle(document.querySelector(".photo-image svg")).animationPlayState'), 'running');
+        await inspect(`${prefix}-photo-motion`);
       }
     }
     await open(1440, false, true);
     assert.equal(await evaluate('document.querySelector("#motion").checked'), false);
     assert.equal(await evaluate('getComputedStyle(document.querySelector(".photo-image svg")).animationName'), 'none');
-    await click('[data-content="clock"][type="button"]');
-    const frozen = await evaluate('document.querySelector("[data-clock]").textContent');
-    await delay(1100);
-    assert.equal(await evaluate('document.querySelector("[data-clock]").textContent'), frozen);
     await click('#motion');
-    await delay(1100);
-    assert.notEqual(await evaluate('document.querySelector("[data-clock]").textContent'), frozen);
+    assert.equal(await evaluate('getComputedStyle(document.querySelector(".photo-image svg")).animationName'), 'none', 'the system reduced-motion preference still takes priority');
     await click('#motion');
 
     await appClick('#window-minimise');
@@ -252,7 +252,8 @@ try {
     await click('#reset');
     await appUntil('!document.querySelector("[data-app-error]")', 'reset clears error');
     assert.equal(await app('document.querySelector(".receiver-name strong").textContent'), 'Studio PC');
-    assert.equal(await evaluate('document.querySelector("#demo-note").value.startsWith("Make something")'), true);
+    assert.equal(await evaluate('document.querySelector("#rotate").getAttribute("aria-pressed")'), 'false');
+    assert.equal(await evaluate('document.querySelector("#motion").checked'), false);
     await click('#theme');
     await appUntil('document.documentElement.dataset.mode === "dark"', 'page theme synchronizes app');
     await appClick('#nav-settings');

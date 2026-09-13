@@ -2,24 +2,22 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
-import { initialState, reduce, DEFAULT_NOTE, formatTime } from '../demo.mjs';
+import { initialState, reduce } from '../demo.mjs';
 import { createPreviewBridge, exampleSettings } from '../../frontend/preview/bridge.mjs';
 
 test('the example is already mirroring, with no start or playback stage', () => {
   const state = initialState();
   assert.equal(state.phase, 'mirroring');
   assert.equal(state.videoMinimised, false);
-  assert.equal(reduce(state, { type: 'content', value: 'notes' }).content, 'notes');
+  assert.deepEqual(Object.keys(state).sort(), ['landscape', 'motion', 'phase', 'videoMinimised']);
 });
-test('content, orientation, and notes survive a reconnect', () => {
-  let state = reduce(initialState(), { type: 'content', value: 'notes' });
-  state = reduce(state, { type: 'rotate' });
-  state = reduce(state, { type: 'note', value: '<img src=x> A real note' });
+test('photo orientation and motion preferences survive a reconnect', () => {
+  let state = reduce(initialState(), { type: 'rotate' });
+  state = reduce(state, { type: 'motion', value: false });
   state = reduce(state, { type: 'status', value: 'stopped' });
   state = reduce(state, { type: 'status', value: 'mirroring' });
   assert.equal(state.landscape, true);
-  assert.equal(state.content, 'notes');
-  assert.equal(state.note, '<img src=x> A real note');
+  assert.equal(state.motion, false);
 });
 test('minimizing the video does not disconnect the example phone', () => {
   const state = reduce(initialState(), { type: 'minimise-video' });
@@ -27,22 +25,28 @@ test('minimizing the video does not disconnect the example phone', () => {
   assert.equal(state.videoMinimised, true);
   assert.equal(reduce(state, { type: 'show-video' }).videoMinimised, false);
 });
-test('reduced motion starts disabled and turning motion off holds the stopwatch', () => {
+test('photo motion respects the initial preference and can be toggled', () => {
   let state = initialState(true);
-  assert.equal(reduce(state, { type: 'tick' }).seconds, 0);
+  assert.equal(state.motion, false);
   state = reduce(state, { type: 'motion', value: true });
-  state = reduce(state, { type: 'tick' });
-  assert.equal(state.seconds, 1);
-  assert.equal(reduce(reduce(state, { type: 'motion', value: false }), { type: 'tick' }).seconds, 1);
+  assert.equal(state.motion, true);
+  assert.equal(reduce(state, { type: 'motion', value: false }).motion, false);
 });
-test('reset is connected and notes are bounded by complete code points', () => {
-  assert.equal(initialState().note, DEFAULT_NOTE);
-  const state = reduce(initialState(), { type: 'note', value: '\u{1f4f1}'.repeat(400) });
-  assert.equal(Array.from(state.note).length, 280);
+test('reset restores a connected, portrait photo using the current motion preference', () => {
+  assert.deepEqual(initialState(true), { phase: 'mirroring', landscape: false, motion: false, videoMinimised: false });
+  assert.equal(initialState().motion, true);
 });
-test('stopwatch formatting and rollover remain bounded', () => {
-  assert.equal(formatTime(125), '02:05');
-  assert.equal(reduce({ ...initialState(), seconds: 3599 }, { type: 'tick' }).seconds, 0);
+test('only the photo example remains, without content selection or timer code', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../app.mjs', import.meta.url), 'utf8');
+  const styles = await readFile(new URL('../style.css', import.meta.url), 'utf8');
+  assert.equal((html.match(/class="sample /g) || []).length, 1);
+  assert.match(html, /class="sample photos"/);
+  assert.match(html, /id="rotate"/);
+  assert.match(html, /id="motion"/);
+  assert.doesNotMatch(html, /data-content|note-editor|demo-note|sample notes|sample clock|stopwatch/i);
+  assert.doesNotMatch(script, /setInterval|formatTime|DEFAULT_NOTE|data-note|data-clock|data-content/);
+  assert.doesNotMatch(styles, /\.(?:notes|clock|content-switch|note-editor|sample-eyebrow)(?=[\s:{.-])/);
 });
 test('unknown interactions cannot silently invent a preview state', () => {
   assert.throws(() => reduce(initialState(), { type: 'content', value: 'camera' }));
