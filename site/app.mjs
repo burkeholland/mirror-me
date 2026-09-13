@@ -32,9 +32,9 @@ function render() {
   document.querySelector('#video-window').hidden = !visible;
   document.querySelector('#video-placeholder').hidden = visible;
   document.querySelector('#video-placeholder-text').textContent = state.videoMinimised
-    ? 'The video window is minimized. The example is still mirroring.'
-    : state.phase === 'advertising' ? 'The receiver is ready. Reconnect the example iPhone to show video again.'
-      : 'The example session has stopped. Reconnect the example to explore it again.';
+    ? 'Video minimized. Still mirroring.'
+    : state.phase === 'advertising' ? 'Waiting for the example iPhone.'
+      : 'Disconnected.';
   document.querySelector('#restore-video').textContent = state.videoMinimised ? 'Show video' : 'Reconnect example';
   document.querySelector('#rotate').setAttribute('aria-pressed', String(state.landscape));
   motion.checked = state.motion;
@@ -87,9 +87,9 @@ window.addEventListener('message', event => {
         frame.hidden = true;
         document.querySelector('#app-placeholder').hidden = false;
         document.querySelector('#app-placeholder-text').textContent = message.action === 'quit'
-          ? 'The example app is closed. You can reopen it without leaving this page.'
-          : message.action === 'minimise' ? 'MirrorMe is minimized. The separate video window stays open.'
-            : 'MirrorMe is in the system tray. The separate video window stays open.';
+          ? 'App closed.'
+          : message.action === 'minimise' ? 'App minimized. Video remains open.'
+            : 'Hidden to tray. Video remains open.';
         document.querySelector('#restore-app').focus({ preventScroll: true });
       } else if (message.action === 'maximise' || message.action === 'restore') {
         desk.dataset.appExpanded = String(message.action === 'maximise');

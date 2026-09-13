@@ -134,15 +134,29 @@ test('the preview implements the entire application-facing native boundary', asy
 test('the page embeds the real app, with immediate video and truthful preview limits', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(html, /releases\/download\/v0\.1\.0-preview\.1\/MirrorMe-windows-x64\.zip/);
-  assert.match(html, /Real interface &middot; Example data/);
+  assert.match(html, /Simulated connection/);
   assert.match(html, /src="\.\/preview\/index\.html"/);
   assert.match(html, /Direct3D12 Renderer/);
   assert.match(html, /113 MB/);
-  assert.match(html, /Physical-iPhone mirroring/);
+  assert.match(html, /iPhone connections may be intermittent/);
+  assert.match(html, /No device access/);
+  assert.match(html, /Protected video may not display/);
+  assert.match(html, /Leave Windows security protections enabled/);
   assert.match(html, /data-phase="mirroring"/);
   assert.doesNotMatch(html, /id="connect"|Start demo|Play demo|demo-sidebar|releases\/latest|src="https:|href="\/(?:assets|style)/);
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /camera 'none'; microphone 'none'; display-capture 'none'/);
+});
+test('the landing page states the function without slogans or repeated preview prose', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /<h1 id="headline">Mirror your iPhone<br>to Windows\.<\/h1>/);
+  assert.doesNotMatch(html, /More room|A little perspective|THE QUIETER PLACES|Everything is ready|A small setup|photo-caption|eyebrow|demo-footnote/);
+  const copy = html.split('<body>')[1].split('</body>')[0]
+    .replace(/<svg\b[\s\S]*?<\/svg>/g, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z0-9#]+;/gi, ' ');
+  const words = copy.trim().split(/\s+/).length;
+  assert.ok(words <= 300, `Keep landing-page copy concise, including collapsed details (${words} words)`);
 });
 test('the generated preview is built from the current desktop sources, without copied screens', async () => {
   const manifest = JSON.parse(await readFile(new URL('../preview/source-manifest.json', import.meta.url), 'utf8'));

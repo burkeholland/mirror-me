@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Explore MirrorMe's real Windows interface in your browser. Change settings and interact with example content in a separate video window.">
+  <meta name="description" content="Mirror your iPhone screen and audio to Windows over AirPlay. Open-source Windows x64 preview.">
   <meta name="theme-color" content="#f5f7f8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
-  <meta property="og:title" content="MirrorMe - Your iPhone. More room.">
-  <meta property="og:description" content="An iPhone-mirroring preview that feels at home on Windows. Try the interactive simulation.">
+  <meta property="og:title" content="MirrorMe - iPhone mirroring for Windows">
+  <meta property="og:description" content="Mirror your iPhone screen and audio to Windows over AirPlay. Open-source Windows x64 preview.">
   <meta property="og:type" content="website">
   <title>MirrorMe - Mirror your iPhone to Windows.</title>
   <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
@@ -27,9 +27,6 @@
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z"/></symbol>
       <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/></symbol>
       <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></symbol>
-      <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r=".5"/></symbol>
-      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
-      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
       <symbol id="landscape" viewBox="0 0 320 480">
         <rect width="320" height="480" fill="#dfedf2"/>
         <circle cx="242" cy="112" r="37" fill="#fbfdfe"/>
@@ -47,7 +44,7 @@
     <header class="site-header">
       <a class="brand" href="./" aria-label="MirrorMe home"><img src="./assets/mark.svg" width="36" height="36" alt=""><span>MirrorMe</span></a>
       <nav aria-label="Main navigation">
-        <a href="#demo">Explore the app</a><a href="#setup">Getting started</a>
+        <a href="#demo">Preview</a><a href="#setup">Setup</a>
         <a href="https://github.com/burkeholland/mirror-me">Source<span aria-hidden="true"> &#8599;</span></a>
         <button class="theme-button" id="theme" type="button" aria-label="Use dark theme"><svg class="icon"><use href="#i-moon"/></svg></button>
       </nav>
@@ -55,38 +52,37 @@
 
     <main id="main">
       <section class="intro" aria-labelledby="headline">
-        <div><p class="eyebrow">Made for your Windows desktop</p><h1 id="headline">Your iPhone.<br><span>More room.</span></h1></div>
+        <div><h1 id="headline">Mirror your iPhone<br>to Windows.</h1><p class="lead">Screen and audio over AirPlay.</p></div>
         <div class="intro-copy">
-          <p class="lead">Put your iPhone screen on your PC. Share a photo, walk through an app, or simply take a closer look.</p>
           <a class="btn btn-primary download" href="https://github.com/burkeholland/mirror-me/releases/download/v0.1.0-preview.1/MirrorMe-windows-x64.zip"><svg class="icon"><use href="#i-download"/></svg>Download for Windows</a>
-          <p class="release-note">Windows x64 &middot; v0.1.0 preview &middot; Unsigned<br>One-time receiver setup downloads an additional 113 MB.<br>Real-iPhone compatibility is still being verified.</p>
+          <p class="release-note">Windows x64 &middot; v0.1.0 preview &middot; Unsigned<br>Setup requires a 113 MB receiver download.</p>
         </div>
       </section>
 
       <section id="demo" class="demo" aria-labelledby="demo-title" data-phase="mirroring" data-motion="true" data-landscape="false">
         <div class="demo-heading">
-          <div><h2 id="demo-title">MirrorMe, in your browser.</h2><p>Open Settings, change the theme, or explore the example screen. Everything is ready to use.</p></div>
-          <span class="simulation-label">Real interface &middot; Example data</span>
+          <h2 id="demo-title">App preview</h2>
+          <span class="simulation-label">Simulated connection</span>
         </div>
         <div class="preview-desk" id="preview-desk">
           <div class="app-panel">
-            <div class="window-label"><strong>MirrorMe</strong><span>The app's actual controls</span></div>
+            <div class="window-label">Controls</div>
             <div class="app-frame">
               <iframe id="app-preview" src="./preview/index.html" title="Interactive MirrorMe app - example data, no Windows access"
                 sandbox="allow-scripts allow-same-origin" allow="camera 'none'; microphone 'none'; display-capture 'none'; clipboard-read 'none'; clipboard-write 'none'" referrerpolicy="no-referrer"></iframe>
               <div id="app-placeholder" class="window-placeholder" hidden>
                 <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
-                <p id="app-placeholder-text">MirrorMe is in the system tray. The separate video window stays open.</p>
+                <p id="app-placeholder-text">Hidden to tray. Video remains open.</p>
                 <button type="button" id="restore-app" class="btn btn-secondary">Show MirrorMe</button>
               </div>
             </div>
             <div id="preview-error" class="preview-error" role="alert" hidden>
-              <p>The app preview could not open. The download and sample content are still available.</p>
+              <p>The app preview could not open.</p>
               <button type="button" id="reload-preview" class="text-button">Reload preview</button>
             </div>
           </div>
           <div class="video-panel">
-            <div class="window-label"><strong>Mirrored screen</strong><span>A separate Windows window</span></div>
+            <div class="window-label">iPhone screen &middot; Separate window</div>
             <div class="video-frame" id="video-frame">
               <div class="video-window" id="video-window" tabindex="-1" aria-label="Separate video window, showing example content">
                 <header class="video-titlebar">
@@ -99,50 +95,46 @@
                 </header>
                 <div class="video-display">
                   <div class="mirrored-screen" id="mirrored-screen" aria-label="Example iPhone content">
-                    <div class="sample photos"><div class="photo-image"><svg role="img" aria-label="Original blue mountain illustration"><use href="#landscape"/></svg></div><div class="photo-caption"><span>THE QUIETER PLACES</span><strong>A little perspective.</strong><small>Sample illustration</small></div></div>
+                    <div class="sample photos"><div class="photo-image"><svg role="img" aria-label="Sample mountain illustration"><use href="#landscape"/></svg></div></div>
                   </div>
                 </div>
               </div>
               <div id="video-placeholder" class="window-placeholder" hidden>
                 <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
-                <p id="video-placeholder-text">The example session has stopped.</p>
+                <p id="video-placeholder-text">Disconnected.</p>
                 <button type="button" id="restore-video" class="btn btn-secondary">Reconnect example</button>
               </div>
             </div>
-            <p class="video-caption">Video appears here, not inside Settings. The current release uses the renderer's window title.</p>
           </div>
         </div>
         <div class="demo-controls">
-          <span class="controls-label">Example photo</span>
-          <div class="view-controls"><button type="button" id="rotate" class="btn btn-secondary" aria-pressed="false"><svg class="icon"><use href="#i-rotate"/></svg>Rotate</button><label class="motion-control" for="motion"><input type="checkbox" id="motion" checked><span>Motion</span></label></div>
+          <span class="controls-label">Sample image</span>
+          <div class="view-controls"><button type="button" id="rotate" class="btn btn-secondary" aria-pressed="false"><svg class="icon"><use href="#i-rotate"/></svg>Rotate</button><label class="motion-control" for="motion"><input type="checkbox" id="motion" checked><span>Motion</span></label><button type="button" class="text-button" id="reset">Reset</button></div>
         </div>
-        <div class="demo-footnote"><span id="interaction-hint" role="status">Use the real app controls. Changes stay in this page, not on your PC.</span><button type="button" class="text-button" id="reset">Reset example</button></div>
       </section>
-      <p class="demo-disclosure">The same interface code as the Windows app, with a simulated receiver. No live AirPlay, downloads, saved settings, or device access.</p>
-      <noscript><p class="alert">JavaScript is needed for the interactive controls. The sample image, download, and setup instructions are still available.</p></noscript>
+      <p class="demo-disclosure">No device access. Preview changes are not saved.</p>
+      <noscript><p class="alert">Enable JavaScript to use the preview.</p></noscript>
 
       <section class="setup-section" id="setup" aria-labelledby="setup-title">
-        <div class="section-intro"><p class="eyebrow">From here to your desktop</p><h2 id="setup-title">A small setup.<br>Then, a bigger view.</h2><p>Use the controls you already know on your iPhone. Keep both devices on the same local network.</p><a class="source-link" href="https://github.com/burkeholland/mirror-me#using-mirrorme">Read the full guide <svg class="icon"><use href="#i-arrow"/></svg></a></div>
+        <div class="section-intro"><h2 id="setup-title">Setup</h2><p>Connect both devices to the same network.</p><a class="source-link" href="https://github.com/burkeholland/mirror-me#using-mirrorme">Setup guide</a></div>
         <ol class="setup-steps">
-          <li><span class="step-number">01</span><div><h3>Open MirrorMe.</h3><p>Extract the whole Windows ZIP, open <code>MirrorMe.exe</code>, and choose a name for your PC.</p></div></li>
-          <li><span class="step-number">02</span><div><h3>Get the receiver ready.</h3><p>Approve the one-time 113 MB receiver download from UxPlay Windows on GitHub. MirrorMe checks it before installing. If Bonjour needs setup, Windows will ask for permission separately.</p></div></li>
-          <li><span class="step-number">03</span><div><h3>Pick your PC on your iPhone.</h3><p>Open <strong>Control Center</strong>, tap <strong>Screen Mirroring</strong>, then choose your PC. The actual video opens in its own Windows window.</p></div></li>
+          <li><span class="step-number">1</span><div><h3>Open MirrorMe</h3><p>Extract the entire ZIP and run <code>MirrorMe.exe</code>.</p></div></li>
+          <li><span class="step-number">2</span><div><h3>Install receiver files</h3><p>Approve the UxPlay download and Bonjour setup if prompted.</p></div></li>
+          <li><span class="step-number">3</span><div><h3>Connect your iPhone</h3><p>Control Center &rarr; Screen Mirroring &rarr; your PC.</p></div></li>
         </ol>
       </section>
 
       <section class="details-section" aria-labelledby="details-title">
-        <div><p class="eyebrow">Before you download</p><h2 id="details-title">A few things to know.</h2></div>
+        <h2 id="details-title">About this preview</h2>
         <div class="questions">
-          <details><summary>How ready is this preview?</summary><p>The Windows interface, local discovery, runtime setup, and generated-video decoding/display have been checked. Physical-iPhone mirroring can be intermittent; reliable reconnection, audio synchronization, and device compatibility still need further device checks. This is an unsigned preview, not a certified app-store release.</p><a href="https://github.com/burkeholland/mirror-me#real-iphone-release-checklist">See the open device checklist</a></details>
-          <details><summary>What stays on my computer?</summary><p>The app keeps preferences and receiver files locally. Mirroring is designed for your local network, not a cloud relay. The website preview keeps example settings in memory and does not access a real device.</p></details>
-          <details><summary>Do I need another app on my iPhone?</summary><p>No companion iPhone app is required. MirrorMe receives AirPlay screen mirroring through UxPlay. The one-time PC download supplies the media and discovery libraries; the separate UxPlay desktop app is not installed or opened.</p></details>
-          <details><summary>Can I mirror everything?</summary><p>Protected streaming content may block screen mirroring. MirrorMe is a receiver, not remote control of your iPhone. Windows 11 on an x64 PC is the preview target; ARM and every iPhone/iOS combination have not been validated.</p></details>
-          <details><summary>Why might Windows show a warning?</summary><p>The preview is not code-signed. Check the public source and the release's SHA-256 checksums before deciding whether to run it. Do not disable Windows security protections to use this app.</p><a href="https://github.com/burkeholland/mirror-me/releases/tag/v0.1.0-preview.1">Release files and checksums</a></details>
+          <details><summary>Compatibility</summary><p>Targets Windows 11 x64. iPhone connections may be intermittent; audio synchronization and device compatibility remain under testing.</p><a href="https://github.com/burkeholland/mirror-me#real-iphone-release-checklist">Device checklist</a></details>
+          <details><summary>Requirements and limits</summary><p>No iPhone app required. Uses UxPlay to receive AirPlay on your local network. Protected video may not display. Mirroring only, not remote control.</p></details>
+          <details><summary>Windows security warning</summary><p>This preview is unsigned. Check the source and SHA-256 checksums before running it. Leave Windows security protections enabled.</p><a href="https://github.com/burkeholland/mirror-me/releases/tag/v0.1.0-preview.1">Release files and checksums</a></details>
         </div>
       </section>
     </main>
 
-    <footer class="site-footer"><a class="brand" href="./"><img src="./assets/mark.svg" width="28" height="28" alt="">MirrorMe</a><span>A little more space for your screen.</span><div><a href="https://github.com/burkeholland/mirror-me">GitHub</a><a href="https://github.com/burkeholland/mirror-me/blob/main/THIRD-PARTY-NOTICES.md">Open-source credits</a></div></footer>
+    <footer class="site-footer"><a class="brand" href="./"><img src="./assets/mark.svg" width="28" height="28" alt="">MirrorMe</a><div><a href="https://github.com/burkeholland/mirror-me">GitHub</a><a href="https://github.com/burkeholland/mirror-me/blob/main/THIRD-PARTY-NOTICES.md">Credits</a></div></footer>
   </div>
 </body>
 </html>

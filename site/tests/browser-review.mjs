@@ -140,11 +140,14 @@ try {
         assert.equal(await evaluate('document.querySelectorAll(".sample").length'), 1);
         assert.equal(await evaluate('document.querySelector(".sample").classList.contains("photos")'), true);
         assert.equal(await evaluate('document.querySelector("[data-content], #demo-note, .note-editor, .notes, .clock")'), null);
+        assert.equal(await evaluate('document.querySelector("#headline").innerText'), 'Mirror your iPhone\nto Windows.');
+        assert.ok(await evaluate(`document.querySelector('#demo').getBoundingClientRect().top < ${width < 700 ? 600 : 400}`), 'the app preview appears near the top of the page');
         assert.match(await app('document.querySelector("#connection-title").textContent'), /mirroring/i);
         assert.equal(await app('getComputedStyle(document.querySelector("#page-title")).fontSize'), '26px');
         assert.equal(await app('document.querySelector("#nav-settings").textContent.includes("Settings")'), true);
         await inspect(`${prefix}-immediately-interactive`);
         if (width === 1440 || width === 390) {
+          await screenshot(`${prefix}-page`);
           await evaluate('document.querySelector("#demo").scrollIntoView()');
           await screenshot(prefix);
         }
