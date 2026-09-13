@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Meet MirrorMe, an open-source Windows iPhone-mirroring preview. Play with an interactive demo, then download the Windows app.">
+  <meta name="description" content="Explore MirrorMe's real Windows interface in your browser. Change settings and interact with example content in a separate video window.">
   <meta name="theme-color" content="#f5f7f8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta property="og:title" content="MirrorMe - Your iPhone. More room.">
   <meta property="og:description" content="An iPhone-mirroring preview that feels at home on Windows. Try the interactive simulation.">
   <meta property="og:type" content="website">
-  <title>MirrorMe - Your iPhone. More room.</title>
+  <title>MirrorMe - Mirror your iPhone to Windows.</title>
   <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./assets/postrboard.css">
   <link rel="stylesheet" href="./style.css">
@@ -19,8 +19,9 @@
   <a class="skip-link" href="#main">Skip to content</a>
   <svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z"/></symbol>
-      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+      <symbol id="i-square" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
       <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></symbol>
       <symbol id="i-rotate" viewBox="0 0 24 24"><rect x="8" y="4" width="10" height="16" rx="2" transform="rotate(25 13 12)"/><path d="M4 7V3h4M4 3a10 10 0 0 1 16 3"/></symbol>
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z"/></symbol>
@@ -46,7 +47,7 @@
     <header class="site-header">
       <a class="brand" href="./" aria-label="MirrorMe home"><img src="./assets/mark.svg" width="36" height="36" alt=""><span>MirrorMe</span></a>
       <nav aria-label="Main navigation">
-        <a href="#demo">Try the demo</a><a href="#setup">Getting started</a>
+        <a href="#demo">Explore the app</a><a href="#setup">Getting started</a>
         <a href="https://github.com/burkeholland/mirror-me">Source<span aria-hidden="true"> &#8599;</span></a>
         <button class="theme-button" id="theme" type="button" aria-label="Use dark theme"><svg class="icon"><use href="#i-moon"/></svg></button>
       </nav>
@@ -62,55 +63,67 @@
         </div>
       </section>
 
-      <section id="demo" class="demo" aria-labelledby="demo-title" data-phase="idle" data-content="photos" data-playing="true" data-landscape="false" data-zoom="false">
+      <section id="demo" class="demo" aria-labelledby="demo-title" data-phase="mirroring" data-content="photos" data-motion="true" data-landscape="false">
         <div class="demo-heading">
-          <div><h2 id="demo-title">Take it for a spin.</h2><p>Connect, rotate, and make the example your own.</p></div>
-          <div class="demo-header-actions"><span class="simulation-label">Interactive simulation</span><button type="button" id="connect" class="btn btn-primary"><svg class="icon"><use href="#i-play"/></svg><span>Start demo</span></button></div>
+          <div><h2 id="demo-title">MirrorMe, in your browser.</h2><p>Open Settings, change the theme, or explore the example screen. Everything is ready to use.</p></div>
+          <span class="simulation-label">Real interface &middot; Example data</span>
         </div>
-        <div class="stage">
-          <div class="phone-column">
-            <div class="phone" aria-label="Simulated iPhone screen">
-              <div class="phone-glass">
-                <div class="phone-chrome" aria-hidden="true"><span>9:41</span><span class="island"></span><span class="battery"></span></div>
-                <div class="screen-content">
-                  <div class="sample photos"><div class="photo-image"><svg role="img" aria-label="Original blue mountain illustration"><use href="#landscape"/></svg></div><div class="photo-caption"><span>THE QUIETER PLACES</span><strong>A little perspective.</strong><small>Sample illustration</small></div></div>
-                  <div class="sample notes" hidden><span class="sample-eyebrow">A QUICK NOTE</span><h3>Big ideas.<br>Small screen.</h3><p data-note></p><span class="note-foot">Edited right here in the demo.</span></div>
-                  <div class="sample clock" hidden><span class="sample-eyebrow">A MOMENT TO FOCUS</span><div class="clock-face"><span data-clock>00:00</span><small>DEMO STOPWATCH</small></div><p>One thing at a time.</p></div>
-                </div>
-                <div class="home-indicator" aria-hidden="true"></div>
+        <div class="preview-desk" id="preview-desk">
+          <div class="app-panel">
+            <div class="window-label"><strong>MirrorMe</strong><span>The app's actual controls</span></div>
+            <div class="app-frame">
+              <iframe id="app-preview" src="./preview/index.html" title="Interactive MirrorMe app - example data, no Windows access"
+                sandbox="allow-scripts allow-same-origin" allow="camera 'none'; microphone 'none'; display-capture 'none'; clipboard-read 'none'; clipboard-write 'none'" referrerpolicy="no-referrer"></iframe>
+              <div id="app-placeholder" class="window-placeholder" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
+                <p id="app-placeholder-text">MirrorMe is in the system tray. The separate video window stays open.</p>
+                <button type="button" id="restore-app" class="btn btn-secondary">Show MirrorMe</button>
               </div>
             </div>
-            <span class="device-caption">Your iPhone <span>Example screen</span></span>
+            <div id="preview-error" class="preview-error" role="alert" hidden>
+              <p>The app preview could not open. The download and sample content are still available.</p>
+              <button type="button" id="reload-preview" class="text-button">Reload preview</button>
+            </div>
           </div>
-          <div class="connection-path" aria-hidden="true"><span></span><svg class="icon"><use href="#i-wifi"/></svg><span></span></div>
-          <div class="desktop-column">
-            <div class="desktop">
-              <div class="window-bar"><span><img src="./assets/mark.svg" width="18" height="18" alt="">MirrorMe</span><span class="window-buttons" aria-hidden="true"><i></i><i></i><i></i></span></div>
-              <div class="desktop-workspace">
-                <div class="demo-sidebar" aria-hidden="true"><span class="selected"><svg class="icon"><use href="#i-monitor"/></svg>Mirror</span><span class="sidebar-line"></span><span class="sidebar-caption">One quiet app.<br>A bigger view.</span><span class="sidebar-state"><i></i><span data-sidebar-status>Ready to connect</span></span></div>
-                <div class="desktop-display">
-                  <div class="empty-screen" id="empty-screen"><div class="ready-mark"><svg><use href="#i-monitor"/></svg></div><h3 id="display-title">Ready for your iPhone</h3><p id="display-description">Your screen goes here.<br>Start the demo to see it in action.</p><span class="pc-name">Studio PC</span></div>
-                  <div class="mirrored-screen" id="mirrored-screen" hidden aria-label="Simulated mirrored screen">
-                    <div class="sample photos"><div class="photo-image"><svg role="img" aria-label="The same blue mountain illustration mirrored on the PC"><use href="#landscape"/></svg></div><div class="photo-caption"><span>THE QUIETER PLACES</span><strong>A little perspective.</strong><small>Sample illustration</small></div></div>
-                    <div class="sample notes" hidden><span class="sample-eyebrow">A QUICK NOTE</span><h3>Big ideas.<br>Small screen.</h3><p data-note></p><span class="note-foot">Edited right here in the demo.</span></div>
-                    <div class="sample clock" hidden><span class="sample-eyebrow">A MOMENT TO FOCUS</span><div class="clock-face"><span data-clock>00:00</span><small>DEMO STOPWATCH</small></div><p>One thing at a time.</p></div>
+          <div class="video-panel">
+            <div class="window-label"><strong>Mirrored screen</strong><span>A separate Windows window</span></div>
+            <div class="video-frame" id="video-frame">
+              <div class="video-window" id="video-window" tabindex="-1" aria-label="Separate video window, showing example content">
+                <header class="video-titlebar">
+                  <span class="video-title"><svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg><span>Direct3D12 Renderer</span></span>
+                  <div class="video-window-controls">
+                    <button type="button" id="minimise-video" aria-label="Minimize example video window"><svg class="icon"><use href="#i-minus"/></svg></button>
+                    <button type="button" id="maximise-video" aria-label="Maximize example video window" aria-pressed="false"><svg class="icon"><use href="#i-square"/></svg></button>
+                    <button type="button" id="close-video" aria-label="Close example video window"><svg class="icon"><use href="#i-close"/></svg></button>
+                  </div>
+                </header>
+                <div class="video-display">
+                  <div class="mirrored-screen" id="mirrored-screen" aria-label="Example iPhone content">
+                    <div class="sample photos"><div class="photo-image"><svg role="img" aria-label="Original blue mountain illustration"><use href="#landscape"/></svg></div><div class="photo-caption"><span>THE QUIETER PLACES</span><strong>A little perspective.</strong><small>Sample illustration</small></div></div>
+                    <div class="sample notes" hidden><span class="sample-eyebrow">A QUICK NOTE</span><h3>Big ideas.<br>Small screen.</h3><p data-note></p><span class="note-foot">Sample content, not your phone.</span></div>
+                    <div class="sample clock" hidden><span class="sample-eyebrow">A MOMENT TO FOCUS</span><div class="clock-face"><span data-clock>00:00</span><small>EXAMPLE STOPWATCH</small></div><p>One thing at a time.</p></div>
                   </div>
                 </div>
               </div>
-              <div class="window-footer"><span><i class="status-light"></i><span id="demo-status" role="status">Ready to try</span></span><span>Simulated &middot; not a live connection</span></div>
+              <div id="video-placeholder" class="window-placeholder" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
+                <p id="video-placeholder-text">The example session has stopped.</p>
+                <button type="button" id="restore-video" class="btn btn-secondary">Reconnect example</button>
+              </div>
             </div>
-            <span class="device-caption">Your Windows desktop <span>Room for the whole picture</span></span>
+            <p class="video-caption">Video appears here, not inside Settings. The current release uses the renderer's window title.</p>
           </div>
         </div>
         <div class="demo-controls">
+          <span class="controls-label">Example screen</span>
           <fieldset class="content-switch"><legend class="sr-only">Example content</legend><button type="button" data-content="photos" aria-pressed="true">Photos</button><button type="button" data-content="notes" aria-pressed="false">Notes</button><button type="button" data-content="clock" aria-pressed="false">Stopwatch</button></fieldset>
-          <div class="view-controls"><button type="button" id="rotate" class="btn btn-secondary" aria-pressed="false"><svg class="icon"><use href="#i-rotate"/></svg>Rotate</button><button type="button" id="motion" class="btn btn-secondary" aria-pressed="true"><svg class="icon"><use href="#i-pause"/></svg><span>Pause animation</span></button></div>
+          <div class="view-controls"><button type="button" id="rotate" class="btn btn-secondary" aria-pressed="false"><svg class="icon"><use href="#i-rotate"/></svg>Rotate</button><label class="motion-control" for="motion"><input type="checkbox" id="motion" checked><span>Motion</span></label></div>
         </div>
-        <div class="note-editor" id="note-editor" hidden><label for="demo-note">Make it your note.<span>What you type appears on both example screens. It stays in this browser.</span></label><textarea id="demo-note" rows="3" maxlength="280" spellcheck="false"></textarea></div>
-        <div class="demo-footnote"><span id="interaction-hint">Try a different screen, or rotate the phone.</span><button type="button" class="text-button" id="reset">Reset demo</button></div>
+        <div class="note-editor" id="note-editor" hidden><label for="demo-note">Edit the example note.<span id="note-privacy">This changes only the browser example. The installed app displays your iPhone; it does not control it.</span></label><textarea id="demo-note" rows="3" maxlength="280" spellcheck="false" aria-describedby="note-privacy"></textarea></div>
+        <div class="demo-footnote"><span id="interaction-hint" role="status">Use the real app controls. Changes stay in this page, not on your PC.</span><button type="button" class="text-button" id="reset">Reset example</button></div>
       </section>
-      <p class="demo-disclosure">This is a browser simulation, not live AirPlay. No phone, camera, microphone, or account access.</p>
-      <noscript><p class="alert">Enable JavaScript to play with the example. The download and setup instructions still work without it.</p></noscript>
+      <p class="demo-disclosure">The same interface code as the Windows app, with a simulated receiver. No live AirPlay, downloads, saved settings, or device access.</p>
+      <noscript><p class="alert">JavaScript is needed for the interactive controls. The sample image, download, and setup instructions are still available.</p></noscript>
 
       <section class="setup-section" id="setup" aria-labelledby="setup-title">
         <div class="section-intro"><p class="eyebrow">From here to your desktop</p><h2 id="setup-title">A small setup.<br>Then, a bigger view.</h2><p>Use the controls you already know on your iPhone. Keep both devices on the same local network.</p><a class="source-link" href="https://github.com/burkeholland/mirror-me#using-mirrorme">Read the full guide <svg class="icon"><use href="#i-arrow"/></svg></a></div>
@@ -124,7 +137,7 @@
       <section class="details-section" aria-labelledby="details-title">
         <div><p class="eyebrow">Before you download</p><h2 id="details-title">A few things to know.</h2></div>
         <div class="questions">
-          <details><summary>How ready is this preview?</summary><p>The Windows interface, local discovery, runtime setup, and generated-video decoding/display have been checked. Physical-iPhone mirroring, audio synchronization, and device compatibility still need confirmation. This is an unsigned preview, not a certified app-store release.</p><a href="https://github.com/burkeholland/mirror-me#real-iphone-release-checklist">See the open device checklist</a></details>
+          <details><summary>How ready is this preview?</summary><p>The Windows interface, local discovery, runtime setup, and generated-video decoding/display have been checked. Physical-iPhone mirroring can be intermittent; reliable reconnection, audio synchronization, and device compatibility still need further device checks. This is an unsigned preview, not a certified app-store release.</p><a href="https://github.com/burkeholland/mirror-me#real-iphone-release-checklist">See the open device checklist</a></details>
           <details><summary>What stays on my computer?</summary><p>The app keeps preferences and receiver files locally. Mirroring is designed for your local network, not a cloud relay. This website demo never sends your sample note anywhere. It does not access a real device.</p></details>
           <details><summary>Do I need another app on my iPhone?</summary><p>No companion iPhone app is required. MirrorMe receives AirPlay screen mirroring through UxPlay. The one-time PC download supplies the media and discovery libraries; the separate UxPlay desktop app is not installed or opened.</p></details>
           <details><summary>Can I mirror everything?</summary><p>Protected streaming content may block screen mirroring. MirrorMe is a receiver, not remote control of your iPhone. Windows 11 on an x64 PC is the preview target; ARM and every iPhone/iOS combination have not been validated.</p></details>

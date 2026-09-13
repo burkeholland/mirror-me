@@ -13,7 +13,7 @@ Local discovery and real video decoding/display have been checked, but the
 [physical-iPhone checklist](#real-iphone-release-checklist) is still open.
 The website demonstration is a simulation, not a device test.
 
-[Try the interactive demo](https://burkeholland.github.io/mirror-me/) |
+[Explore the app interface](https://burkeholland.github.io/mirror-me/) |
 [Download the Windows preview](https://github.com/burkeholland/mirror-me/releases/download/v0.1.0-preview.1/MirrorMe-windows-x64.zip)
 
 Extract the **entire ZIP**, open `MirrorMe.exe`, and choose **Download receiver
@@ -240,6 +240,45 @@ For visual development, `frontend\tests\preview.html` is an explicitly
 labeled simulation with selectable states. It does not start a receiver or
 change Windows settings. These fixtures are not included in the production
 frontend bundle.
+
+### Website app preview
+
+The landing page embeds the **same frontend entry point, styles, and controls**
+as the Windows app. `frontend\preview\bridge.mjs` replaces only the Wails/native
+boundary with in-memory example settings and an already-connected example
+iPhone. Video is shown in a separate window representation, matching the
+desktop architecture. This is not live AirPlay or remote control of a phone.
+
+The preview can save/revert example settings, show dialogs, change themes,
+and simulate window and connection actions. Clipboard, Windows folders,
+external app links, and runtime installation report that they are unavailable
+instead of pretending to change the computer. Nothing is persisted between
+page loads; no camera, microphone, screen-capture, or receiver access occurs.
+
+Rebuild after changing the frontend, then check the generated site:
+
+```powershell
+npm --prefix frontend run build:site-preview
+node --test .\site\tests\demo.test.mjs
+node .\site\tests\browser-review.mjs
+```
+
+The separate Vite build writes `site\preview`; it does not modify the native
+app's `frontend\dist` bundle. A source/asset hash manifest and automated checks
+prevent the committed preview from silently drifting away from the app.
+Browser checks cover both windows at desktop/mobile sizes, immediate
+interactivity, actual Settings drafts and dialogs, keyboard controls, themes,
+reduced motion, and browser-only behavior. Screenshots go to `build\site-review`.
+
+Commit the source and generated assets together. `scripts\publish-site.ps1`
+checks freshness and publishes the committed `site` subtree to `gh-pages`
+without force-pushing. To check the deployed page:
+
+```powershell
+node .\site\tests\browser-review.mjs https://burkeholland.github.io/mirror-me/
+```
+
+### Device validation
 
 These automated checks do not replace mirroring from a physical iPhone.
 Device compatibility, video/audio synchronization, and protected-content

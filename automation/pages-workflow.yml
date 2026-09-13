@@ -4,7 +4,7 @@ name: Publish website
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/pages.yml"]
+    paths: ["site/**", "frontend/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check interactive demo
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Restore frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Build the shared app preview
+        run: npm run build:site-preview --prefix frontend
+      - name: Check interactive preview and source freshness
         run: node --test site/tests/demo.test.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

@@ -28,6 +28,10 @@ jobs:
         run: npm test --prefix frontend
       - name: Build embedded assets
         run: npm run build --prefix frontend
+      - name: Build the shared website preview
+        run: npm run build:site-preview --prefix frontend
+      - name: Check website behavior and source freshness
+        run: node --test site/tests/demo.test.mjs
       - name: Check Go behavior
         run: go test ./...
       - name: Check Go diagnostics
