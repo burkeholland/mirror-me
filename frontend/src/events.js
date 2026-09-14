@@ -2,7 +2,7 @@ import {
   state, load, navigate, selectSettingsSection, openPictureSettings, setDraftField,
   revertDraft, saveDraft, regeneratePin, beginSetup, dismissFirstRun,
   startMirroring, stopMirroring, confirmSetupAndStart, showMirroredScreen,
-  openSettingsFolder, openLogsFolder, copyLogsPath, copySettingsFolder, copyDeviceName, copyDiagnostics,
+  openSettingsFolder, openLogsFolder, copyLogsPath, copySettingsFolder, copyDeviceName,
   openExternalURL, minimiseWindow, toggleMaximiseWindow, hideWindow, quitApp,
   openDialog, closeDialog, finishNavigation, dismissToast,
 } from './state.js';
@@ -41,7 +41,6 @@ export function bindEvents(app, render) {
       case 'revert-settings': revertDraft(render); break;
       case 'regenerate-pin': await regeneratePin(render); break;
       case 'copy-device-name': await copyDeviceName(render); break;
-      case 'copy-diagnostics': await copyDiagnostics(render); break;
       case 'copy-settings-folder': await copySettingsFolder(render); break;
       case 'open-settings-folder': await openSettingsFolder(render); break;
       case 'open-guide': openDialog('guide', render); break;

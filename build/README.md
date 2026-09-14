@@ -26,10 +26,24 @@ The `windows` directory contains the manifest and rc files used when building wi
 These may be customised for your application. To return these files to the default state, simply delete them and
 build with `wails build`.
 
-- `icon.ico` - The icon used for the application. This is used when building using `wails build`. If you wish to
-  use a different icon, simply replace this file with your own. If it is missing, a new `icon.ico` file
-  will be created using the `appicon.png` file in the build directory.
+- `icon.ico` - The application and tray icon, generated from `site/assets/mark.svg`.
+  Do not edit it separately from the website icon.
 - `installer/*` - The files used to create the Windows installer. These are used when building using `wails build`.
 - `info.json` - Application details used for Windows builds. The data here will be used by the Windows installer,
   as well as the application itself (right click the exe -> properties -> details)
 - `wails.exe.manifest` - The main application manifest file.
+
+## Shared application icon
+
+`site/assets/mark.svg` is the source for the website, app title bar, About page,
+Windows executable/tray and receiver video-window icons. To regenerate the
+checked-in SVG copy, PNG and multi-size ICO files from the repository root:
+
+```powershell
+python -m pip install -r scripts\icon-requirements.txt
+python scripts\generate-icon.py
+python scripts\generate-icon.py --check
+```
+
+The renderer dependencies are build tools only; they are not installed with
+MirrorMe. The ICO includes 16 through 256 pixel sizes for Windows display scaling.

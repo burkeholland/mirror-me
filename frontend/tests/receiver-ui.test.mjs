@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { settingsFixture, snapshotFixture } from './fixtures.mjs';
 
@@ -14,7 +15,7 @@ const vite = await createServer({
 const {
   state, load, receiveEngineEvent, receiveSettingsUpdate, startMirroring, stopMirroring,
   beginSetup, dismissFirstRun, saveDraft, regeneratePin, navigate, finishNavigation,
-  tickConnection, hasDraftChanges, setDraftField, revertDraft, diagnosticText,
+  tickConnection, hasDraftChanges, setDraftField, revertDraft,
   copyDeviceName, openExternalURL, openDialog, showMirroredScreen, receiveLogWarning, openLogsFolder, CONNECTION_WAIT_MS,
 } = await vite.ssrLoadModule('/src/state.js');
 const { renderApp, refreshReceiverStatus } = await vite.ssrLoadModule('/src/render.js');
@@ -67,6 +68,18 @@ function buttonHTML(html, action) {
   return html.match(new RegExp(`<button\\b[^>]*data-action="${action}"[^>]*>[\\s\\S]*?<\\/button>`))?.[0];
 }
 
+test('title bar and About use the unchanged website brand mark', async () => {
+  const websiteMark = (await readFile(new URL('../../site/assets/mark.svg', import.meta.url), 'utf8')).trim();
+  const appMark = (await readFile(new URL('../src/assets/mark.svg', import.meta.url), 'utf8')).trim();
+  assert.equal(appMark, websiteMark, 'Regenerate app branding when the website mark changes');
+  for (const route of ['home', 'about']) {
+    state.route = route;
+    const html = renderHTML();
+    assert.ok(html.includes(`<div class="brand-mark" aria-hidden="true">${websiteMark}`));
+    if (route === 'about') assert.ok(html.includes(`<div class="about-mark" aria-hidden="true">${websiteMark}`));
+  }
+});
+
 test('startup, connection, and discovery setup can all be cancelled', () => {
   for (const status of ['starting', 'connecting', 'needs-setup']) {
     state.status = { status };
@@ -99,15 +112,10 @@ test('the connection page explains separate video before and after connecting', 
 });
 
 test('an unnamed native phone is not shown as disconnected', () => {
-  state.route = 'settings';
-  state.settingsSection = 'app';
   for (const status of ['connecting', 'mirroring', 'paused']) {
     state.status = { status, backend: 'native', deviceName: '' };
-    assert.match(renderHTML(), /data-diagnostic-device>Your iPhone</);
-    assert.match(diagnosticText(), /Device: Your iPhone/);
+    assert.doesNotMatch(renderHTML(), /Not connected/);
   }
-  state.status = { status: 'advertising', backend: 'native' };
-  assert.match(diagnosticText(), /Device: Not connected/);
 });
 
 test('paused mirroring explains recovery without showing a live screen or a connection warning', () => {
@@ -124,8 +132,6 @@ test('paused mirroring explains recovery without showing a live screen or a conn
   assert.equal(buttonHTML(html, 'show-mirrored-screen'), undefined);
   assert.equal(buttonHTML(html, 'start-mirroring'), undefined);
   assert.doesNotMatch(html, /You're mirroring|is sharing its screen|data-elapsed|connection-progress|video hasn't arrived/);
-  assert.match(diagnosticText(), /Receiver: paused/);
-  assert.match(diagnosticText(), /Video: Paused, not displayed/);
 });
 
 test('a paused receiver keeps Stop available while a start or settings save is pending', () => {
@@ -210,7 +216,6 @@ test('a live ready event wins over an older initial status request', async () =>
   resolveSettings({ ...settingsFixture });
   await loading;
   assert.equal(state.status.status, 'advertising');
-  assert.doesNotMatch(diagnosticText(), /Recent activity/);
 });
 
 test('a live startup error is not replaced by an older initial status request', async () => {
@@ -452,7 +457,6 @@ test('received video is distinct from rendered video and points to display setti
   let html = renderHTML();
   assert.match(html, /Opening your mirrored screen/);
   assert.doesNotMatch(html, /You're mirroring/);
-  assert.match(diagnosticText(), /Video: Received, not displayed/);
   state.connectionSlow = true;
   html = renderHTML();
   assert.match(html, /Windows has not displayed it/);
@@ -486,7 +490,7 @@ test('receiver events update status without rebuilding Settings', () => {
   assert.equal(state.draft.deviceName, 'An unsaved name');
 });
 
-test('pause updates Settings indicators and diagnostics without disturbing edited settings', () => {
+test('pause updates Settings indicators without disturbing edited settings', () => {
   state.route = 'settings';
   state.draft.deviceName = 'An unsaved name';
   let options;
@@ -496,14 +500,10 @@ test('pause updates Settings indicators and diagnostics without disturbing edite
   const elements = {
     '[data-receiver-label]': {},
     '[data-receiver-tone]': { dataset: {} },
-    '[data-diagnostic-status]': {},
-    '[data-diagnostic-device]': {},
   };
   refreshReceiverStatus({ querySelector: selector => elements[selector] });
   assert.equal(elements['[data-receiver-label]'].textContent, 'Paused');
   assert.equal(elements['[data-receiver-tone]'].dataset.receiverTone, 'neutral');
-  assert.equal(elements['[data-diagnostic-status]'].textContent, 'Paused');
-  assert.equal(elements['[data-diagnostic-device]'].textContent, 'Your iPhone');
 });
 
 test('navigating away with edits asks whether to keep them', () => {
@@ -660,14 +660,6 @@ test('theme previews also restore the native window to the Windows preference', 
   assert.deepEqual(calls, ['dark', 'system']);
 });
 
-test('diagnostics omit saved pairing codes and settings paths', () => {
-  state.settings.pinCode = 'secret-pairing-code';
-  state.settingsFolder = 'private-settings-path';
-  const text = diagnosticText();
-  assert.doesNotMatch(text, /secret-pairing-code|private-settings-path/);
-  assert.match(text, /Receiver: stopped/);
-});
-
 test('clipboard and external-link failures are surfaced rather than swallowed', async () => {
   window.runtime.ClipboardSetText = async () => false;
   await copyDeviceName(noop);
@@ -678,7 +670,7 @@ test('clipboard and external-link failures are surfaced rather than swallowed', 
   assert.equal(state.error, 'Browser unavailable');
 });
 
-test('names and diagnostics are rendered as text, not markup', () => {
+test('names and logging warnings are rendered as text, not markup', () => {
   state.settings.deviceName = '<preview> & "name"';
   let html = renderHTML();
   assert.match(html, /&lt;preview&gt; &amp; &quot;name&quot;/);
@@ -689,10 +681,13 @@ test('names and diagnostics are rendered as text, not markup', () => {
   assert.doesNotMatch(html, /<preview>|<diagnostic>/);
 });
 
-test('details and opt-in logging live only in Settings App', () => {
+test('connection details are absent and opt-in logging remains in Settings App', () => {
   for (const status of ['stopped', 'starting', 'needs-setup', 'advertising', 'connecting', 'mirroring', 'paused', 'error']) {
     state.status = { status, backend: 'native' };
-    assert.doesNotMatch(renderHTML(), /Connection details|activity-list|Copy details|home-hint/);
+    for (const route of ['home', 'settings', 'about']) {
+      state.route = route;
+      assert.doesNotMatch(renderHTML(), /Connection details|connection-details|data-diagnostic|copy-diagnostics|activity-list|Copy details|home-hint/);
+    }
   }
   state.route = 'about';
   assert.doesNotMatch(renderHTML(), /data-disclosure=".*-details"|activity-list|Copy details/);
@@ -701,11 +696,11 @@ test('details and opt-in logging live only in Settings App', () => {
   state.logsFolder = 'local-logs';
   const html = renderHTML();
   assert.match(html, /Troubleshooting/);
-  assert.match(html, /data-disclosure="settings-details"/);
-  assert.match(html, /Built into MirrorMe/);
   assert.match(html, /field-verboseLogging/);
   assert.doesNotMatch(html.match(/<input[^>]+id="field-verboseLogging"[^>]*>/)[0], /\bchecked\b/);
-  assert.match(html, /local-logs|Open logs folder/);
+  assert.match(html, /local-logs/);
+  assert.ok(buttonHTML(html, 'open-logs-folder'));
+  assert.ok(buttonHTML(html, 'copy-logs-path'));
 });
 
 test('logging warnings preserve edited Settings and do not change mirroring state', async () => {

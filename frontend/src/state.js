@@ -6,7 +6,7 @@ import {
 import {
   WindowToggleMaximise, WindowIsMaximised, WindowMinimise, WindowHide, ClipboardSetText,
 } from '../wailsjs/runtime/runtime';
-import { friendlyErrorMessage, deviceLabel, MAX_PC_NAME_BYTES } from './format.js';
+import { friendlyErrorMessage, MAX_PC_NAME_BYTES } from './format.js';
 
 export const CONNECTION_WAIT_MS = 12000;
 export const state = {
@@ -382,20 +382,6 @@ async function copyText(text, message, render) {
 export const copySettingsFolder = render => copyText(state.settingsFolder, 'Settings path copied', render);
 export const copyDeviceName = render => copyText(state.settings.deviceName, 'PC name copied', render);
 export const copyLogsPath = render => copyText(state.logsFolder, 'Logs path copied', render);
-
-export function diagnosticText() {
-  const snapshot = state.status;
-  return [
-    `MirrorMe ${state.version}`,
-    `Receiver: ${snapshot.status}`,
-    `Device: ${deviceLabel(snapshot)}`,
-    `Model: ${snapshot.deviceModel || 'Unknown'}`,
-    `Video: ${snapshot.status === 'paused' ? 'Paused, not displayed' : snapshot.status === 'mirroring' ? 'Displayed' : snapshot.videoReceived ? 'Received, not displayed' : 'Not received'}`,
-    `Error: ${snapshot.lastError || 'None'}`,
-  ].join('\n');
-}
-
-export const copyDiagnostics = render => copyText(diagnosticText(), 'Connection details copied', render);
 
 export async function openExternalURL(url, render) {
   try { await OpenExternalURL(url); } catch (error) { setError(error, render); }

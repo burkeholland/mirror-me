@@ -39,8 +39,8 @@ choosing whether to run it.
   Wi-Fi network exactly like it finds an Apple TV; no pairing app or cable
   required.
 - **A focused Mirror workspace** — one connection view, the PC name your
-  iPhone sees, and the right action for the current state. Connection details
-  are in **Settings > App > Troubleshooting**, not on the main screen.
+  iPhone sees, and the right action for the current state. Optional logging
+  is in **Settings > App > Troubleshooting**.
 - **A separate, branded video window** — the control window manages receiving
   and settings; your iPhone appears in **MirrorMe - iPhone screen**, with the
   MirrorMe icon. Video is not embedded in the controls page.
@@ -438,15 +438,15 @@ Remove-Item Env:MIRRORME_LIVE_TEST
   select **Allow discovery** again.
 - **My iPhone stays on Connecting.** Stop Screen Mirroring on the phone,
   choose **Try again** in MirrorMe, then select this PC again on the phone.
-  **Settings > App > Troubleshooting > Connection details** separates reported
-  receiver state from video arrival and provides a copyable status summary.
+  Enable **Verbose logging** in **Settings > App > Troubleshooting** before
+  reproducing a persistent problem.
 - **Video arrived but no screen opens.** In Settings, open **Picture & sound**,
   expand the advanced options, turn off HEVC, save, and
-  reconnect. Check any Windows codec error in Connection details.
+  reconnect. Check the error shown on the Mirror screen.
   A video failure is shown as an error rather than a
   successful mirroring session.
 - **Audio plays but video never starts.** Reconnect from the iPhone's Screen
-  Mirroring menu and inspect **Connection details**. The native build
+  Mirroring menu and check the status on the Mirror screen. The native build
   distinguishes accepted packets from actually displayed frames and reports
   decoder/display failures explicitly. Protected video may not support mirroring.
 - **The older preview's receiver download fails.** Keep an internet connection for setup,

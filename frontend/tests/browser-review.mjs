@@ -162,6 +162,33 @@ try {
     assert.deepEqual(result.duplicateIds, [], `${name}: duplicate IDs`);
     assert.deepEqual(result.invalidReferences, [], `${name}: broken accessible references`);
     assert.deepEqual(errors, [], `${name}: browser exceptions`);
+    assert.equal(await evaluate("Boolean(document.querySelector('.connection-details, .diagnostics, [data-action=\"copy-diagnostics\"]'))"), false,
+      `${name}: connection details must not appear on any page`);
+    const spacing = await evaluate(`(() => {
+      const startup = document.querySelector('#panel-app [data-disclosure="windows-startup"]');
+      if (!startup?.getClientRects().length) return null;
+      const group = startup.nextElementSibling;
+      const heading = group.querySelector('h2').getBoundingClientRect();
+      const tokens = getComputedStyle(startup);
+      return {
+        above: heading.top - startup.getBoundingClientRect().bottom,
+        below: group.querySelector('.settings-rows').getBoundingClientRect().top - heading.bottom,
+        sectionGap: parseFloat(tokens.getPropertyValue('--space-5')),
+        headingGap: parseFloat(tokens.getPropertyValue('--space-3')),
+      };
+    })()`);
+    if (spacing) {
+      assert.equal(spacing.above, spacing.sectionGap, `${name}: gap above Troubleshooting`);
+      assert.equal(spacing.below, spacing.headingGap, `${name}: gap below Troubleshooting`);
+    }
+    assert.equal(await evaluate(`(() => {
+      const marks = [...document.querySelectorAll('.brand-mark svg, .about-mark svg')];
+      return marks.length > 0 && marks.every(mark =>
+        mark.getAttribute('viewBox') === '0 0 48 48' &&
+        mark.querySelector('rect').getAttribute('fill') === '#0369a1' &&
+        mark.querySelectorAll('rect').length === 3 &&
+        mark.getBoundingClientRect().width === mark.parentElement.getBoundingClientRect().width);
+    })()`), true, `${name}: the website brand must render at full size in either theme`);
     results.push({ name, ...result });
   };
 
@@ -177,6 +204,10 @@ try {
     for (const section of ['connection', 'picture', 'app']) {
       await open(`route=settings&section=${section}&theme=${theme}&pin=1`);
       await check(`settings-${section}-${theme}`);
+      if (section === 'app') {
+        await evaluate("document.querySelector('[data-disclosure=\"windows-startup\"]').open = true");
+        await check(`settings-startup-expanded-${theme}`);
+      }
       if (section === 'picture') await screenshot(`settings-${theme}`);
     }
   }
@@ -185,7 +216,7 @@ try {
   assert.equal(await evaluate("Boolean(document.querySelector('.connection-details'))"), false);
   await open('route=settings&section=app&backend=native');
   await check('native-troubleshooting-settings');
-  assert.equal(await evaluate("document.body.textContent.includes('Built into MirrorMe')"), true);
+  assert.equal(await evaluate("Boolean(document.querySelector('[data-action=\"open-logs-folder\"]') && document.querySelector('[data-action=\"copy-logs-path\"]'))"), true);
   assert.equal(await evaluate("document.querySelector('#field-verboseLogging').checked"), false);
   await evaluate(`(() => {
     const input = document.querySelector('#field-verboseLogging');

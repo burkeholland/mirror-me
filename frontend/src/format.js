@@ -58,9 +58,3 @@ export function resolutionLabel(value) {
 export function friendlyErrorMessage(err) {
   return err?.message ?? String(err);
 }
-
-export function deviceLabel(snapshot) {
-  return snapshot.deviceName || (
-    ['connecting', 'mirroring', 'paused'].includes(snapshot.status) ? 'Your iPhone' : 'Not connected'
-  );
-}

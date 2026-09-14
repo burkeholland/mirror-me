@@ -28,8 +28,8 @@ svg.icon { width: 20px; height: 20px; flex: 0 0 auto; }
 
 .app-window { height: 100%; display: flex; flex-direction: column; background: var(--bg); }
 .titlebar { height: 40px; flex-shrink: 0; display: flex; align-items: center; padding-left: var(--space-4); user-select: none; --wails-draggable: drag; -webkit-app-region: drag; }
-.brand-mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; background: var(--accent-surface); color: var(--on-accent); margin-right: var(--space-2); }
-.brand-mark .icon { width: 14px; height: 14px; stroke-width: 1.8; }
+.brand-mark { width: 20px; height: 20px; flex-shrink: 0; margin-right: var(--space-2); }
+.brand-mark svg, .about-mark svg { display: block; width: 100%; height: 100%; }
 .titlebar-title { font-size: 12px; }
 .window-controls { display: flex; height: 100%; margin-left: auto; }
 .caption-button { width: 46px; height: 100%; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--text); cursor: default; }
@@ -167,6 +167,7 @@ svg.icon { width: 20px; height: 20px; flex: 0 0 auto; }
 .settings-tabs [role="tab"]:hover { color: var(--text); }
 .settings-panel { flex: 1; padding-bottom: var(--space-6); }
 .settings-group { margin-bottom: var(--space-5); }
+.settings-disclosure + .settings-group { margin-top: var(--space-5); }
 .settings-group h2, .help-section > h2 { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: var(--space-3); }
 .settings-rows { border: 1px solid var(--border); border-radius: var(--radius-sharp); overflow: hidden; }
 .setting-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding: var(--space-4); min-height: 76px; }
@@ -209,15 +210,9 @@ label.setting-row:hover { background: color-mix(in srgb, var(--bg) 55%, transpar
 .settings-disclosure > summary { padding: var(--space-4); color: var(--text); }
 .settings-disclosure[open] > summary { border-bottom: 1px solid var(--border); }
 .settings-disclosure > .disclosure-content { padding: 0; }
-.connection-details > summary { font-size: 12px; }
-.diagnostics { display: grid; gap: var(--space-2); margin-bottom: var(--space-4); font-size: 12px; }
-.diagnostics { grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--space-4); }
-.diagnostics > div { display: contents; }
-.diagnostics dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
 
 .help-intro { display: flex; align-items: center; gap: var(--space-4); padding-bottom: var(--space-6); margin-bottom: var(--space-5); border-bottom: 1px solid var(--border); }
-.about-mark { display: grid; place-items: center; width: 56px; height: 56px; flex-shrink: 0; border-radius: var(--radius-compact); background: var(--accent-tint); color: var(--accent-text); }
-.about-mark .icon { width: 28px; height: 28px; }
+.about-mark { width: 56px; height: 56px; flex-shrink: 0; }
 .help-intro h2 { font-size: 20px; }
 .help-intro p { font-size: 12px; color: var(--text-muted); margin: var(--space-1) 0; }
 .version-label { color: var(--text-meta); font-size: 11px; }

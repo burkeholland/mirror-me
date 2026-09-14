@@ -1,6 +1,7 @@
 import { state, hasDraftChanges } from './state.js';
-import { escHtml, escAttr, statusMeta, formatElapsedSince, resolutionLabel, deviceLabel, MAX_PC_NAME_BYTES } from './format.js';
+import { escHtml, escAttr, statusMeta, formatElapsedSince, resolutionLabel, MAX_PC_NAME_BYTES } from './format.js';
 import { icon } from './icons.js';
+import brandMark from './assets/mark.svg?raw';
 
 const SECTIONS = [['connection', 'Connection'], ['picture', 'Picture & sound'], ['app', 'App']];
 const RESOLUTIONS = ['auto', '1280x720', '1920x1080', '3840x2160'];
@@ -78,7 +79,7 @@ export function renderApp(app) {
 
 function renderTitlebar() {
   return `<header class="titlebar">
-    <div class="brand-mark" aria-hidden="true">${icon('cast')}</div><span class="titlebar-title">MirrorMe</span>
+    <div class="brand-mark" aria-hidden="true">${brandMark}</div><span class="titlebar-title">MirrorMe</span>
     <div class="window-controls">
       <button class="caption-button" id="window-minimise" data-waction="minimise" aria-label="Minimize" title="Minimize">${icon('minus')}</button>
       <button class="caption-button" id="window-maximise" data-waction="maximise" aria-label="${state.maximised ? 'Restore' : 'Maximize'}" title="${state.maximised ? 'Restore' : 'Maximize'}">${icon(state.maximised ? 'copy' : 'square')}</button>
@@ -397,25 +398,14 @@ function appSettings() {
     <p class="settings-note">Two log files, up to 1 MB each. Turning logging off keeps existing files.</p>
     <p class="settings-path">${escHtml(state.logsFolder)}</p>
     <div class="button-row">${button('open-logs-folder', 'Open logs folder', { quiet: true, small: true })}
-      ${button('copy-logs-path', 'Copy logs path', { quiet: true, small: true, icon: 'copy' })}</div>
-    ${connectionDetails('settings-details')}`;
-}
-
-function connectionDetails(key) {
-  return disclosure(key, 'Connection details', `<dl class="diagnostics">
-    <div><dt>Receiver</dt><dd data-diagnostic-status>${escHtml(statusMeta(state.status.status).label)}</dd></div>
-    ${state.status.backend === 'native' ? '<div><dt>Implementation</dt><dd>Built into MirrorMe</dd></div>' : ''}
-    <div><dt>Version</dt><dd>${escHtml(state.version || 'Development')}</dd></div>
-    <div><dt>Device</dt><dd data-diagnostic-device>${escHtml(deviceLabel(state.status))}</dd></div>
-  </dl>
-  ${button('copy-diagnostics', 'Copy details', { id: `copy-${key}`, quiet: true, small: true, icon: 'copy' })}`, 'connection-details');
+      ${button('copy-logs-path', 'Copy logs path', { quiet: true, small: true, icon: 'copy' })}</div>`;
 }
 
 function helpAnswers() {
   return `${disclosure('help-discovery', "My PC isn't in Screen Mirroring", `<p>Keep your iPhone and PC on the same trusted network. A guest network or VPN may prevent them from finding each other.</p>
     <p>Make sure MirrorMe says <strong>Ready to connect</strong>. If Windows asks about network access, allow the MirrorMe receiver on your private network. Do not turn off your firewall.</p>`)}
     ${disclosure('help-connecting', 'My iPhone is stuck on Connecting', `<p>Finding your iPhone and receiving its video are separate steps. MirrorMe only marks the session as mirroring after the receiver reports video.</p>
-      <p>On your iPhone, stop Screen Mirroring. Choose <strong>Try again</strong> in MirrorMe, then select this PC again on your iPhone. Connection details and logging are in <strong>Settings &gt; App &gt; Troubleshooting</strong>.</p>`)}
+      <p>On your iPhone, stop Screen Mirroring. Choose <strong>Try again</strong> in MirrorMe, then select this PC again on your iPhone. Logging is in <strong>Settings &gt; App &gt; Troubleshooting</strong>.</p>`)}
     ${disclosure('help-paused', 'Mirroring is paused', `<p>Paused means the receiver reported a pause, not that MirrorMe detected a locked phone from missing video.</p>
       <p>Unlock your iPhone to resume. If video doesn't resume, stop <strong>Screen Mirroring</strong> on your iPhone, then choose this PC again. The video window stays hidden while paused; you can still stop mirroring in MirrorMe.</p>`)}
     ${disclosure('help-video', 'The picture is black or sound is missing', `<p>Some apps block screen mirroring of protected video. Try the iPhone Home Screen or a photo first.</p>
@@ -432,7 +422,7 @@ function renderAbout() {
     : [['UxPlay', 'https://github.com/FDH2/UxPlay'], ['libuxplay', 'https://github.com/leapbtw/libuxplay'],
       ['GStreamer', 'https://gstreamer.freedesktop.org/']];
   return `<div class="page help-page">${heading('Help &amp; about')}${errorNotice()}
-    <section class="help-intro"><div class="about-mark" aria-hidden="true">${icon('cast')}</div>
+    <section class="help-intro"><div class="about-mark" aria-hidden="true">${brandMark}</div>
       <div><h2>MirrorMe</h2><p>iPhone screen mirroring, made for Windows.</p><span class="version-label">Version ${escHtml(state.version || 'Development')}</span></div>
       ${button('open-guide', 'Connection guide', { id: 'about-guide', primary: true, icon: 'phone' })}</section>
     <section class="help-section"><h2>A little help</h2>${helpAnswers()}</section>
@@ -514,10 +504,6 @@ export function refreshReceiverStatus(app) {
   if (label) label.textContent = receiverLabel();
   const dot = app.querySelector('[data-receiver-tone]');
   if (dot) dot.dataset.receiverTone = meta.tone;
-  const status = app.querySelector('[data-diagnostic-status]');
-  if (status) status.textContent = meta.label;
-  const device = app.querySelector('[data-diagnostic-device]');
-  if (device) device.textContent = deviceLabel(state.status);
   const warning = app.querySelector('[data-log-warning]');
   if (warning) {
     warning.textContent = state.logWarning;
