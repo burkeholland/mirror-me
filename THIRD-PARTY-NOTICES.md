@@ -60,7 +60,7 @@ the summary table above does not replace them.
 | Component | License | Source |
 |---|---|---|
 | Wails v2.15.0 | MIT | <https://github.com/wailsapp/wails> |
-| Go 1.25 and golang.org/x/sys v0.46.0 | BSD-3-Clause | <https://go.dev/>, <https://pkg.go.dev/golang.org/x/sys> |
+| Go compiler/runtime and golang.org/x/sys v0.46.0 | BSD-3-Clause | <https://go.dev/>, <https://pkg.go.dev/golang.org/x/sys> |
 | Postrboard CSS 2.0.0 | MIT | <https://github.com/burkeholland/postrboard-design> |
 | Lucide 1.39.0, including Feather-derived icons | ISC / MIT | <https://lucide.dev>, <https://github.com/feathericons/feather> |
 
@@ -77,6 +77,14 @@ versions and package license metadata are pinned in
 [frontend/package-lock.json](frontend/package-lock.json). Preserve each
 dependency's original notices when packaging a build; the short table is not
 a substitute for the full transitive notice set.
+
+The public 0.2.3 preview was compiled with Go 1.26.2. Its matching source ZIP
+includes that Go release's official source archive, the original source ZIPs
+for the complete Go module graph, and the exact Lucide package plus its
+preferred upstream source. Full native, Go and frontend license texts are
+included in both downloads. The release manifest binds the executable and
+source archive by SHA-256; the native-only development receipts are not
+standalone application release approval.
 
 ## Static website and artwork
 

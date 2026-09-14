@@ -14,17 +14,21 @@ Local discovery and real video decoding/display have been checked, but the
 The website shows static screenshots with example data, not a device test.
 
 [Explore the app interface](https://burkeholland.github.io/mirror-me/) |
-[Build from source](#getting-started)
+[Download the Windows preview](https://github.com/burkeholland/mirror-me/releases/download/v0.2.3-preview.1/MirrorMe-0.2.3-windows-x64.zip) |
+[Matching source and checksums](https://github.com/burkeholland/mirror-me/releases/tag/v0.2.3-preview.1)
 
 The current **0.2.3 source build** has a built-in receiver. It uses Windows
 media and discovery APIs and statically linked protocol/audio libraries:
 no UxPlay executable, GStreamer bundle, Bonjour installation, or receiver
 download is needed. It is not a clean-room AirPlay implementation.
 
-**No Windows download is currently published.** The external-receiver preview
-and its release assets have been removed. Build the self-contained app from
-source using the instructions below. A new binary release must include its
-matching corresponding-source and license package.
+**The public 0.2.3 preview is self-contained.** Extract the Windows ZIP and
+open `MirrorMe.exe`. It is unsigned, so Windows may show an unknown-publisher
+warning. Compare `SHA256SUMS.txt` on the release page before running it.
+The same release includes the full license notices and
+`MirrorMe-0.2.3-source.zip`, with the frozen application source, matching
+dependency sources, build recipes and a verified `REBUILD.ps1`.
+The old external-receiver preview remains retired.
 
 ## Features in the current source build
 
@@ -310,8 +314,9 @@ It does not modify the native app's `frontend\dist` bundle. The manifest ties
 the screenshots to their source and asset hashes. Website browser checks cover
 desktop/mobile layouts, static content, image loading, keyboard navigation,
 themes, reduced motion, and use without JavaScript. Review images go to
-`build\site-review`. The executable size shown describes the current source
-build, not an available public download.
+`build\site-review`. The executable size shown is the uncompressed executable,
+not the Windows ZIP size. Download links point to a specific verified preview;
+matching source, full notices and checksums are on that release page.
 
 Commit the source and generated assets together. `scripts\publish-site.ps1`
 checks freshness and publishes the committed `site` subtree to `gh-pages`

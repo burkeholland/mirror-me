@@ -28,11 +28,12 @@ test('the landing page is concise and excludes the removed section and runtime n
   assert.ok(words <= 180, `Keep the page concise (${words} words)`);
 });
 
-test('the page describes a source build without retired download links', () => {
-  assert.match(html, /17\.9 MB executable\.<\/strong> Current source build\./);
-  assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me#getting-started"/);
-  assert.match(html, /Windows download not yet available/);
-  assert.doesNotMatch(html, /releases\/(?:download|latest)|v0\.1\.0|separate receiver setup|entire ZIP/);
+test('the page links the self-contained preview and its sources without retired downloads', () => {
+  assert.match(html, /17\.9 MB executable\.<\/strong> Built-in receiver\./);
+  assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/releases\/download\/v0\.2\.3-preview\.1\/MirrorMe-0\.2\.3-windows-x64\.zip"/);
+  assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/releases\/tag\/v0\.2\.3-preview\.1"/);
+  assert.match(html, /Source, licenses &amp; checksums/);
+  assert.doesNotMatch(html, /Windows download not yet available|v0\.1\.0|separate receiver setup/);
   assert.match(html, /Unsigned/);
   assert.doesNotMatch(html, /releases\/latest|src="https:/);
 });
