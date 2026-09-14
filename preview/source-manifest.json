@@ -1,13 +1,14 @@
 {
   "description": "Built from the desktop frontend; only native calls are replaced with in-memory example behavior.",
   "sources": {
-    "src/events.js": "1a22d46c58ae03e0fede76706a42b8862912cb0bf2cf0ae483e02f6558e5b8c4",
-    "src/format.js": "33c6e596c9bc51c39a898dbdd96ccceadaa8f801813c6f878f7bdae015cf167f",
+    "src/assets/mark.svg": "85852086ac6dfb7c04e672fd887aef867a7bf63c5b37bac65522b30772cb5b6b",
+    "src/events.js": "e81cd9673b4677dc7240f45ed77e3581e71b7d2d52608f5b2d70b9178dbfd4af",
+    "src/format.js": "85adc7839e16322888cc3f10cb9f567a82f073125bc10f40bb32b9596dfb2ba0",
     "src/icons.js": "6c136e7aa7509dbaa51fb24b55be84f3b896f1e027b51da0b27a67a7bb1b1e13",
     "src/main.js": "4ab301181f6ad8d67d6b7429ede70ecc87c33d77ae375c7d32d6094850b7501d",
-    "src/render.js": "d5a1dac7260348ae0ee0e332487b357462409f64f701762086bc1bf4ffa55c84",
-    "src/state.js": "f797513ca321dbbfe1d7ccf032372d3c9b82b10b170ec8f35bf89a7a0cc7fa90",
-    "src/style.css": "073e809cb602cbcb7d4ca9bd5d9f1e116a98b845e489854e8e071a95d453230e",
+    "src/render.js": "80c11485eb8a86b5192f2eb48f6b1dabf855ea2a6291f9847275989843f0eee0",
+    "src/state.js": "b0573dda082620796e3eb052352289c8971df3a24a9f4f3f1b074aa03ecd48df",
+    "src/style.css": "b34f827c9b65fd41990b1353d0c5914195860e8c2065bf9098fc14f9658cba32",
     "src/theme.js": "13158b592466fd7af532033dde1ae836f9aa6b534b54fe7cd2ce16749083866c",
     "src/vendor/postrboard.css": "d5e7a983b3b35413223b6eebc564c79fd7d50e8e693c13b9d7e22eabeccacade",
     "preview/bridge.mjs": "97447280dc58dbf9902533ee1c9b5b1d3a81518e3a2cae5bbff60b701917e6e7",
@@ -24,10 +25,10 @@
     "package-lock.json": "7f80730938c312fe9bd4cb8bef6c4ae305dea441f95c443d68e70dba84314429"
   },
   "assets": {
-    "assets/index-BhZd6FQF.js": "65241086298c2d771be957af3ece49aab2a833ca52dbc0cc310104e8845c5d3c",
-    "assets/main-CYRrj4d2.js": "03c1ee034cf2324c885ba678b0cece48c406751fcf6f884addd24f0d3bef8b6e",
-    "assets/state-BnVYEtz7.js": "738b5db5821e7daf27ac33e0e3b086d456dacdf6f818c77e25e4de32c9f6e0e9",
-    "assets/main-E-dS7mUQ.css": "3dc743a756be14569a1a8bde5197746a15d493ccec0faedc27730b148b8d95a5",
-    "index.html": "4df47510c51932f7fc4d30d09066981e6fd35c1fd86aef9bb7c440399fad7b06"
+    "assets/index-DbqK1A7t.js": "8aaf3b9534a4397ecb5096750239b49956a6276fd93835d8bea7f6837dea56cc",
+    "assets/main-D-EKC6Fa.js": "64241152a2c58e956a87a3ab845982f0d034f09d999e76837868f667ec75193e",
+    "assets/state-D_7Ml8ST.js": "c676a25bf2eaccf1f26ca1f8e2d97303030b889dc54f3f9bcbffe015ef880dae",
+    "assets/main-CGHteNwK.css": "0a6be549502e14e91654d551c9be7455bdf047d59f99cfd72160ef3584d9db4a",
+    "index.html": "c6301278b89499ee4a22c7e66ae7c765176a31c13c726bab12cd33e59e5e354f"
   }
 }
