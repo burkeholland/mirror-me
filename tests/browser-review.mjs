@@ -128,7 +128,10 @@ try {
     assert.ok(data.alt.length > 0);
     assert.doesNotMatch(data.text, /ux\s*play|About this preview|Sample image/i);
     assert.match(data.text, /17\.9 MB executable/);
-    assert.match(data.text, /Windows download not yet available/);
+    assert.match(data.text, /Download for Windows/);
+    assert.match(data.text, /Source, licenses & checksums/);
+    assert.equal(await evaluate("document.querySelector('.download').getAttribute('href')"),
+      'https://github.com/burkeholland/mirror-me/releases/download/v0.2.3-preview.1/MirrorMe-0.2.3-windows-x64.zip');
     assert.doesNotMatch(data.text, /Older v0\.1\.0|Download Windows preview|separate receiver setup/);
     assert.equal(data.motion, 'none');
     if (data.width >= 768) {
