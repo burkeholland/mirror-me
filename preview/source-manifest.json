@@ -1,21 +1,21 @@
 {
   "description": "Built from the desktop frontend; only native calls are replaced with in-memory example behavior.",
   "sources": {
-    "src/events.js": "e681e05928b2ae28b2a79a4ef2fb5a0ac1fbe8ff1e7ab7f70d356781a901d7e9",
-    "src/format.js": "d45275ce40543c967a2ab926a93d06184078ee4199b601f6225eda3802cdc0f4",
+    "src/events.js": "1a22d46c58ae03e0fede76706a42b8862912cb0bf2cf0ae483e02f6558e5b8c4",
+    "src/format.js": "33c6e596c9bc51c39a898dbdd96ccceadaa8f801813c6f878f7bdae015cf167f",
     "src/icons.js": "6c136e7aa7509dbaa51fb24b55be84f3b896f1e027b51da0b27a67a7bb1b1e13",
-    "src/main.js": "d64fa5c85233e65d373dfd5c5e6518ed2cadd1a2d9790d5028f4b2c3e3fd1487",
-    "src/render.js": "2088322a64f3c2e572fca6a3dac86d3f3e906fe007b5f9c478e9ba674a927d83",
-    "src/state.js": "3c4f8481da82ba18a1108a7c886d725947ec7e74ffac8c90f91b8faffec8ec26",
-    "src/style.css": "eb99c126edfe896dc4f66c66d254e06c6ef124c873de5c07031d650f68f2dd8b",
+    "src/main.js": "4ab301181f6ad8d67d6b7429ede70ecc87c33d77ae375c7d32d6094850b7501d",
+    "src/render.js": "d5a1dac7260348ae0ee0e332487b357462409f64f701762086bc1bf4ffa55c84",
+    "src/state.js": "f797513ca321dbbfe1d7ccf032372d3c9b82b10b170ec8f35bf89a7a0cc7fa90",
+    "src/style.css": "073e809cb602cbcb7d4ca9bd5d9f1e116a98b845e489854e8e071a95d453230e",
     "src/theme.js": "13158b592466fd7af532033dde1ae836f9aa6b534b54fe7cd2ce16749083866c",
     "src/vendor/postrboard.css": "d5e7a983b3b35413223b6eebc564c79fd7d50e8e693c13b9d7e22eabeccacade",
-    "preview/bridge.mjs": "43e3ab9d4a41fb6b6d85080353ecbee351f2857514dcb8262dafe978545d4e21",
+    "preview/bridge.mjs": "97447280dc58dbf9902533ee1c9b5b1d3a81518e3a2cae5bbff60b701917e6e7",
     "preview/index.html": "ec31e74db603e54e8127344c3d73b2dbcaa65a79915a73fe2c64fb691d442cea",
     "preview/main.mjs": "42af7abeb5c175bcef96b10b9c2c5024154ba4be199c0ad54a261d2676e160c7",
-    "wailsjs/go/main/App.d.ts": "f6be3db80b266cc1a1cf31276a87c268a2b28e9a842e2f49a3b8db334435bdc2",
-    "wailsjs/go/main/App.js": "bdc5b4ca16e2c96c54d0187cb48bf4a4a7475a08e0e0c522c7e8cb2ce5200af7",
-    "wailsjs/go/models.ts": "95bfc59b0d64a58f2123afad1d90556e879888a6205027a30c2716bd28f3dc6d",
+    "wailsjs/go/main/App.d.ts": "53172206b5b46c7a115d7b7341d799a41fb0c4eaa023c467c7c3d4f3174e1949",
+    "wailsjs/go/main/App.js": "82a3459cd39c31468de4c13fbcf5bb0df5a35ab0b2abb114312b2f8fd350b39b",
+    "wailsjs/go/models.ts": "ce7e5e5813e80c9f46b2fdf752969dd9dfaa0c4cc5784e0fa884e5bc74c873ab",
     "wailsjs/runtime/package.json": "e17998421ed0ff615d8c538fa2d99a0dc46ff974e915a513a6e4f1ac47450d92",
     "wailsjs/runtime/runtime.d.ts": "8f4ec03cac22770b665b4071a652fa952a81846c852dd557c4806fea0e4aaa69",
     "wailsjs/runtime/runtime.js": "e25fe86d3c590de724b93e008f7637c809e54cfa76bdeff8afaf44ed89aeab0d",
@@ -24,10 +24,10 @@
     "package-lock.json": "7f80730938c312fe9bd4cb8bef6c4ae305dea441f95c443d68e70dba84314429"
   },
   "assets": {
-    "assets/index-CMLvLoS4.js": "2fea9357e512254b7feed1c271ca2b320ec302002532a1aadd8908bb7cf99f5e",
-    "assets/main-dgMUaVAm.js": "441953836f6c4cda55c549cdc20d0228274ceba5542146d0bfef7e13c24fd85b",
-    "assets/state-B0TxWuVo.js": "cea14e6fd727fcf099748534559765d038f71d9a044602b18fb287e99ca5bae0",
-    "assets/main-CJOySl25.css": "427e993b6ae443cd16e9f99adb40c1713432fb11af959fd84f616e380d0f933d",
-    "index.html": "64187153d9c568d0097f44deecb9809b52d23839f09d87ad463460b31520d4e7"
+    "assets/index-BhZd6FQF.js": "65241086298c2d771be957af3ece49aab2a833ca52dbc0cc310104e8845c5d3c",
+    "assets/main-CYRrj4d2.js": "03c1ee034cf2324c885ba678b0cece48c406751fcf6f884addd24f0d3bef8b6e",
+    "assets/state-BnVYEtz7.js": "738b5db5821e7daf27ac33e0e3b086d456dacdf6f818c77e25e4de32c9f6e0e9",
+    "assets/main-E-dS7mUQ.css": "3dc743a756be14569a1a8bde5197746a15d493ccec0faedc27730b148b8d95a5",
+    "index.html": "4df47510c51932f7fc4d30d09066981e6fd35c1fd86aef9bb7c440399fad7b06"
   }
 }
