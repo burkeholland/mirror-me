@@ -15,9 +15,9 @@ const {
   state, load, receiveEngineEvent, receiveSettingsUpdate, startMirroring, stopMirroring,
   beginSetup, dismissFirstRun, saveDraft, regeneratePin, navigate, finishNavigation,
   tickConnection, hasDraftChanges, setDraftField, revertDraft, diagnosticText,
-  copyDeviceName, openExternalURL, openDialog, CONNECTION_WAIT_MS,
+  copyDeviceName, openExternalURL, openDialog, showMirroredScreen, receiveLogWarning, openLogsFolder, CONNECTION_WAIT_MS,
 } = await vite.ssrLoadModule('/src/state.js');
-const { renderApp } = await vite.ssrLoadModule('/src/render.js');
+const { renderApp, refreshReceiverStatus } = await vite.ssrLoadModule('/src/render.js');
 const { bindEvents, bindShortcuts } = await vite.ssrLoadModule('/src/events.js');
 const { applyTheme } = await vite.ssrLoadModule('/src/theme.js');
 const originalWindow = globalThis.window;
@@ -34,7 +34,7 @@ beforeEach(() => {
   Object.assign(state, {
     settings: { ...settingsFixture }, draft: { ...settingsFixture }, route: 'home',
     status: { status: 'stopped' }, statusSince: 0, connectionSlow: false,
-    activity: [], toasts: [], error: '', fieldError: '', busy: false, busyAction: '',
+    logWarning: '', logsFolder: '', toasts: [], error: '', fieldError: '', busy: false, busyAction: '',
     saving: false, maximised: false, loading: false, settingsSection: 'connection',
     setupStep: 1, setupName: settingsFixture.deviceName, details: {},
     scrollPositions: {}, dialog: null, returnFocus: '', focusTarget: '',
@@ -47,6 +47,7 @@ beforeEach(() => {
       GetStatus: async () => ({ status: 'starting' }),
       GetVersion: async () => 'test',
       GetSettingsFolder: async () => 'settings',
+      GetLogsFolder: async () => 'logs',
       SaveSettings: async next => ({ ...next }),
       StartMirroring: async () => {},
       StopMirroring: async () => {},
@@ -83,6 +84,124 @@ test('Cancel stays enabled while a start command is pending', () => {
   assert.doesNotMatch(buttonHTML(renderHTML(), 'stop-mirroring'), /\bdisabled\b/);
 });
 
+test('the connection page explains separate video before and after connecting', () => {
+  for (const status of ['stopped', 'starting', 'advertising', 'connecting', 'mirroring']) {
+    state.status = { status, deviceName: 'Example iPhone' };
+    const html = renderHTML();
+    assert.doesNotMatch(html, /home-hint|data-disclosure="home-details"|data-activity-list|Copy details/);
+    assert.match(html, /class="scene-caption">Separate video window/);
+    if (status === 'mirroring') {
+      assert.match(html, /MirrorMe - iPhone screen/);
+      assert.ok(buttonHTML(html, 'show-mirrored-screen'));
+    }
+    assert.doesNotMatch(html, /<video\b/);
+  }
+});
+
+test('an unnamed native phone is not shown as disconnected', () => {
+  state.route = 'settings';
+  state.settingsSection = 'app';
+  for (const status of ['connecting', 'mirroring', 'paused']) {
+    state.status = { status, backend: 'native', deviceName: '' };
+    assert.match(renderHTML(), /data-diagnostic-device>Your iPhone</);
+    assert.match(diagnosticText(), /Device: Your iPhone/);
+  }
+  state.status = { status: 'advertising', backend: 'native' };
+  assert.match(diagnosticText(), /Device: Not connected/);
+});
+
+test('paused mirroring explains recovery without showing a live screen or a connection warning', () => {
+  state.status = { status: 'paused', backend: 'native', videoReceived: false, connectedAt: null };
+  state.connectionSlow = true;
+  const html = renderHTML();
+  assert.match(html, /Mirroring is paused/);
+  assert.match(html, /data-receiver-label>Paused</);
+  assert.doesNotMatch(html, /data-diagnostic-status/);
+  assert.match(html, /Unlock your iPhone to resume/);
+  assert.match(html, /stop <strong>Screen Mirroring<\/strong> on your iPhone, then choose this PC again/);
+  assert.match(buttonHTML(html, 'stop-mirroring'), /Stop mirroring/);
+  assert.doesNotMatch(buttonHTML(html, 'stop-mirroring'), /\bdisabled\b/);
+  assert.equal(buttonHTML(html, 'show-mirrored-screen'), undefined);
+  assert.equal(buttonHTML(html, 'start-mirroring'), undefined);
+  assert.doesNotMatch(html, /You're mirroring|is sharing its screen|data-elapsed|connection-progress|video hasn't arrived/);
+  assert.match(diagnosticText(), /Receiver: paused/);
+  assert.match(diagnosticText(), /Video: Paused, not displayed/);
+});
+
+test('a paused receiver keeps Stop available while a start or settings save is pending', () => {
+  state.status = snapshotFixture('paused');
+  state.busy = true;
+  state.busyAction = 'start';
+  state.saving = true;
+  assert.doesNotMatch(buttonHTML(renderHTML(), 'stop-mirroring'), /\bdisabled\b/);
+  state.busyAction = 'stop';
+  assert.match(buttonHTML(renderHTML(), 'stop-mirroring'), /\bdisabled\b/);
+});
+
+test('a stale Show screen action cannot reopen a paused video window', async () => {
+  let shows = 0;
+  window.go.main.App.ShowMirroredScreen = async () => { shows++; return true; };
+  state.status = snapshotFixture('paused');
+  await showMirroredScreen(noop);
+  assert.equal(shows, 0);
+  assert.equal(state.toasts.length, 0);
+  state.status = snapshotFixture('mirroring');
+  await showMirroredScreen(noop);
+  assert.equal(shows, 1);
+});
+
+test('onboarding handles a receiver pause without claiming success or waiting for discovery', () => {
+  state.settings.firstRun = true;
+  state.setupStep = 2;
+  state.status = snapshotFixture('paused');
+  const html = renderHTML();
+  assert.match(html, /Mirroring is paused/);
+  assert.match(html, /Unlock your iPhone to resume/);
+  assert.match(html, /hidden until video resumes/);
+  assert.match(buttonHTML(html, 'stop-mirroring'), /Stop mirroring/);
+  assert.match(buttonHTML(html, 'dismiss-first-run'), />Done</);
+  assert.equal(buttonHTML(html, 'show-mirrored-screen'), undefined);
+  assert.doesNotMatch(html, /Once this PC is ready|You're connected|is mirroring\.|connection-progress/);
+});
+
+test('Help and the connection guide explain receiver-reported pause and phone-side recovery', () => {
+  state.status = snapshotFixture('paused');
+  state.route = 'about';
+  let html = renderHTML();
+  assert.match(html, /data-disclosure="help-paused"/);
+  assert.match(html, /receiver reported a pause/);
+  assert.match(html, /Unlock your iPhone to resume/);
+  assert.match(html, /choose this PC again/);
+  openDialog('guide', noop);
+  html = renderHTML();
+  const dialog = html.slice(html.indexOf('<dialog'));
+  assert.match(dialog, /Mirroring is paused/);
+  assert.match(dialog, /Unlock your iPhone to resume/);
+  assert.doesNotMatch(dialog, /class="connection-steps"/);
+});
+
+test('native picture settings describe the decoder that is actually used', () => {
+  state.status = { status: 'advertising', backend: 'native' };
+  state.route = 'settings';
+  state.settingsSection = 'picture';
+  const html = renderHTML();
+  assert.match(html, /This preview uses software decoding/);
+  assert.doesNotMatch(html, /data-field="hardwareDecode"/);
+  assert.match(html, /data-field="h265"/);
+});
+
+test('native receiver guidance has no runtime-download or service-install step', () => {
+  state.status = { status: 'advertising', backend: 'native' };
+  let html = renderHTML();
+  assert.doesNotMatch(html, /data-diagnostic-status/);
+  assert.doesNotMatch(html, /Download receiver files|Allow discovery|113 MB/);
+  state.route = 'about';
+  html = renderHTML();
+  assert.match(html, /AirPlay protocol code and audio codecs are built into MirrorMe/);
+  assert.match(html, /No separate receiver download or discovery service is installed/);
+  assert.doesNotMatch(html, /GStreamer|uses UxPlay/);
+});
+
 test('a live ready event wins over an older initial status request', async () => {
   let resolveSettings;
   window.go.main.App.GetSettings = () => new Promise(resolve => { resolveSettings = resolve; });
@@ -91,7 +210,7 @@ test('a live ready event wins over an older initial status request', async () =>
   resolveSettings({ ...settingsFixture });
   await loading;
   assert.equal(state.status.status, 'advertising');
-  assert.equal(state.activity[0].text, 'Ready');
+  assert.doesNotMatch(diagnosticText(), /Recent activity/);
 });
 
 test('a live startup error is not replaced by an older initial status request', async () => {
@@ -183,6 +302,18 @@ test('onboarding saves the chosen name before starting and finishes only when re
   assert.equal(state.settings.firstRun, true);
   await dismissFirstRun(noop);
   assert.equal(state.settings.firstRun, false);
+});
+
+test('discovery name limits are checked before saving or starting', async () => {
+  let saves = 0;
+  window.go.main.App.SaveSettings = async next => { saves++; return next; };
+  state.setupName = '\u754c'.repeat(17);
+  await beginSetup(noop);
+  assert.equal(saves, 0);
+  assert.match(state.fieldError, /shorter PC name/);
+  state.draft.deviceName = 'a'.repeat(51);
+  assert.equal(await saveDraft(noop), false);
+  assert.equal(saves, 0);
 });
 
 test('onboarding and Settings share one PC-name draft', () => {
@@ -282,6 +413,40 @@ test('a new connection resets the old wait warning', () => {
   assert.ok(state.statusSince > 1000);
 });
 
+test('pausing cancels the slow-connection warning and resuming starts a fresh display wait', () => {
+  state.status = snapshotFixture('connecting');
+  state.statusSince = 1000;
+  state.connectionSlow = true;
+  receiveEngineEvent({ Snapshot: snapshotFixture('paused') }, noop);
+  assert.equal(state.connectionSlow, false);
+  let renders = 0;
+  tickConnection(() => { renders++; }, state.statusSince + CONNECTION_WAIT_MS * 10);
+  assert.equal(state.connectionSlow, false);
+  assert.equal(renders, 0);
+
+  state.statusSince = 1000;
+  receiveEngineEvent({ Snapshot: { ...snapshotFixture('connecting'), videoReceived: true } }, noop);
+  assert.ok(state.statusSince > 1000);
+  tickConnection(() => { renders++; }, state.statusSince + CONNECTION_WAIT_MS - 1);
+  assert.equal(state.connectionSlow, false);
+  tickConnection(() => { renders++; }, state.statusSince + CONNECTION_WAIT_MS);
+  assert.equal(state.connectionSlow, true);
+  assert.equal(renders, 1);
+  receiveEngineEvent({ Snapshot: snapshotFixture('mirroring') }, noop);
+  assert.equal(state.connectionSlow, false);
+  assert.match(renderHTML(), /data-elapsed/);
+});
+
+test('a paused initial snapshot never starts a slow-connection warning', async () => {
+  window.go.main.App.GetStatus = async () => snapshotFixture('paused');
+  await load(noop);
+  let renders = 0;
+  tickConnection(() => { renders++; }, state.statusSince + CONNECTION_WAIT_MS * 10);
+  assert.equal(renders, 0);
+  assert.equal(state.connectionSlow, false);
+  assert.match(renderHTML(), /Mirroring is paused/);
+});
+
 test('received video is distinct from rendered video and points to display settings', () => {
   state.status = { ...snapshotFixture('connecting'), videoReceived: true };
   let html = renderHTML();
@@ -319,6 +484,26 @@ test('receiver events update status without rebuilding Settings', () => {
   receiveEngineEvent({ Snapshot: snapshotFixture('connecting') }, value => { options = value; });
   assert.equal(options.statusOnly, true);
   assert.equal(state.draft.deviceName, 'An unsaved name');
+});
+
+test('pause updates Settings indicators and diagnostics without disturbing edited settings', () => {
+  state.route = 'settings';
+  state.draft.deviceName = 'An unsaved name';
+  let options;
+  receiveEngineEvent({ Snapshot: { status: 'paused', backend: 'native' } }, value => { options = value; });
+  assert.equal(options.statusOnly, true);
+  assert.equal(state.draft.deviceName, 'An unsaved name');
+  const elements = {
+    '[data-receiver-label]': {},
+    '[data-receiver-tone]': { dataset: {} },
+    '[data-diagnostic-status]': {},
+    '[data-diagnostic-device]': {},
+  };
+  refreshReceiverStatus({ querySelector: selector => elements[selector] });
+  assert.equal(elements['[data-receiver-label]'].textContent, 'Paused');
+  assert.equal(elements['[data-receiver-tone]'].dataset.receiverTone, 'neutral');
+  assert.equal(elements['[data-diagnostic-status]'].textContent, 'Paused');
+  assert.equal(elements['[data-diagnostic-device]'].textContent, 'Your iPhone');
 });
 
 test('navigating away with edits asks whether to keep them', () => {
@@ -495,11 +680,51 @@ test('clipboard and external-link failures are surfaced rather than swallowed', 
 
 test('names and diagnostics are rendered as text, not markup', () => {
   state.settings.deviceName = '<preview> & "name"';
-  state.activity = [{ time: new Date(), text: '<diagnostic>' }];
-  const html = renderHTML();
+  let html = renderHTML();
   assert.match(html, /&lt;preview&gt; &amp; &quot;name&quot;/);
+  state.route = 'settings';
+  state.logWarning = '<diagnostic>';
+  html = renderHTML();
   assert.match(html, /&lt;diagnostic&gt;/);
   assert.doesNotMatch(html, /<preview>|<diagnostic>/);
+});
+
+test('details and opt-in logging live only in Settings App', () => {
+  for (const status of ['stopped', 'starting', 'needs-setup', 'advertising', 'connecting', 'mirroring', 'paused', 'error']) {
+    state.status = { status, backend: 'native' };
+    assert.doesNotMatch(renderHTML(), /Connection details|activity-list|Copy details|home-hint/);
+  }
+  state.route = 'about';
+  assert.doesNotMatch(renderHTML(), /data-disclosure=".*-details"|activity-list|Copy details/);
+  state.route = 'settings';
+  state.settingsSection = 'app';
+  state.logsFolder = 'local-logs';
+  const html = renderHTML();
+  assert.match(html, /Troubleshooting/);
+  assert.match(html, /data-disclosure="settings-details"/);
+  assert.match(html, /Built into MirrorMe/);
+  assert.match(html, /field-verboseLogging/);
+  assert.doesNotMatch(html.match(/<input[^>]+id="field-verboseLogging"[^>]*>/)[0], /\bchecked\b/);
+  assert.match(html, /local-logs|Open logs folder/);
+});
+
+test('logging warnings preserve edited Settings and do not change mirroring state', async () => {
+  state.route = 'settings';
+  state.settingsSection = 'app';
+  state.status = { status: 'mirroring' };
+  setDraftField('verboseLogging', true, noop);
+  const draft = { ...state.draft };
+  let options;
+  receiveLogWarning('Disk unavailable', value => { options = value; });
+  assert.deepEqual(options, { statusOnly: true });
+  assert.deepEqual(state.draft, draft);
+  assert.equal(state.status.status, 'mirroring');
+  assert.match(renderHTML(), /Disk unavailable/);
+  await saveDraft(noop);
+  assert.equal(state.settings.verboseLogging, true);
+  window.go.main.App.OpenLogsFolder = async () => { throw new Error('Folder unavailable'); };
+  await openLogsFolder(noop);
+  assert.equal(state.error, 'Folder unavailable');
 });
 
 test('the About page explains one tray icon without an extra desktop receiver UI', () => {

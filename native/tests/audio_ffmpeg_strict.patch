@@ -1,0 +1,11 @@
+--- a/libavcodec/alac.c
++++ b/libavcodec/alac.c
+@@ -466,6 +466,8 @@
+     if (avpkt->size * 8 - get_bits_count(&alac->gb) > 8) {
+         av_log(avctx, AV_LOG_ERROR, "Error : %d bits left\n",
+                avpkt->size * 8 - get_bits_count(&alac->gb));
++        if (avctx->err_recognition & AV_EF_EXPLODE)
++            return AVERROR_INVALIDDATA;
+     }
+ 
+     if (alac->channels == ch && alac->nb_samples)

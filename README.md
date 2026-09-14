@@ -16,23 +16,36 @@ The website demonstration is a simulation, not a device test.
 [Explore the app interface](https://burkeholland.github.io/mirror-me/) |
 [Download the Windows preview](https://github.com/burkeholland/mirror-me/releases/download/v0.1.0-preview.1/MirrorMe-windows-x64.zip)
 
-Extract the **entire ZIP**, open `MirrorMe.exe`, and choose **Download receiver
+The current **0.2.3 source build** has a built-in receiver. It uses Windows
+media and discovery APIs and statically linked protocol/audio libraries:
+no UxPlay executable, GStreamer bundle, Bonjour installation, or receiver
+download is needed. It is not a clean-room AirPlay implementation.
+
+**The public download is still the earlier 0.1.0 preview, not this rewrite.**
+For that older download, extract the **entire ZIP**, open `MirrorMe.exe`, and choose **Download receiver
 files** when prompted. This one-time, 113 MB download comes directly from the
 upstream UxPlay Windows project. MirrorMe checks its pinned SHA-256 and decodes
 a generated test frame before installing it in your local application cache.
+Setup also checks the production video-timestamp path with synchronization
+enabled, including a buffered first frame.
 The standalone UxPlay desktop app is excluded. Internet is needed for this
 setup; mirroring itself stays on your local network. Windows may warn about
 the unsigned application; verify the release checksum and source before
 choosing whether to run it.
 
-## Features
+## Features in the current source build
 
 - **Wireless AirPlay mirroring** — your iPhone finds MirrorMe over your local
   Wi-Fi network exactly like it finds an Apple TV; no pairing app or cable
   required.
 - **A focused Mirror workspace** — one connection view, the PC name your
-  iPhone sees, and the right action for the current state. Connection
-  details and recent activity stay out of the way until you expand them.
+  iPhone sees, and the right action for the current state. Connection details
+  are in **Settings > App > Troubleshooting**, not on the main screen.
+- **A separate, branded video window** — the control window manages receiving
+  and settings; your iPhone appears in **MirrorMe - iPhone screen**, with the
+  MirrorMe icon. Video is not embedded in the controls page.
+  Frames and letterboxing are assembled off-screen and copied together,
+  rather than briefly clearing the visible picture to black between frames.
 - **A short, two-step welcome** — name this PC, then connect your iPhone.
   Receiving starts when you continue, not before first-run setup.
 - **Useful connection recovery** — phone detection, encoded-video arrival,
@@ -45,8 +58,8 @@ choosing whether to run it.
   you **Save changes** or **Revert**:
   - **Device** — the name your iPhone sees in its Screen Mirroring list.
   - **Streaming quality** — resolution (Auto / 720p / 1080p / 4K), max frame
-    rate, audio passthrough, hardware-accelerated decoding, and optional
-    H.265/HEVC for newer iPhones.
+    rate, audio playback, and optional H.265/HEVC when Windows has a compatible
+    decoder. This native preview uses software video decoding, not GPU decoding.
   - **Connection & security** — prefer the newest connection over rejecting
     a second device, an inactivity auto-disconnect timer, and an optional
     **4-digit PIN** (generated with `crypto/rand`) required before an iPhone
@@ -62,10 +75,10 @@ choosing whether to run it.
 - **Bounded startup** — the app reports ready only after receiver
   initialization succeeds. Startup can be cancelled, and a receiver that
   does not become ready within 20 seconds is stopped with an explanation.
-- **Guided one-time setup** — AirPlay depends on Apple's Bonjour network
-  service. If it isn't installed yet, MirrorMe walks you through the one-time,
-  self-contained install (a single UAC prompt) instead of failing silently.
-  See [How mirroring works](#how-mirroring-works) below.
+- **Built-in receiving** — Windows handles discovery; there is no receiver
+  download or Bonjour setup step. Both discovery services must register
+  before the app reports ready. Windows Firewall still needs to allow the app
+  on your trusted private network.
 - **Safe-by-design settings storage** — settings are written atomically
   (temp file + rename) to `%APPDATA%\MirrorMe\settings.json`, so a crash or
   power loss mid-save can't corrupt your configuration.
@@ -81,14 +94,20 @@ choosing whether to run it.
 - **Windows 11** (or Windows 10 with the [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) installed — present by default on Windows 11).
 - Your iPhone and this PC on the **same local network**. The PC can use
   Wi-Fi or Ethernet.
-- An internet connection for the first receiver download. Published
-  previews do not bundle or republish the upstream runtime DLLs.
+- The current native source build needs no internet connection at runtime.
+  The older public preview still needs its first receiver download.
+- Windows N/KN editions may need Microsoft's Media Feature Pack. Optional
+  HEVC support depends on an installed Windows decoder.
 
 To build from source you'll also need:
 
 - [Go](https://go.dev/) 1.25 or later
 - [Node.js](https://nodejs.org/) 20.19+ or 22.12+ (required by Vite 7)
 - The [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation) (`go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`)
+- An x64 **UCRT** MinGW toolchain (tested: Strawberry GCC 13.2.0 at
+  `C:\Strawberry\c\bin`), CMake, Ninja, Python, Git for Windows with Bash,
+  GNU Make, and tar. An MSVCRT-only compiler cannot consume the pinned SDK.
+- Internet for the pinned source/build dependencies on the first build.
 
 ## Getting started
 
@@ -96,41 +115,52 @@ To build from source you'll also need:
 # Install the Wails CLI (one time)
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
 
-# From the MirrorMe source folder, build the background receiver
-# when it is not already bundled
-.\scripts\build-receiver.ps1
+# Restore the frontend dependencies
+npm ci --prefix frontend
 
-# Live development, with hot reload for the frontend
+# Build native libraries, the Windows app, and check single-file startup
+.\scripts\build-app.ps1
+
+# Later app-only rebuilds, after native libraries are unchanged
+.\scripts\build-app.ps1 -SkipNativeBuild
+
+# Live frontend development after native libraries are built
 wails dev
-
-# Build the Windows executable
-wails build
-
-# Package a preview ZIP plus matching native receiver source
-.\scripts\package-release.ps1
 ```
 
-`wails build` produces `build\bin\MirrorMe.exe`. A post-build step
-(`scripts/copy-engine.ps1`) automatically copies the bundled mirroring
-engine (`engine/`) alongside it for local development. The public ZIP includes
-only MirrorMe's background receiver in that folder and installs the pinned
-runtime on explicit first-run consent. **Keep the `engine` folder next to
-`MirrorMe.exe`**; do not copy the app executable out on its own.
+The build produces `build\bin\MirrorMe.exe`; that executable does not require
+an `engine` folder. Windows and WebView2 remain platform requirements.
+Close an existing app from its tray before replacing its executable, or use
+`-OutputName MirrorMe-native.exe` to build separately.
 
-The receiver is built separately from pinned UxPlay source. Its native build
-requirements and dependency locations are configured by
-`scripts\build-receiver.ps1`. Go/Wails still builds the Windows app and its
-interface; it does not compile the receiver's C/C++ dependencies.
+The script verifies the production archive, forces fresh Go linking, audits
+DLL imports, and runs the worker from an otherwise empty folder with a
+Windows-only PATH. A protocol-only test stub cannot pass as a production build.
+Use the script after native changes: ordinary Go caching does not track
+external static archive contents. See `native\INTEGRATION.txt` and
+`native\AUDIO-NOTICES.txt` for component builds and retained source licenses.
+
+The old backend is isolated behind the explicit `legacy_receiver` build tag.
+`build-receiver.ps1`, `copy-engine.ps1`, and `package-release.ps1` are legacy
+tools, not the packaging route for the new single-executable application.
+Do not publish a native binary without its matching corresponding-source
+and license package.
+
+`collect-native-sources.ps1` collects pinned native sources, exact MSYS2
+recipes/patches, and compiler-runtime notices into `build\native-sources\bundle`.
+Its `-Offline` mode rechecks the cached inputs. This native source inventory
+is not yet a complete application distribution package: publication must also
+bind the final executable to the matching application/frontend sources and
+dependency notices. The app build writes a `.build.json` fingerprint beside
+its executable and deliberately does not mark the build approved for release.
 
 ## Using MirrorMe
 
 1. Launch `MirrorMe.exe`. On first run, choose the name this PC should
    show on your iPhone and select **Continue**.
-   If prompted, choose **Download receiver files** and let the one-time
-   download and decoder check complete. It is cancellable and does not
-   need administrator permission.
-2. If discovery needs setup, select **Allow discovery** and approve the
-   Windows administrator prompt to install or start Bonjour.
+   The current source build starts its built-in receiver directly.
+2. Allow MirrorMe through Windows Firewall on your trusted private network
+   if Windows prompts. Do not disable the firewall.
 3. When the PC is ready, open **Control Center** on your iPhone and tap
    **Screen Mirroring**. Choose this PC's name. On an iPhone with a Home
    button, swipe up from the bottom to open Control Center.
@@ -157,7 +187,7 @@ window, start/stop mirroring, jump to Settings or About, or quit for good.
 | Picture & sound | Maximum resolution | The requested quality limit: Automatic, 720p, 1080p, or 4K. |
 | Picture & sound | Maximum frame rate | The requested frame-rate limit, not a live measurement. |
 | Picture & sound | Play iPhone audio | Uses the PC's speakers for mirrored sound. |
-| Picture & sound, advanced | Use hardware acceleration | Uses the graphics processor to decode video. |
+| Picture & sound, advanced | Windows video decoder | The current native preview uses software decoding. |
 | Picture & sound, advanced | Allow HEVC video | Enables H.265 for compatible devices. |
 | App | Theme | Light, dark, or follow Windows; preview before saving. |
 | App | Keep MirrorMe on top | Keeps the control window above other apps. |
@@ -177,23 +207,43 @@ guide, and **Esc** to close a dialog. Arrow keys move between settings
 categories. Receiver updates do not interrupt editing, and the session
 timer updates without rebuilding the page.
 
+### Troubleshooting logs
+
+In **Settings > App > Troubleshooting**, turn on **Verbose logging** and save
+before reproducing a problem. This takes effect without restarting mirroring.
+Use **Open logs folder** or **Copy logs path** to find
+`%APPDATA%\MirrorMe\logs\verbose.jsonl` and its rotated backup
+`verbose.jsonl.1`. Each file is limited to 1 MiB.
+
+The JSON-lines records include UTC time, application version, receiver state,
+video-arrival and error flags, and selected picture/audio settings. Agents can
+read these files to trace connection, pause, resume and shutdown events.
+They do not contain screen/audio content, pairing codes, device identities,
+raw errors, or network packet dumps. Logging is off by default. Turning it off
+stops writing but retains existing files; delete those files to remove them.
+A file-writing failure appears in Settings without interrupting mirroring.
+
 ## How mirroring works
 
-MirrorMe doesn't reimplement Apple's AirPlay protocol. It's a native Windows
-front end that manages [UxPlay](https://github.com/FDH2/UxPlay), an
-open-source AirPlay mirroring receiver, as a background subprocess. MirrorMe owns the
-UI, settings, tray icon, and lifecycle; UxPlay owns the network protocol and
-video decoding.
+The default Windows x64 build runs the same executable with
+`--receiver-worker` for receiving. The worker starts before Wails, so it
+does not create another tray or control window. This separates decoder and
+driver failures from the interface without installing another program.
+Versioned JSON carries settings and status over private process pipes;
+pairing codes are not command-line arguments or lifecycle log markers.
 
-There is **one tray icon**. `mirrorme-receiver.exe` is a background-only
-adapter around the Windows-compatible UxPlay library, not the separate
-`uxplay-windows` desktop application. Settings are passed directly as
-arguments, and status is read from the receiver's output pipe, not from a
-guessed log-file location. Quitting MirrorMe also stops the receiver.
+The new native host uses Windows DNS-SD, Media Foundation video decoding,
+an owned Windows video window, and WASAPI audio output. FFmpeg's selected
+audio decoders are compiled in. Low-level licensed AirPlay, pairing, and
+crypto compatibility code remains derived from the pinned libuxplay source;
+UxPlay's orchestration and GStreamer renderers are not compiled.
 
-Bonjour must be running for network discovery. **Allow discovery** uses the
-standard Windows permission prompt to install or start it. Ordinary
-mirroring does not need administrator permission.
+There is **one tray icon**. Quitting MirrorMe stops the worker. A stable
+receiver identity and protected pairing key are stored beneath
+`%APPDATA%\MirrorMe\identity`; a malformed key is reported, not silently
+replaced. PC names fit the 50-byte discovery-label budget without splitting
+Unicode characters. Automatic video settings currently select 1080p/60 FPS
+as requested limits, not a promise of delivered frame rate.
 
 ## Project structure
 
@@ -201,8 +251,8 @@ mirroring does not need administrator permission.
 mirror-me/
 ├── app.go, config.go, engine*.go, security.go, ...   Go backend (Wails-bound App, settings, engine supervisor)
 ├── main.go                                            Entry point / window configuration
-├── engine/                                            Background receiver and multimedia runtime libraries
-├── receiver/                                          Native receiver adapter and reproducible build inputs
+├── native/                                            Built-in Windows receiver, media, audio, tests and dependency pins
+├── receiver/                                          Legacy receiver and retained pinned protocol source checkout
 ├── frontend/src/                                      Vanilla JS/HTML/CSS UI (style.css, state.js, render.js, events.js, main.js)
 ├── build/                                             Wails build assets (icons, Windows manifest)
 ├── scripts/                                            Build helper scripts (engine packaging, icon generation)
@@ -284,20 +334,54 @@ These automated checks do not replace mirroring from a physical iPhone.
 Device compatibility, video/audio synchronization, and protected-content
 behavior need real-device testing before release.
 
-The native build also checks actual decoding with an original H.264 fixture:
+The native components have original video/audio fixtures and real Windows
+playback, discovery, lifecycle, malformed-input, and session-ordering checks:
+
+```powershell
+.\scripts\build-audio-codecs.ps1 -Test
+.\scripts\build-native.ps1
+.\native\tests\media_check.ps1
+.\native\tests\media_flicker_check.ps1
+.\native\tests\media_audio_check.ps1
+$env:MIRRORME_NATIVE_BINARY = (Resolve-Path .\build\bin\MirrorMe.exe).Path
+go test -run '^TestNativeApplicationRunsFromOneFile$' -count=1 -v
+Remove-Item Env:MIRRORME_NATIVE_BINARY
+```
+
+These include real H.264 window pixels, landscape/portrait 4K, real AAC-ELD
+and ALAC audio, and barriers preventing old frames from reviving ended
+sessions. They do not establish physical-device interoperability.
+
+### Legacy receiver checks
+
+The older backend also retains its timestamp/decoder regressions:
 
 ```powershell
 .\engine\mirrorme-receiver.exe --media-self-test
 .\engine\mirrorme-receiver.exe --media-self-test-software
+# Exercise the real timestamp callback, with synchronization enabled:
+.\engine\mirrorme-receiver.exe --media-self-test-timing
+.\engine\mirrorme-receiver.exe --media-self-test-timing-negative
+.\engine\mirrorme-receiver.exe --media-self-test-timing-on-time
 # Opens a temporary real Windows video window, without a network receiver:
 .\engine\mirrorme-receiver.exe --media-self-test-window
+.\engine\mirrorme-receiver.exe --media-self-test-timing-window
 # An intentionally broken pipeline must exit nonzero and report its error:
 .\engine\mirrorme-receiver.exe --media-self-test-invalid
 ```
 
 The no-window checks must not emit the streaming marker, even after their
 test sink processes decoded frames. The window check must report rendered
-video, not merely a selected codec or PLAYING pipeline.
+video and the correct native title/icons, not merely a selected codec or
+PLAYING pipeline. `build-receiver.ps1 -TestVideoWindow` includes both real
+window checks; its normal offline suite includes the timestamp regressions.
+
+The timestamp regression reproduces a confirmed startup defect: a buffered
+first frame caused the phone-to-PC clock offset to be applied twice on retry,
+potentially scheduling video far into the future while audio played. The
+callback now converts the original timestamp once per attempt and preserves
+the incoming packet. This does not disable synchronization or force a
+different decoder or graphics backend.
 
 To verify the complete first-run download in a fresh temporary cache:
 `$env:MIRRORME_RUNTIME_TEST='1'; go test -run '^TestRuntimeOfficialDownloadAndDecoder$' -count=1 -v`.
@@ -309,6 +393,19 @@ use local test servers and do not download it.
 These items require a physical device and are not implied by a passing UI
 review or successful network discovery:
 
+The user confirmed physical iPhone video in native 0.2.0, but reported severe
+flickering. The user confirmed that version 0.2.1's buffered presentation removes
+the flickering, then reported latency and failure to resume after locking the phone.
+Version 0.2.2 preserves video decoder references across pauses and clock corrections,
+hides paused/disconnected video, and resumes on fresh video even without a resume
+header. Controls show a distinct paused state instead of claiming live playback.
+It also reuses decoder output storage and skips color conversion for outdated
+queued frames without skipping their reference decoding. Original 1080p/60 FPS
+fixtures cover receiver-side timing, backlog recovery and inter-frame resume;
+these measurements exclude phone encoding, Wi-Fi and monitor scan-out.
+Real-phone lock/unlock and latency retesting remain required. Sustained playback
+and broad device reliability are not established by generated-frame checks.
+
 - [ ] Connect an iPhone and confirm that its Home Screen actually appears.
 - [ ] Rotate the phone, open a photo, and confirm that the video window updates.
 - [ ] Play unprotected video and confirm picture/audio synchronization.
@@ -317,14 +414,14 @@ review or successful network discovery:
 - [ ] Exercise sleep/wake and a network interruption, and confirm recovery.
 - [ ] Quit MirrorMe and confirm that its receiver and discovery records stop.
 
-For an opt-in local integration check, stop other receiver instances and
+For an opt-in **legacy** local integration check, stop other receiver instances and
 run the following from the project root. This starts the actual bundled
 receiver, confirms AirPlay and RAOP service discovery through Bonjour, and
 stops it again without changing saved settings:
 
 ```powershell
 $env:MIRRORME_LIVE_TEST = '1'
-go test -run '^TestReceiverLiveStartupAndDiscovery$' -count=1 -v
+go test -tags legacy_receiver -run '^TestReceiverLiveStartupAndDiscovery$' -count=1 -v
 Remove-Item Env:MIRRORME_LIVE_TEST
 ```
 
@@ -335,24 +432,29 @@ Remove-Item Env:MIRRORME_LIVE_TEST
   that receiving is started (Mirror shows **Ready for your iPhone**,
   not **Not receiving**). Corporate/public Wi-Fi networks that isolate clients from
   each other will also block AirPlay discovery.
-- **Setup keeps asking for Bonjour.** Make sure you approve the UAC prompt
+- **An older preview keeps asking for Bonjour.** The native source build does
+  not need Bonjour. For the older public preview, make sure you approve the UAC prompt
   that appears after **Allow discovery** — if it's dismissed or times out,
   select **Allow discovery** again.
 - **My iPhone stays on Connecting.** Stop Screen Mirroring on the phone,
   choose **Try again** in MirrorMe, then select this PC again on the phone.
-  **Connection details** separates reported receiver state from video
-  arrival and provides a copyable activity summary.
+  **Settings > App > Troubleshooting > Connection details** separates reported
+  receiver state from video arrival and provides a copyable status summary.
 - **Video arrived but no screen opens.** In Settings, open **Picture & sound**,
-  expand the advanced options, turn off hardware acceleration, save, and
-  reconnect. A video pipeline failure is shown as an error rather than a
+  expand the advanced options, turn off HEVC, save, and
+  reconnect. Check any Windows codec error in Connection details.
+  A video failure is shown as an error rather than a
   successful mirroring session.
-- **The receiver download fails.** Keep an internet connection for setup,
+- **Audio plays but video never starts.** Reconnect from the iPhone's Screen
+  Mirroring menu and inspect **Connection details**. The native build
+  distinguishes accepted packets from actually displayed frames and reports
+  decoder/display failures explicitly. Protected video may not support mirroring.
+- **The older preview's receiver download fails.** Keep an internet connection for setup,
   cancel and retry. Failed hashes, incomplete ZIPs, and failed decoder checks
   are not installed. Runtime files are cached under
   `%LOCALAPPDATA%\MirrorMe\receiver`; settings remain in `%APPDATA%`.
-- **The receiver times out.** Read the error on Home, confirm **Bonjour
-  Service** is running in Windows Services, and try again. Allow the
-  receiver through Windows Firewall on your trusted private network;
+- **The receiver times out.** Read the error on Home and try again. Allow
+  MirrorMe through Windows Firewall on your trusted private network;
   do not disable the firewall.
 - **An old uxplay-windows icon is still present.** Quit the standalone
   `uxplay-windows` application. Current MirrorMe builds never launch it.
@@ -364,18 +466,20 @@ Remove-Item Env:MIRRORME_LIVE_TEST
 ## License
 
 MirrorMe's own source code is licensed under the [MIT License](LICENSE).
-The native receiver uses GPLv3 UxPlay with a small adapter and integration
-changes. Its libraries retain their respective licenses; see
+The combined self-contained executable links licensed AirPlay code and is
+subject to the applicable GPL terms, including corresponding-source obligations.
+The MIT grant for MirrorMe's own Go/frontend source remains intact.
+Its libraries retain their respective licenses; see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for full attribution before
 redistributing this app.
 
 ## Credits
 
-- [UxPlay](https://github.com/FDH2/UxPlay) — the open-source AirPlay
-  mirroring receiver MirrorMe manages.
+- [UxPlay](https://github.com/FDH2/UxPlay) — upstream AirPlay compatibility work.
 - [leapbtw/libuxplay](https://github.com/leapbtw/libuxplay) — the
-  Windows-compatible UxPlay library used by the background receiver.
+  pinned source of retained low-level protocol compatibility code.
 - [leapbtw/uxplay-windows](https://github.com/leapbtw/uxplay-windows) — the
-  source of the existing bundled multimedia runtime and Bonjour installer.
+  source of the older public preview's multimedia runtime and Bonjour installer.
+- [FFmpeg](https://ffmpeg.org) — statically linked audio decoders in the native build.
 - [Wails](https://wails.io) — the Go + web application framework MirrorMe is
   built on.

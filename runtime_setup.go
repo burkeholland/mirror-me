@@ -275,7 +275,7 @@ func verifyRuntime(ctx context.Context, directory string) error {
 	if !runtimeFilesPresent(directory) {
 		return errors.New("the downloaded archive is missing required receiver files")
 	}
-	for _, mode := range []string{"--self-test", "--media-self-test"} {
+	for _, mode := range []string{"--self-test", "--media-self-test", "--media-self-test-timing"} {
 		probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		command := exec.CommandContext(probeCtx, filepath.Join(directory, receiverExecutable), mode)
 		command.Dir = directory
@@ -284,7 +284,7 @@ func verifyRuntime(ctx context.Context, directory string) error {
 		configureCommand(command)
 		last := ""
 		expected := "MIRRORME_RECEIVER_SELF_TEST_OK"
-		if mode == "--media-self-test" {
+		if mode != "--self-test" {
 			expected = "MIRRORME_MEDIA_TEST_OK"
 		}
 		confirmed := false

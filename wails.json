@@ -6,9 +6,6 @@
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
-  "postBuildHooks": {
-    "windows/*": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/copy-engine.ps1"
-  },
   "author": {
     "name": "Burke Holland",
     "email": "burkeholland@gmail.com"
@@ -16,8 +13,8 @@
   "info": {
     "companyName": "Burke Holland",
     "productName": "MirrorMe",
-    "productVersion": "0.1.0",
+    "productVersion": "0.2.3",
     "copyright": "Copyright \u00a9 2026 Burke Holland",
-    "comments": "Unsigned preview. Mirror your iPhone's screen to this PC over AirPlay."
+    "comments": "Unsigned native-receiver preview. Physical iPhone acceptance testing is in progress."
   }
 }

@@ -13,12 +13,13 @@ export const settingsFixture = {
   startMinimized: false,
   autoStartMirroring: true,
   alwaysOnTop: false,
+  verboseLogging: false,
   theme: 'system',
   firstRun: false,
 };
 
 export function snapshotFixture(status) {
-  const connected = status === 'connecting' || status === 'mirroring';
+  const connected = ['connecting', 'mirroring', 'paused'].includes(status);
   return {
     status,
     deviceName: connected ? 'Preview iPhone' : '',

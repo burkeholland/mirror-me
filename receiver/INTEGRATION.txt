@@ -11,6 +11,13 @@ control window, system-tray icon, Bluetooth beacon process, or elevation.
 Launch it with CREATE_NO_WINDOW, redirected stdout/stderr, and a redirected
 stdin PIPE held open while the receiver should run. Only GStreamer's normal
 video sink can create a video window when a client supplies video.
+The separate output is titled "MirrorMe - iPhone screen". Both title-bar
+and taskbar icons come from the receiver's embedded MirrorMe resource; no
+neighboring application executable is needed in downloaded runtime caches.
+The frame watcher brands only this process's visible captioned windows and
+checks again after reconnects or renderer-created replacement windows.
+Cross-thread window messages have a deadline, so a stuck graphics window
+cannot indefinitely block the receiver's control loop.
 
 Normal UxPlay arguments are converted from the Windows UTF-16 command line
 to UTF-8 and forwarded unchanged. Example:
@@ -49,6 +56,17 @@ selection, a PLAYING pipeline, HLS setup, and a fakesink cannot claim screen
 mirroring. The watcher holds a pipeline reference and is removed before
 renderer teardown. Decoder, buffer-push, and display failures are explicit
 MIRRORME_RECEIVER_ERROR lines. Closing the output window is a normal stop.
+Production libuxplay may prefix errors with "*** ERROR: "; the supervisor
+recognizes that exact prefix, as well as unprefixed adapter errors.
+MIRRORME_RECEIVER_WARNING reports a recoverable problem in activity without
+stopping video or mislabeling it as a Wi-Fi failure.
+
+Video synchronization stays enabled. The timestamp callback preserves each
+packet's original client timestamp, mapping it to PC time once on each
+retry. A frame older than pipeline startup can require a clock correction;
+applying the full offset again to an already-mapped timestamp instead
+schedules video far into the future. The timing regression exercises this
+production callback, not just the decoder.
 
 Do NOT treat these original upstream messages as readiness:
   UxPlay 1.73.6: An Open-Source AirPlay mirroring and audio-streaming server.
@@ -101,7 +119,17 @@ Offline validation
                                into a test sink; must NOT report STREAMING.
   --media-self-test-software    Same check with avdec_h264 selected explicitly.
   --media-self-test-window      Uses the automatic Windows video sink; must
-                               report rendered frames and STREAMING.
+                               render 30 frames, report STREAMING, and have
+                               the MirrorMe title and both embedded icons.
+  --media-self-test-timing      Synchronized production timestamp callback;
+                               buffered first frame, client clock behind PC.
+  --media-self-test-timing-negative
+                               Same regression with client clock ahead.
+  --media-self-test-timing-on-time
+                               Normal first frame with no startup correction.
+  --media-self-test-timing-window
+                               Buffered timestamp regression in a real,
+                               branded Windows video window.
   --media-self-test-invalid     Intentional pipeline failure; must exit 1.
 
 Success from --self-test begins MIRRORME_RECEIVER_SELF_TEST_OK and MUST NOT
@@ -124,6 +152,10 @@ generated, not downloaded:
     -x264-params keyint=1:repeat-headers=1 -f h264 receiver\tests\blue-frame.h264
 The media probes submit a bounded number of frames and check decoded sink
 statistics, with a separate no-input interval that must not report mirroring.
+Timing probes also check that the callback leaves the packet's client
+timestamp unchanged. All timing modes run in the normal native build.
+Use -TestVideoWindow to include the two real-window checks when building
+on an interactive Windows desktop; they display only a generated blue frame.
 
 Build provenance and redistribution
 ----------------------------------
@@ -141,9 +173,12 @@ bundled dependency notices remain applicable; this script replaces no DLLs.
 receiver\vendor\libuxplay is the PRISTINE pinned checkout.
 receiver\patches\windows-receiver.patch contains the Windows integration
 changes; receiver\patches\video-lifecycle.patch adds frame-based reporting.
-The script archives the exact commit, applies both patches to
+receiver\patches\video-timing.patch fixes repeated timestamp conversion.
+The script archives the exact commit, applies these maintained patches to
 build\receiver\libuxplay, and builds that copy. Do not edit the pristine
 checkout; update the maintained patch for future native changes.
+receiver\resources\mirrorme.ico and receiver\receiver.rc.in supply the
+standalone receiver's application icon and Windows version information.
 
 The public Windows preview carries this executable but no third-party DLLs.
 First-run setup downloads the pinned upstream runtime only after user consent.

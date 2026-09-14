@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.24)
-project(mirrorme_receiver VERSION 1.0.0 LANGUAGES C CXX)
+project(mirrorme_receiver VERSION 0.1.1 LANGUAGES C CXX RC)
 
 if(NOT WIN32 OR NOT MINGW OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "Use a 64-bit MinGW-w64 UCRT compiler (not MSVC or MSVCRT).")
@@ -66,10 +66,12 @@ target_link_libraries(airplay PUBLIC receiver_dependencies playfair llhttp pthre
 
 add_library(renderers STATIC
   "${CMAKE_CURRENT_SOURCE_DIR}/video_status.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/video_window.c"
   "${UXPLAY_SOURCE_DIR}/renderers/audio_renderer.c"
   "${UXPLAY_SOURCE_DIR}/renderers/video_renderer.c"
   "${UXPLAY_SOURCE_DIR}/renderers/mux_renderer.c")
 target_link_libraries(renderers PUBLIC airplay)
+target_link_libraries(renderers PRIVATE user32)
 target_include_directories(renderers PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_library(uxplay STATIC "${UXPLAY_SOURCE_DIR}/uxplay.cpp")
@@ -81,7 +83,8 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/tests/blue-frame.h264" media_hex HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," media_bytes "${media_hex}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/media_fixture.h"
   "static const unsigned char media_fixture[] = {${media_bytes}};\n")
-add_executable(mirrorme-receiver main.cpp media_probe.cpp)
+configure_file(receiver.rc.in "${CMAKE_CURRENT_BINARY_DIR}/receiver.rc" @ONLY)
+add_executable(mirrorme-receiver main.cpp media_probe.cpp "${CMAKE_CURRENT_BINARY_DIR}/receiver.rc")
 target_include_directories(mirrorme-receiver PRIVATE "${UXPLAY_SOURCE_DIR}")
 target_include_directories(mirrorme-receiver PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_definitions(mirrorme-receiver PRIVATE

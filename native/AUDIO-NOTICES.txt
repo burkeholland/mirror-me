@@ -1,0 +1,123 @@
+MirrorMe native AirPlay audio decoder
+====================================
+
+Production decoder
+------------------
+native/audio_decode.cpp is GPL-3.0-or-later, as is MirrorMe's native receiver.
+No external executable, installed codec, GStreamer, Bonjour, or Media Foundation
+AAC-ELD decoder is used by this audio module.
+
+FFmpeg 8.0.1, https://ffmpeg.org/
+  Copyright (c) the FFmpeg developers and the individual source-file authors.
+  libavcodec 62.11.100 and libavutil 60.8.100 are built statically from official
+  source, with ALAC, AAC (including AAC-ELD), PCM S16LE and PCM S24LE decoders.
+  License: GNU Lesser General Public License version 2.1 or later.
+  GPL, nonfree, libfdk, external codec libraries, networking, demuxers, encoders,
+  hardware acceleration, dynamic libraries and executable tools are NOT enabled.
+  This is compiled-in third-party implementation, not a claim of no third-party
+  source. FFmpeg's static LGPL code is combined with GPLv3-or-later MirrorMe.
+
+Official source:
+  https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz
+  SHA-256 05ee0b03119b45c0bdb4df654b96802e909e0a752f72e4fe3794f487229e5a41
+  Release signature verified using FFmpeg's official release signing key:
+  FCF9 86EA 15E6 E293 A564 4F10 B432 2F04 D676 58D8
+
+The only upstream source modification is native/tests/audio_ffmpeg_strict.patch:
+  With AV_EF_EXPLODE set, ALAC rejects excess data after its end tag instead of
+  logging a warning and discarding the trailing packet. Original copyrights
+  remain intact. The exact patch SHA-256 is in native/audio-dependencies.json.
+  Generated build files (not upstream source) also have MSYS paths normalized
+  for Strawberry's native Windows GNU Make.
+
+Source, attribution and redistribution
+-------------------------------------
+Keep this notice and the original FFmpeg source notices. The build preserves:
+  build/native-audio/ffmpeg-8.0.1.tar.xz       exact original source archive
+  build/native-audio/ffmpeg-8.0.1/            patched, buildable source
+  build/native-audio/objects/                objects and complete configuration
+  build/native-audio/build-manifest.json     hashes and configure arguments
+  build/native-audio/install/share/licenses/ffmpeg/
+    COPYING.LGPLv2.1, COPYING.LGPLv3, COPYING.GPLv2, COPYING.GPLv3,
+    LICENSE.md, audio-dependencies.json, build-audio-codecs.ps1,
+    audio_ffmpeg_strict.patch, config.h and config.mak.
+
+When distributing a binary, provide corresponding source and the license text
+under the applicable GPL/LGPL terms. Include MirrorMe/native source, the pinned
+FFmpeg source archive, source patch, dependency manifest and build scripts;
+do not substitute only a link to an upstream homepage. Preserve build/link
+inputs needed for rebuilding the static combination. Review the included full
+license texts for exact obligations. Codec patent rights, where applicable,
+are separate from the software copyright licenses.
+
+AirPlay configuration provenance
+--------------------------------
+ALAC cookie layout/defaults and AAC-LC/AAC-ELD AudioSpecificConfig are derived
+from receiver/vendor/libuxplay/renderers/audio_renderer.c at UxPlay commit:
+  437f37514257d9cb513ac7fbdee743b4da85852e
+The original source credits:
+  RPiPlay, Copyright (C) 2019 Florian Draschbacher
+  UxPlay, Copyright (C) 2021-23 F. Duncanh
+  GNU General Public License version 3 or later.
+
+AudioFormat bit positions are protocol facts cross-referenced with
+  https://github.com/openairplay/airplay2-receiver/blob/master/ap2/connections/audio.py
+No Python receiver implementation is included in the production decoder.
+
+Contract and supported audio
+----------------------------
+ct=1: little-endian signed PCM (16/24-bit, mono/stereo); rates 8/16/24/32 kHz
+      at 16-bit and 44.1/48 kHz at 16/24-bit, according to audioFormat.
+ct=2: ALAC 44.1/48 kHz, stereo, 16/24-bit.
+ct=4: AAC-LC 44.1/48 kHz stereo, 1024 or 960 samples/access unit.
+      Raw MPEG-4 access units use negotiated ASC. A single unprotected ADTS
+      frame is also accepted after its profile/rate/channels/length are checked;
+      it must use 1024 samples. Concatenated or CRC-protected ADTS is rejected.
+ct=8: raw AAC-ELD AOT39, 480 or 512 samples/access unit; stereo 44.1/48 kHz
+      and mono 16/24/44.1/48 kHz. This is ELD core audio without LD-SBR,
+      resilience or arbitrary ELD extensions, matching UxPlay's AirPlay ASC.
+      44.1 kHz stereo/480 uses f8e85000, NOT an AAC-LC/ADTS header.
+
+audioFormat is either zero (legacy 44.1 kHz stereo/16-bit default) or exactly
+one compatible negotiated bit, not a capability mask. A zero samples_per_packet
+selects 352 for ALAC/PCM, 1024 for LC, 480 for ELD. Unknown ct/format/depth/
+frame sizes fail explicitly rather than falling back to a different codec.
+At most 65536 encoded bytes, 4096 output frames and 2 channels per decode.
+FFmpeg allocation callbacks independently constrain actual channel/sample
+buffers; AAC needs a bounded 2048-frame internal working buffer even for ELD.
+
+The caller supplies one decrypted, RTP-stripped codec packet at a time, in
+playback order. The decoder does not strip AirPlay/RTP/encryption headers.
+PCM output is signed16 and interleaved; 24-bit samples are downconverted, not
+reinterpreted. Output remains owned by the decoder until the next decode,
+flush or destroy. Different instances can be created/destroyed concurrently;
+decode/flush/destroy of one instance require a single consumer.
+Each error clears the returned frame and reports a concrete error message.
+Flush discards and lazily recreates the codec context, including AAC overlap,
+configuration and PNS state. Any reinitialization failure is reported by the
+next decode, not silently swallowed by the void flush API.
+
+Building and testing (developer only)
+------------------------------------
+PowerShell 7, the pinned Strawberry GCC 13.2.0 UCRT toolchain, GNU Make and Git
+Bash are required. No packages are installed by the script:
+  .\scripts\build-audio-codecs.ps1 -Test
+  .\scripts\build-audio-codecs.ps1 -Rebuild -Test
+
+Include: build/native-audio/install/include and native/include
+Compile: native/audio_decode.cpp as C++17
+Static link order:
+  libavcodec.a libavutil.a -lbcrypt -lole32 -luuid
+  -static -static-libgcc -static-libstdc++
+The test executable is build/native-audio/audio-tests.exe. The script checks
+its PE import table against Windows OS DLL names and writes
+build/native-audio/audio-tests-imports.txt. The host executable must perform
+its own import inspection after combining protocol, video and audio modules.
+
+Test-only code and original media
+--------------------------------
+See native/tests/audio_fixtures/NOTICE.txt, provenance.json and
+LIBXAAC-LICENSE.txt. Real AAC-ELD fixtures are generated from original sine
+waves with the Apache-2.0 Ittiam libxaac encoder, built from pinned source with
+a documented core-only ELD configuration patch. libxaac is NOT linked into
+the production application. There is no libfdk dependency.

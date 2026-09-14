@@ -12,6 +12,7 @@ export function escHtml(v) {
 // Attribute values need the same escaping as text content here, but this is
 // kept as a separate name so call sites document *why* they're escaping.
 export const escAttr = escHtml;
+export const MAX_PC_NAME_BYTES = 50;
 
 const STATUS_META = {
   stopped: { icon: 'monitor', tone: 'neutral', title: 'Ready when you are', label: 'Not receiving' },
@@ -20,6 +21,7 @@ const STATUS_META = {
   advertising: { icon: 'wifi', tone: 'success', title: 'Ready for your iPhone', label: 'Ready to connect' },
   connecting: { icon: 'loader', tone: 'info', title: 'Your iPhone is connecting', label: 'Connecting', spin: true },
   mirroring: { icon: 'monitor-play', tone: 'success', title: "You're mirroring", label: 'Mirroring' },
+  paused: { icon: 'monitor', tone: 'neutral', title: 'Mirroring is paused', label: 'Paused' },
   error: { icon: 'alert', tone: 'danger', title: "Let's get you connected", label: 'Needs attention' },
 };
 
@@ -42,10 +44,6 @@ export function formatElapsedSince(isoTimestamp) {
   return `${s}s`;
 }
 
-export function formatClock(date) {
-  return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
-}
-
 const RESOLUTION_LABELS = {
   auto: 'Automatic (recommended)',
   '1280x720': '720p (1280 × 720)',
@@ -59,4 +57,10 @@ export function resolutionLabel(value) {
 
 export function friendlyErrorMessage(err) {
   return err?.message ?? String(err);
+}
+
+export function deviceLabel(snapshot) {
+  return snapshot.deviceName || (
+    ['connecting', 'mirroring', 'paused'].includes(snapshot.status) ? 'Your iPhone' : 'Not connected'
+  );
 }

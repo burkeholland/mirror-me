@@ -4,6 +4,29 @@ The Go application and `frontend\` code are covered by the root MIT
 [`LICENSE`](LICENSE). The native receiver and its dependencies are licensed
 separately. The MIT license does not relicense any third-party component.
 
+## Self-contained native source build
+
+The default Windows x64 build links the new `native\` host, Windows media and
+discovery integration, and licensed protocol/codec libraries into the same
+application executable. It does not launch UxPlay, load GStreamer, or install
+Bonjour. Windows platform libraries and WebView2 remain platform requirements.
+
+The low-level AirPlay protocol implementation remains derived from the pinned
+`leapbtw/libuxplay` source below; it is not a clean-room implementation.
+The original protocol copyrights and licenses are retained. OpenSSL and
+libplist are statically linked; audio decoding uses the separately pinned
+codec build. Native build manifests and notices record those inputs.
+
+**The combined native executable is subject to the applicable GPL terms.**
+The root MIT grant still covers MirrorMe's own Go/frontend sources, not the
+linked program as a whole. Distribution requires matching native and application
+source, library source/build inputs, and the relevant license notices.
+Do not treat a development SDK archive or a successful local build as proof
+that a redistributable corresponding-source package is complete.
+
+The following legacy-runtime notes describe the existing published preview,
+not the self-contained build.
+
 ## Background AirPlay receiver
 
 `engine\mirrorme-receiver.exe` uses UxPlay through the Windows-compatible

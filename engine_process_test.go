@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,9 @@ import (
 // cleanup without needing an iPhone or altering the machine's Bonjour service.
 func TestMain(m *testing.M) {
 	if mode := os.Getenv("MIRRORME_TEST_RECEIVER"); mode != "" {
+		if strings.HasPrefix(mode, "native-") {
+			os.Exit(runNativeFixture(mode))
+		}
 		switch mode {
 		case "ready":
 			fmt.Println("MIRRORME_RECEIVER_READY port=7000")
@@ -21,6 +25,10 @@ func TestMain(m *testing.M) {
 			fmt.Println("UxPlay 1.71: An Open-Source AirPlay mirroring and audio-streaming server.")
 		case "fatal":
 			fmt.Fprintln(os.Stderr, "MIRRORME_RECEIVER_ERROR: fixture initialization failed")
+		case "video-error":
+			fmt.Println("MIRRORME_RECEIVER_READY port=7000")
+			fmt.Println("MIRRORME_VIDEO_RECEIVED")
+			fmt.Fprintln(os.Stderr, "*** ERROR: MIRRORME_RECEIVER_ERROR: Video output failed: decoder error")
 		case "crash":
 			time.Sleep(100 * time.Millisecond)
 			os.Exit(9)
@@ -33,6 +41,9 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(0)
 	}
+	if len(os.Args) == 2 && os.Args[1] == receiverWorkerArgument {
+		os.Exit(runReceiverWorker(os.Stdin, os.Stdout, createNativeReceiver))
+	}
 	os.Exit(m.Run())
 }
 
@@ -43,6 +54,11 @@ func launchFixture(t *testing.T, mode string, timeout time.Duration) (*Engine, *
 		exePath: os.Args[0], engineDir: t.TempDir(),
 		status: StatusStopped, startupTimeout: timeout,
 		checkBonjour: func() (bool, error) { return true, nil },
+	}
+	if strings.HasPrefix(mode, "native-") {
+		e.builtin = true
+		e.nativeDeviceID = "02:12:34:56:78:90"
+		e.nativeKeyPath = filepath.Join(e.engineDir, "pairing.key")
 	}
 	t.Cleanup(func() {
 		if err := e.Stop(); err != nil {
@@ -112,6 +128,19 @@ func TestReceiverProcessFatalOutputStopsChild(t *testing.T) {
 	}
 	if !strings.Contains(e.Snapshot().LastError, "fixture initialization failed") {
 		t.Fatalf("receiver error was hidden: %+v", e.Snapshot())
+	}
+}
+
+func TestReceiverProcessProductionVideoErrorStopsChild(t *testing.T) {
+	e, run := launchFixture(t, "video-error", 3*time.Second)
+	waitForStatus(t, e, StatusError)
+	select {
+	case <-run.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("receiver kept running after a fatal video error")
+	}
+	if e.Snapshot().LastError != "Video output failed: decoder error" {
+		t.Fatalf("real native logger prefix hid the video error: %+v", e.Snapshot())
 	}
 }
 

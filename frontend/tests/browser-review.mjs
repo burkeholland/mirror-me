@@ -169,6 +169,9 @@ try {
     for (const status of ['stopped', 'starting', 'needs-setup', 'advertising', 'connecting', 'mirroring', 'error']) {
       await open(`state=${status}&theme=${theme}`);
       await check(`${status}-${theme}`);
+      assert.equal(await evaluate("Boolean(document.querySelector('.home-hint, .connection-details, .activity-list'))"), false,
+        'the main screen must not show the removed diagnostics area');
+      assert.match(await evaluate("document.querySelector('.scene-caption').textContent"), /Separate video window/);
       if (status === 'advertising') await screenshot(`ready-${theme}`);
     }
     for (const section of ['connection', 'picture', 'app']) {
@@ -177,6 +180,27 @@ try {
       if (section === 'picture') await screenshot(`settings-${theme}`);
     }
   }
+  await open('state=advertising&backend=native');
+  await check('native-receiver-ready');
+  assert.equal(await evaluate("Boolean(document.querySelector('.connection-details'))"), false);
+  await open('route=settings&section=app&backend=native');
+  await check('native-troubleshooting-settings');
+  assert.equal(await evaluate("document.body.textContent.includes('Built into MirrorMe')"), true);
+  assert.equal(await evaluate("document.querySelector('#field-verboseLogging').checked"), false);
+  await evaluate(`(() => {
+    const input = document.querySelector('#field-verboseLogging');
+    input.click(); input.focus();
+    window.__mirrorMePreview.emit('log-warning', 'Log storage unavailable');
+  })()`);
+  assert.equal(await evaluate("document.activeElement.id === 'field-verboseLogging' && document.querySelector('#field-verboseLogging').checked"), true);
+  assert.equal(await evaluate("document.querySelector('[data-log-warning]').textContent"), 'Log storage unavailable');
+  await evaluate("document.querySelector('[data-action=\"save-settings\"]').click()");
+  await until(() => evaluate("window.__mirrorMePreview.state.settings.verboseLogging === true && !window.__mirrorMePreview.state.saving"), 'save verbose logging preference');
+  assert.equal(await evaluate("window.__mirrorMePreview.calls.some(call => call[0] === 'start' || call[0] === 'stop')"), false);
+  await screenshot('troubleshooting-settings');
+  await open('route=about&backend=native');
+  await check('native-receiver-help');
+  assert.equal(await evaluate("document.body.textContent.includes('GStreamer')"), false);
   for (const [name, query] of [
     ['welcome', 'onboarding=1'],
     ['setup-ready', 'onboarding=1&step=2'],

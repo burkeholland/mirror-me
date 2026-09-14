@@ -1,0 +1,29 @@
+diff --git a/uxplay.cpp b/uxplay.cpp
+--- a/uxplay.cpp
++++ b/uxplay.cpp
+@@ -2343,18 +2343,22 @@
+     if (use_video) {
++        const uint64_t remote_timestamp = data->ntp_time_remote;
+         if (!remote_clock_offset) {
+             uint64_t local_time = (data->ntp_time_local ? data->ntp_time_local : get_local_time());
+-            remote_clock_offset = local_time - data->ntp_time_remote;
++            remote_clock_offset = local_time - remote_timestamp;
+         }
+         int count = 0;
+         uint64_t pts_mismatch = 0;
+         do {
+-            data->ntp_time_remote = data->ntp_time_remote + remote_clock_offset;
+-            pts_mismatch = video_renderer_render_buffer(data->data, &(data->data_len), &(data->nal_count), &(data->ntp_time_remote));
++            uint64_t local_timestamp = remote_timestamp + remote_clock_offset;
++            pts_mismatch = video_renderer_render_buffer(data->data, &(data->data_len), &(data->nal_count), &local_timestamp);
+             if (pts_mismatch) {
+                 LOGI("adjust timestamps by %8.6f secs", (double) pts_mismatch / SECOND_IN_NSECS);
+                 remote_clock_offset += pts_mismatch;
+             }
+             count++;
+         } while (pts_mismatch && count < 10);
++        if (pts_mismatch) {
++            LOGE("MIRRORME_RECEIVER_ERROR: Video timing could not synchronize. Reconnect the iPhone.");
++        }
+     }
+ }

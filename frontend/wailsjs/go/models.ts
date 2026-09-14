@@ -17,7 +17,9 @@ export namespace main {
 	    alwaysOnTop: boolean;
 	    theme: string;
 	    firstRun: boolean;
+	    verboseLogging: boolean;
 	    loadError?: string;
+	    logWarning?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -41,7 +43,9 @@ export namespace main {
 	        this.alwaysOnTop = source["alwaysOnTop"];
 	        this.theme = source["theme"];
 	        this.firstRun = source["firstRun"];
+	        this.verboseLogging = source["verboseLogging"];
 	        this.loadError = source["loadError"];
+	        this.logWarning = source["logWarning"];
 	    }
 	}
 	export class EngineSnapshot {
@@ -55,6 +59,7 @@ export namespace main {
 	    setupProgress: number;
 	    lastError?: string;
 	    pinCode?: string;
+	    backend: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new EngineSnapshot(source);
@@ -71,6 +76,7 @@ export namespace main {
 	        this.setupProgress = source["setupProgress"];
 	        this.lastError = source["lastError"];
 	        this.pinCode = source["pinCode"];
+	        this.backend = source["backend"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "video_status.h"
+#include "video_window.h"
 #include <gst/base/gstbasesink.h>
 #include <gst/video/gstvideosink.h>
 
@@ -7,6 +8,7 @@ typedef struct {
     GstElement *pipeline;
     gboolean reported;
     gboolean require_window;
+    guint window_ticks;
 } video_watch;
 
 guint64 mirrorme_rendered_frames(GstElement *pipeline, gboolean include_test_sink) {
@@ -48,6 +50,9 @@ guint64 mirrorme_rendered_frames(GstElement *pipeline, gboolean include_test_sin
 
 static gboolean poll_video(gpointer data) {
     video_watch *watch = data;
+    if (watch->require_window && (!watch->reported || ++watch->window_ticks % 10 == 0)) {
+        mirrorme_brand_video_windows();
+    }
     if (!watch->reported && mirrorme_rendered_frames(watch->pipeline, FALSE) > 0) {
         watch->reported = TRUE;
         g_print("MIRRORME_STREAMING\n");

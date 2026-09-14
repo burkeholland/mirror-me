@@ -22,6 +22,7 @@ const (
 	StatusAdvertising EngineStatus = "advertising"
 	StatusConnecting  EngineStatus = "connecting"
 	StatusMirroring   EngineStatus = "mirroring"
+	StatusPaused      EngineStatus = "paused"
 	StatusError       EngineStatus = "error"
 
 	receiverExecutable = "mirrorme-receiver.exe"
@@ -39,6 +40,7 @@ type EngineSnapshot struct {
 	SetupProgress int          `json:"setupProgress"`
 	LastError     string       `json:"lastError,omitempty"`
 	PinCode       string       `json:"pinCode,omitempty"`
+	Backend       string       `json:"backend"`
 }
 
 type EngineEvent struct {
@@ -49,23 +51,28 @@ type EngineEvent struct {
 type EngineEventHandler func(EngineEvent)
 
 type receiverProcess struct {
-	cmd        *exec.Cmd
-	input      io.WriteCloser
-	output     *receiverOutput
-	done       chan struct{}
-	ready      chan struct{}
-	readyOnce  sync.Once
-	generation uint64
-	startedAt  time.Time
+	cmd         *exec.Cmd
+	input       io.WriteCloser
+	output      *receiverOutput
+	diagnostics *receiverOutput
+	inputMu     sync.Mutex
+	done        chan struct{}
+	ready       chan struct{}
+	readyOnce   sync.Once
+	generation  uint64
+	startedAt   time.Time
 }
 
 // Lifecycle operations are serialized separately from status/log updates.
 // Exactly one goroutine calls Wait for each child, including during Stop.
 type Engine struct {
-	exePath   string
-	engineDir string
-	cacheDir  string
-	onEvent   EngineEventHandler
+	exePath        string
+	engineDir      string
+	cacheDir       string
+	onEvent        EngineEventHandler
+	builtin        bool
+	nativeDeviceID string
+	nativeKeyPath  string
 
 	operations      sync.Mutex
 	mu              sync.Mutex
@@ -94,6 +101,9 @@ type Engine struct {
 var ErrEngineMissing = errors.New("the background mirroring receiver is missing; rebuild or reinstall MirrorMe with its engine folder")
 
 func NewEngine(onEvent EngineEventHandler) (*Engine, error) {
+	if selfContainedReceiver {
+		return newSelfContainedEngine(onEvent)
+	}
 	dir, exe, err := locateEngine()
 	if err != nil {
 		return nil, err
@@ -153,6 +163,10 @@ func (e *Engine) snapshotLocked() EngineSnapshot {
 		LastError: e.lastError, PinCode: e.pinCode,
 		VideoReceived: e.videoReceived,
 		SetupKind:     e.setupKind, SetupProgress: e.setupProgress,
+		Backend: "legacy",
+	}
+	if e.builtin {
+		snap.Backend = "native"
 	}
 	if e.connectedAt != nil {
 		connected := *e.connectedAt
@@ -187,6 +201,9 @@ func (e *Engine) startLocked(config Config) error {
 	if err := e.stopLocked(false); err != nil {
 		return err
 	}
+	if e.builtin {
+		return e.launch(config)
+	}
 	if e.runtime != nil && !runtimeFilesPresent(e.engineDir) {
 		e.mu.Lock()
 		e.status, e.setupKind, e.setupProgress = StatusNeedsSetup, "runtime", 0
@@ -219,6 +236,9 @@ func (e *Engine) startLocked(config Config) error {
 // Setup is explicitly requested by the user. Cancelling it prevents a late
 // installer completion from restarting mirroring after the user pressed Stop.
 func (e *Engine) ConfirmSetupAndStart(config Config) error {
+	if e.builtin {
+		return e.Start(config)
+	}
 	e.operations.Lock()
 	defer e.operations.Unlock()
 	if err := e.stopLocked(false); err != nil {
@@ -296,12 +316,31 @@ func (e *Engine) ConfirmSetupAndStart(config Config) error {
 // directly to our pipes: there are no shared Qt settings or guessed log paths.
 func (e *Engine) launch(config Config) error {
 	if info, err := os.Stat(e.exePath); err != nil || info.IsDir() {
-		e.setError(ErrEngineMissing)
-		return ErrEngineMissing
+		missing := ErrEngineMissing
+		if e.builtin {
+			missing = errors.New("the installed MirrorMe executable is no longer available; reopen the application from its current location")
+		}
+		e.setError(missing)
+		return missing
 	}
-	cmd := exec.Command(e.exePath, buildEngineArgs(config)...)
+	args := buildEngineArgs(config)
+	var nativeOptions workerOptions
+	if e.builtin {
+		var err error
+		nativeOptions, err = makeWorkerOptions(config, e.nativeDeviceID, e.nativeKeyPath)
+		if err != nil {
+			e.setError(err)
+			return err
+		}
+		args = []string{receiverWorkerArgument}
+	}
+	cmd := exec.Command(e.exePath, args...)
 	cmd.Dir = e.engineDir
-	cmd.Env = receiverEnvironment(e.engineDir, e.cacheDir)
+	if e.builtin {
+		cmd.Env = os.Environ()
+	} else {
+		cmd.Env = receiverEnvironment(e.engineDir, e.cacheDir)
+	}
 	cmd.WaitDelay = stopGracePeriod
 	configureCommand(cmd)
 	input, err := cmd.StdinPipe()
@@ -317,9 +356,17 @@ func (e *Engine) launch(config Config) error {
 		generation: e.generation, startedAt: time.Now(),
 	}
 	run.output = &receiverOutput{onLine: func(line string) {
-		e.handleLogLine(run.generation, line)
+		if e.builtin {
+			e.handleWorkerLine(run.generation, line)
+		} else {
+			e.handleLogLine(run.generation, line)
+		}
 	}}
 	cmd.Stdout, cmd.Stderr = run.output, run.output
+	if e.builtin {
+		run.diagnostics = &receiverOutput{onLine: func(line string) { e.handleWorkerDiagnostic(run.generation, line) }}
+		cmd.Stderr = run.diagnostics
+	}
 	e.run = run
 	e.status = StatusStarting
 	e.setupKind, e.setupProgress = "", 0
@@ -353,6 +400,16 @@ func (e *Engine) launch(config Config) error {
 	}
 	go e.monitorExit(run, config, releaseJob)
 	go e.watchStartup(run)
+	if e.builtin {
+		if err := run.sendCommand(workerCommand{Command: "start", Options: &nativeOptions}); err != nil {
+			message := fmt.Errorf("send receiver startup options: %w", err)
+			if stopErr := e.stopLocked(false); stopErr != nil {
+				message = errors.Join(message, stopErr)
+			}
+			e.setError(message)
+			return message
+		}
+	}
 	return nil
 }
 
@@ -383,13 +440,20 @@ func (e *Engine) watchStartup(run *receiverProcess) {
 	case <-run.ready:
 	case <-run.done:
 	case <-timer.C:
-		e.failRun(run.generation, fmt.Sprintf("The receiver did not become ready within %s. Check that Bonjour is running, then try again.", timeout), true)
+		message := fmt.Sprintf("The receiver did not become ready within %s. Check that Bonjour is running, then try again.", timeout)
+		if e.builtin {
+			message = fmt.Sprintf("The receiver did not become ready within %s. Check your local network and Windows media support, then try again.", timeout)
+		}
+		e.failRun(run.generation, message, true)
 	}
 }
 
 func (e *Engine) monitorExit(run *receiverProcess, config Config, releaseJob func()) {
 	waitErr := run.cmd.Wait()
 	run.output.flush()
+	if run.diagnostics != nil {
+		run.diagnostics.flush()
+	}
 	releaseJob()
 	close(run.done)
 
@@ -486,11 +550,14 @@ func (e *Engine) stopLocked(announce bool) error {
 	if run != nil {
 		// EOF is also a shutdown request, so an abrupt parent exit does not
 		// leave a receiver behind. The Windows job adds process-tree cleanup.
-		_, _ = io.WriteString(run.input, "stop\n")
-		_ = run.input.Close()
+		closeWorkerInput(run, e.builtin)
+		grace := stopGracePeriod
+		if e.builtin {
+			grace = workerShutdownDeadline + time.Second
+		}
 		select {
 		case <-run.done:
-		case <-time.After(stopGracePeriod):
+		case <-time.After(grace):
 			if err := run.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 				err = fmt.Errorf("stop mirroring receiver: %w", err)
 				e.setError(err)
@@ -532,7 +599,7 @@ func (e *Engine) IsRunning() bool {
 func (e *Engine) ShowMirroredScreen() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.run == nil || e.run.cmd.Process == nil {
+	if e.status == StatusPaused || e.run == nil || e.run.cmd.Process == nil {
 		return false
 	}
 	return bringVideoWindowToFront(uint32(e.run.cmd.Process.Pid))
@@ -606,6 +673,8 @@ func (e *Engine) handleLogLine(generation uint64, line string) {
 		}
 	case factWarning:
 		activity = "Lost contact with the device. Check its Wi-Fi connection."
+	case factReceiverNotice:
+		activity = fact.message
 	case factFatalError:
 		e.status = StatusError
 		e.lastError = fact.message

@@ -1,12 +1,12 @@
 import {
   GetSettings, SaveSettings, RegeneratePinCode, GetStatus, StartMirroring,
   StopMirroring, ConfirmSetupAndStart, ShowMirroredScreen, GetVersion,
-  GetSettingsFolder, OpenSettingsFolder, OpenExternalURL, Quit,
+  GetSettingsFolder, OpenSettingsFolder, GetLogsFolder, OpenLogsFolder, OpenExternalURL, Quit,
 } from '../wailsjs/go/main/App';
 import {
   WindowToggleMaximise, WindowIsMaximised, WindowMinimise, WindowHide, ClipboardSetText,
 } from '../wailsjs/runtime/runtime';
-import { friendlyErrorMessage } from './format.js';
+import { friendlyErrorMessage, deviceLabel, MAX_PC_NAME_BYTES } from './format.js';
 
 export const CONNECTION_WAIT_MS = 12000;
 export const state = {
@@ -14,6 +14,8 @@ export const state = {
   draft: null,
   version: '',
   settingsFolder: '',
+  logsFolder: '',
+  logWarning: '',
   status: { status: 'stopped' },
   statusSince: 0,
   connectionSlow: false,
@@ -26,7 +28,6 @@ export const state = {
   dialog: null,
   returnFocus: '',
   focusTarget: '',
-  activity: [],
   toasts: [],
   error: '',
   fieldError: '',
@@ -46,7 +47,7 @@ export function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
 function persisted(settings) {
   if (!settings) return null;
-  const { loadError, ...rest } = settings;
+  const { loadError, logWarning, ...rest } = settings;
   return rest;
 }
 
@@ -63,6 +64,7 @@ function acceptSettings(settings, preserveDraft = true) {
       .filter(([key, value]) => value !== state.settings[key]))
     : {};
   state.settings = settings;
+  state.logWarning = settings.logWarning || '';
   state.draft = { ...clone(settings), ...edits };
   state.setupName = state.draft.deviceName;
 }
@@ -74,6 +76,7 @@ function acceptSnapshot(snapshot) {
     state.statusSince = Date.now();
     state.connectionSlow = false;
   }
+  if (snapshot.status !== 'connecting') state.connectionSlow = false;
   state.status = snapshot;
 }
 
@@ -107,13 +110,14 @@ export async function load(render) {
   clearError();
   render();
   try {
-    const [settings, version, status, settingsFolder, maximised] = await Promise.all([
-      GetSettings(), GetVersion(), GetStatus(), GetSettingsFolder(), WindowIsMaximised(),
+    const [settings, version, status, settingsFolder, logsFolder, maximised] = await Promise.all([
+      GetSettings(), GetVersion(), GetStatus(), GetSettingsFolder(), GetLogsFolder(), WindowIsMaximised(),
     ]);
     if (settingsEventRevision === settingsRevisionAtLoad) acceptSettings(settings);
     if (engineEventRevision === engineRevisionAtLoad) acceptSnapshot(status);
     state.version = version;
     state.settingsFolder = settingsFolder;
+    state.logsFolder = logsFolder;
     state.maximised = maximised;
     state.setupName = state.draft.deviceName;
     state.error = state.settings.loadError || '';
@@ -129,9 +133,6 @@ export function receiveEngineEvent(event, render) {
   engineEventRevision++;
   const changed = event.Snapshot && JSON.stringify(event.Snapshot) !== JSON.stringify(state.status);
   if (event.Snapshot) acceptSnapshot(event.Snapshot);
-  if (event.Activity) {
-    state.activity = [{ time: new Date(), text: event.Activity }, ...state.activity].slice(0, 20);
-  }
   // In Settings, update the receiver indicator without interrupting typing,
   // keyboard focus, or an open native select menu.
   render({ statusOnly: state.route !== 'home' || !changed });
@@ -141,6 +142,11 @@ export function receiveSettingsUpdate(settings, render) {
   settingsEventRevision++;
   acceptSettings(settings);
   render();
+}
+
+export function receiveLogWarning(message, render) {
+  state.logWarning = String(message || '');
+  render({ statusOnly: true });
 }
 
 export function tickConnection(render, now = Date.now()) {
@@ -210,6 +216,14 @@ export function revertDraft(render) {
 function validateName(name) {
   if (!name.trim()) {
     state.fieldError = 'Give this PC a name so you can find it on your iPhone.';
+    return false;
+  }
+  if (new TextEncoder().encode(name.trim()).length > MAX_PC_NAME_BYTES) {
+    state.fieldError = 'Use a shorter PC name so it fits in Screen Mirroring.';
+    return false;
+  }
+  if (/[\u0000-\u001f\u007f]/.test(name)) {
+    state.fieldError = 'Use a PC name without control characters.';
     return false;
   }
   return true;
@@ -337,6 +351,7 @@ export const stopMirroring = render => receiverCommand('stop', StopMirroring, re
 export const confirmSetupAndStart = render => receiverCommand('setup', ConfirmSetupAndStart, render);
 
 export async function showMirroredScreen(render) {
+  if (state.status.status === 'paused') return;
   clearError();
   try {
     if (!await ShowMirroredScreen()) {
@@ -351,6 +366,10 @@ export async function openSettingsFolder(render) {
   try { await OpenSettingsFolder(); } catch (error) { setError(error, render); }
 }
 
+export async function openLogsFolder(render) {
+  try { await OpenLogsFolder(); } catch (error) { setError(error, render); }
+}
+
 async function copyText(text, message, render) {
   try {
     if (!await ClipboardSetText(text)) throw new Error('Windows could not copy to the clipboard. Try again.');
@@ -362,19 +381,17 @@ async function copyText(text, message, render) {
 
 export const copySettingsFolder = render => copyText(state.settingsFolder, 'Settings path copied', render);
 export const copyDeviceName = render => copyText(state.settings.deviceName, 'PC name copied', render);
+export const copyLogsPath = render => copyText(state.logsFolder, 'Logs path copied', render);
 
 export function diagnosticText() {
   const snapshot = state.status;
   return [
     `MirrorMe ${state.version}`,
     `Receiver: ${snapshot.status}`,
-    `Device: ${snapshot.deviceName || 'None'}`,
+    `Device: ${deviceLabel(snapshot)}`,
     `Model: ${snapshot.deviceModel || 'Unknown'}`,
-    `Video: ${snapshot.status === 'mirroring' ? 'Displayed' : snapshot.videoReceived ? 'Received, not displayed' : 'Not received'}`,
+    `Video: ${snapshot.status === 'paused' ? 'Paused, not displayed' : snapshot.status === 'mirroring' ? 'Displayed' : snapshot.videoReceived ? 'Received, not displayed' : 'Not received'}`,
     `Error: ${snapshot.lastError || 'None'}`,
-    '',
-    'Recent activity',
-    ...state.activity.map(item => `${item.time.toISOString()} ${item.text}`),
   ].join('\n');
 }
 

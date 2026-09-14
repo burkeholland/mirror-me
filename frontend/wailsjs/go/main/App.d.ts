@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function ConfirmSetupAndStart():Promise<void>;
 
+export function GetLogsFolder():Promise<string>;
+
 export function GetSettings():Promise<main.Config>;
 
 export function GetSettingsFolder():Promise<string>;
@@ -13,6 +15,8 @@ export function GetStatus():Promise<main.EngineSnapshot>;
 export function GetVersion():Promise<string>;
 
 export function OpenExternalURL(arg1:string):Promise<void>;
+
+export function OpenLogsFolder():Promise<void>;
 
 export function OpenSettingsFolder():Promise<void>;
 

@@ -1,0 +1,12 @@
+--- a/encoder/ixheaace_api.c
++++ b/encoder/ixheaace_api.c
+@@ -905,8 +905,7 @@
+         pstr_api_struct->config[ele_idx].aac_config.flag_framelength_small = 1;
+       }
+     }
+-    if ((AOT_SBR == pstr_input_config->aot) || (AOT_PS == pstr_input_config->aot) ||
+-        (AOT_AAC_ELD == pstr_input_config->aot)) {
++    if ((AOT_SBR == pstr_input_config->aot) || (AOT_PS == pstr_input_config->aot)) {
+       pstr_api_struct->config[ele_idx].aac_classic = 0;
+     }
+     if (pstr_api_struct->config[ele_idx].sample_rate < 32000) {

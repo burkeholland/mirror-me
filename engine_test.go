@@ -171,6 +171,18 @@ func TestHandleLogLineWarningDoesNotChangeStatus(t *testing.T) {
 	}
 }
 
+func TestHandleLogLineReceiverNoticeIsNonfatalAndVisible(t *testing.T) {
+	e, events := newTestEngine()
+	e.status = StatusMirroring
+	e.handleLogLine(1, "MIRRORME_RECEIVER_WARNING: Video window icon unavailable")
+	if e.status != StatusMirroring || !e.desiredRunning || e.lastError != "" {
+		t.Fatalf("a window-branding warning stopped video: %+v", e.Snapshot())
+	}
+	if len(*events) != 1 || (*events)[0].Activity != "Video window icon unavailable" {
+		t.Fatalf("the window warning was not visible in activity: %+v", *events)
+	}
+}
+
 func TestHandleLogLineIrrelevantLineIsNoOp(t *testing.T) {
 	e, events := newTestEngine()
 	e.status = StatusAdvertising

@@ -23,8 +23,13 @@ SOFTWARE.
 ---
 
 This license covers MirrorMe's own source code only (the Go application and
-its frontend). It does not cover the native receiver, UxPlay, or bundled
-third-party libraries. The separate background receiver combines a native
-adapter with GPLv3 UxPlay; its source and build inputs are in receiver/.
-Those components retain their own licenses. See THIRD-PARTY-NOTICES.md
-before redistributing MirrorMe.
+its frontend). It does not cover native receiver or third-party library
+code. Those components retain their own licenses.
+
+The legacy receiver is a separate GPLv3 program, with source in receiver/.
+The self-contained native build statically links GPL-licensed AirPlay
+protocol code into the application; that combined executable must be
+distributed under the applicable GPL terms, including corresponding
+source. This does not remove the MIT grant for MirrorMe's own Go/frontend
+source considered separately. See THIRD-PARTY-NOTICES.md before
+redistributing either build.

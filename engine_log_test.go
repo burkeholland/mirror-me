@@ -128,6 +128,39 @@ func TestParseLogLineWarningLostConnection(t *testing.T) {
 	}
 }
 
+func TestParseProductionVideoErrors(t *testing.T) {
+	for _, prefix := range []string{"", "*** ERROR: "} {
+		line := prefix + "MIRRORME_RECEIVER_ERROR: Video output failed: decoder error"
+		fact, ok := parseLogLine(line)
+		if !ok || fact.kind != factFatalError || fact.message != "Video output failed: decoder error" {
+			t.Fatalf("production error prefix hid the failure: %q => %+v", line, fact)
+		}
+	}
+	if _, ok := parseLogLine("a device named *** ERROR: MIRRORME_RECEIVER_ERROR: example"); ok {
+		t.Fatal("an embedded error-looking name is not a native protocol marker")
+	}
+}
+
+func TestParseReceiverWarningPreservesItsExplanation(t *testing.T) {
+	fact, ok := parseLogLine("*** WARNING: MIRRORME_RECEIVER_WARNING: Video window icon unavailable")
+	if !ok || fact.kind != factReceiverNotice || fact.message != "Video window icon unavailable" {
+		t.Fatalf("receiver warning was lost or mistaken for a network error: %+v", fact)
+	}
+}
+
+func TestWarningAndErrorPrefixesCannotClaimVideoOrReadiness(t *testing.T) {
+	for _, prefix := range []string{"*** ERROR: ", "*** WARNING: "} {
+		for _, marker := range []string{
+			"MIRRORME_RECEIVER_READY port=7000", "MIRRORME_STREAMING",
+			"MIRRORME_VIDEO_RECEIVED", "MIRRORME_VIDEO_STOPPED",
+		} {
+			if fact, ok := parseLogLine(prefix + marker); ok {
+				t.Fatalf("a prefixed log was mistaken for a lifecycle marker: %+v", fact)
+			}
+		}
+	}
+}
+
 func TestParseLogLineFatalDNSSDErrors(t *testing.T) {
 	lines := []string{
 		"MIRRORME_RECEIVER_ERROR: receiver initialization failed",

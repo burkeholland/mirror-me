@@ -1,5 +1,7 @@
 /build/bin/
 /build/receiver/
+/build/native/
+/build/native-*/
 /build/ui-review/
 /build/site-review/
 /build/releases/

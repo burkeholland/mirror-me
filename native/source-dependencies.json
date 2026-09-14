@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "scope": "Native corresponding-source collection; not a final application release or a claim of byte-identical historical rebuilds.",
+  "packageRepository": "https://repo.msys2.org/mingw/ucrt64",
+  "recipeRepository": "https://github.com/msys2/MINGW-packages",
+  "packages": [
+    {
+      "name": "openssl",
+      "version": "3.6.1-1",
+      "packageFile": "mingw-w64-ucrt-x86_64-openssl-3.6.1-1-any.pkg.tar.zst",
+      "packageSha256": "ad33a107baaad9e689612c6137b1f9ca7d7e6b118dab632e414b2cfa4f21865c",
+      "archiveMember": "ucrt64/lib/libcrypto.a",
+      "archiveSha256": "f862b717cf6436371c1b0f6fb8bfc7b353c6887b9f4fa81ae0518f565519fde7",
+      "recipeCommit": "b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4",
+      "pkgbuildSha256": "6ab518bc5ab9a4776a324d0099b9b3c1756616c37aa99cf4a09a2927deef65e4",
+      "recipeFiles": [
+        {"name": "PKGBUILD", "cacheFile": "openssl.PKGBUILD", "sha256": "6ab518bc5ab9a4776a324d0099b9b3c1756616c37aa99cf4a09a2927deef65e4"},
+        {"name": "002-relocation.patch", "cacheFile": "openssl-relocation.patch", "sha256": "3e9a8abb6ff5fb7bdb450742fb7bd85513a4abbe85594228620379bcac7c02ef"},
+        {"name": "pathtools.c", "cacheFile": "pathtools.c", "sha256": "ebf471173f5ee9c4416c10a78760cea8afaf1a4a6e653977321e8547ce7bf3c0"},
+        {"name": "pathtools.h", "cacheFile": "pathtools.h", "sha256": "1585ef1b61cf53a2ca27049c11d49e0834683dfda798f03547761375df482a90"}
+      ],
+      "sourceFile": "openssl-3.6.1.tar.gz",
+      "sourceUrl": "https://github.com/openssl/openssl/releases/download/openssl-3.6.1/openssl-3.6.1.tar.gz",
+      "sourceSha256": "b1bfedcd5b289ff22aee87c9d600f515767ebf45f77168cb6d64f231f518a82e",
+      "licenseMembers": ["openssl-3.6.1/LICENSE.txt", "openssl-3.6.1/external/perl/Text-Template-1.56/LICENSE"],
+      "license": "Apache-2.0; MSYS2-added pathtools.c/h are CC0-1.0; build recipes BSD-3-Clause",
+      "correspondence": "PKGBUILD bytes exactly match package .BUILDINFO pkgbuild_sha256sum; upstream source and all patches/additions match that recipe's sha256sums.",
+      "binaryRebuilt": false
+    },
+    {
+      "name": "libplist",
+      "version": "2.7.0-3",
+      "packageFile": "mingw-w64-ucrt-x86_64-libplist-2.7.0-3-any.pkg.tar.zst",
+      "packageSha256": "f799bb20db57b0d34a14659b8794658f638276c703fa7fee3ecfa47aee54d255",
+      "archiveMember": "ucrt64/lib/libplist-2.0.a",
+      "archiveSha256": "119cb99e900ea3d98d3af704baa2c31367f0834e9f287a15561ff08c840b4450",
+      "recipeCommit": "0c88dc07c0132ab9a93d9fe5b43da67fbde190a6",
+      "pkgbuildSha256": "144012571f9ed35c8bf447e9a5d8e7c0689fc4acccd552821fa93b75978aecae",
+      "recipeFiles": [
+        {"name": "PKGBUILD", "cacheFile": "libplist.PKGBUILD", "sha256": "144012571f9ed35c8bf447e9a5d8e7c0689fc4acccd552821fa93b75978aecae"},
+        {"name": "003-fix-py-soext.patch", "cacheFile": "libplist-py.patch", "sha256": "c9190d4697bc3d97fa20b66a54f2b9f8fe2527560376e2dae8d168e79cbd272c"}
+      ],
+      "sourceFile": "libplist-2.7.0.tar.bz2",
+      "sourceUrl": "https://github.com/libimobiledevice/libplist/releases/download/2.7.0/libplist-2.7.0.tar.bz2",
+      "sourceSha256": "7ac42301e896b1ebe3c654634780c82baa7cb70df8554e683ff89f7c2643eb8b",
+      "licenseMembers": ["libplist-2.7.0/COPYING", "libplist-2.7.0/COPYING.LESSER", "libplist-2.7.0/libcnary/COPYING"],
+      "license": "LGPL-2.1-or-later library and libcnary; package also includes GPL-2.0-or-later utilities not linked into MirrorMe",
+      "correspondence": "PKGBUILD bytes exactly match package .BUILDINFO pkgbuild_sha256sum; upstream source and patch match that recipe's sha256sums.",
+      "binaryRebuilt": false
+    }
+  ],
+  "protocol": {
+    "commit": "437f37514257d9cb513ac7fbdee743b4da85852e",
+    "sourceFile": "libuxplay-437f3751.tar.gz",
+    "sourceUrl": "https://codeload.github.com/leapbtw/libuxplay/tar.gz/437f37514257d9cb513ac7fbdee743b4da85852e",
+    "sourceSha256": "c47b3ea6d0c1db835a3ed0c9e9379d56a85e3bdd1804760a5a508ae86dd088e5",
+    "sourceRoot": "libuxplay-437f37514257d9cb513ac7fbdee743b4da85852e",
+    "licenseMembers": ["LICENSE", "lib/playfair/LICENSE.md", "lib/llhttp/LICENSE-MIT"],
+    "changes": "native/patches/prepare-protocol.py plus native host sources; collected as rebuild inputs and a patched protocol snapshot.",
+    "license": "GPL-3.0-or-later overall/playfair, LGPL-2.1-or-later individual protocol files, MIT llhttp"
+  },
+  "compilerRuntime": {
+    "compilerVersion": "13.2.0",
+    "target": "x86_64-w64-mingw32",
+    "mingwVersion": "11.0.1",
+    "crt": "UCRT",
+    "vendorRelease": "13.2.0posix-18.1.5-11.0.1-ucrt-r8",
+    "vendorFile": "winlibs-x86_64-posix-seh-gcc-13.2.0-mingw-w64ucrt-11.0.1-r8.7z",
+    "vendorUrl": "https://github.com/brechtsanders/winlibs_mingw/releases/download/13.2.0posix-18.1.5-11.0.1-ucrt-r8/winlibs-x86_64-posix-seh-gcc-13.2.0-mingw-w64ucrt-11.0.1-r8.7z",
+    "vendorSha256": "54535ca325de2cf84679bc17846e9a2356acd042ceb21e424450836cde02ab9e",
+    "vendorSha256Url": "https://github.com/brechtsanders/winlibs_mingw/releases/download/13.2.0posix-18.1.5-11.0.1-ucrt-r8/winlibs-x86_64-posix-seh-gcc-13.2.0-mingw-w64ucrt-11.0.1-r8.7z.sha256",
+    "installedVersionInfoSha256": "c865613b9393e87655cf26fe2cc45d2aa43de3f347d578beade91e66e90b28ed",
+    "archives": [
+      {"name": "libstdc++.a", "member": "mingw64/lib/libstdc++.a", "sha256": "72aa25e42d91d16275586e3c2608dfe5bde0b7efb87b957d29d23e24d3d7ced5"},
+      {"name": "libgcc.a", "member": "mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/libgcc.a", "sha256": "eee147878cceaac51791635ee920c6a518ce3c8734b7a8186f7cd67b94c7499d"},
+      {"name": "libgcc_eh.a", "member": "mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/libgcc_eh.a", "sha256": "6786e0bf6b5e93a71d78172a40bf1a8fd1743f81a63f212e1c5ce796d7b8dea3"},
+      {"name": "libwinpthread.a", "member": "mingw64/x86_64-w64-mingw32/lib/libwinpthread.a", "sha256": "3a4feb15aaad656808a2df3788271b2a89653885eb51b7565dda73282c6876c6"}
+    ],
+    "gccNoticeCommit": "c891d8dc23e1a46ad9f3e757d09e57b500d40044",
+    "mingwNoticeCommit": "c3e587c067a00a561899d49d3e63a659e38802ec",
+    "sourceObligation": "GCC Runtime Library Exception 3.1 permits the final eligible-compiled combination under its independent modules' terms. Preserve GPLv3/exception and MinGW runtime/winpthreads notices. Do not treat this as permission to redistribute a standalone compiler/runtime SDK without its own compliance analysis.",
+    "vendorRuntimeArchiveHashesVerified": true,
+    "compilerSourceRebuilt": false
+  },
+  "noticeResources": [
+    {"file": "msys2-LICENSE", "url": "https://raw.githubusercontent.com/msys2/MINGW-packages/b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4/LICENSE", "sha256": "e08ac31ef517ea449b7f402ab7940c750127c1de0566458d8e80635be9fa4055"},
+    {"file": "CC0-1.0.txt", "url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt", "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"},
+    {"file": "gcc-COPYING3", "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/c891d8dc23e1a46ad9f3e757d09e57b500d40044/COPYING3", "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"},
+    {"file": "gcc-COPYING.RUNTIME", "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/c891d8dc23e1a46ad9f3e757d09e57b500d40044/COPYING.RUNTIME", "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74"},
+    {"file": "mingw-COPYING", "url": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/c3e587c067a00a561899d49d3e63a659e38802ec/COPYING", "sha256": "99a69660981156c21336fdb5661f89341b013c94e4bf9e1c7467b4745718397f"},
+    {"file": "mingw-runtime-COPYING", "url": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/c3e587c067a00a561899d49d3e63a659e38802ec/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt", "sha256": "e9b2dc02451ea29092a1f25fa0f3c07207ed421f1807dffb0c4e6dce69dee7bd"},
+    {"file": "mingw-headers-COPYING", "url": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/c3e587c067a00a561899d49d3e63a659e38802ec/COPYING.MinGW-w64/COPYING.MinGW-w64.txt", "sha256": "f38e6194bd3bfa1b654f118e5acefe0aead437bbe669eee43957ccc65a7127f1"},
+    {"file": "mingw-DISCLAIMER", "url": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/c3e587c067a00a561899d49d3e63a659e38802ec/DISCLAIMER", "sha256": "039ed6b4f31bb7fb97e733170b58cc435335352e4745734fcfd113877fdaf340"},
+    {"file": "mingw-DISCLAIMER.PD", "url": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/c3e587c067a00a561899d49d3e63a659e38802ec/DISCLAIMER.PD", "sha256": "87f33608570312a0f2a9745edcb2527275df813b13982e8c3b3f893d88a4141a"},
+    {"file": "winpthreads-COPYING", "url": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/c3e587c067a00a561899d49d3e63a659e38802ec/mingw-w64-libraries/winpthreads/COPYING", "sha256": "63263614cdd29f2f93cba85e992f041b31f9fc7b4033692f31269489a8a1b177"},
+    {"file": "msys2-openssl-mingw-runtime-COPYING", "url": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/fd36ef357f4964ad84628b2c69c15791b2f1f559/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt", "sha256": "1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f"},
+    {"file": "msys2-libplist-mingw-runtime-COPYING", "url": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/848cce552a3cc3c99a8513e84da6d1bf154740c6/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt", "sha256": "1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f"}
+  ],
+  "additionalResources": [
+    {"file": "openssl-3.6.1.tar.gz.asc", "url": "https://github.com/openssl/openssl/releases/download/openssl-3.6.1/openssl-3.6.1.tar.gz.asc", "sha256": "a549571f98ac883a6eca7a2c21021a9d2129e6f4bcad2a261f9bd2487fb80f4b", "destination": "recipes/openssl/openssl-3.6.1.tar.gz.asc"},
+    {"file": "ffmpeg-8.0.1.tar.xz.asc", "url": "https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz.asc", "sha256": "54ab4020bb4eb280444da74d7aabc282acf6e8500cf6feaefd9821373fa9e72c", "destination": "audio/ffmpeg-8.0.1.tar.xz.asc"},
+    {"file": "ffmpeg-devel.asc", "url": "https://ffmpeg.org/ffmpeg-devel.asc", "sha256": "397b3becedcd5a98769967ff1ff8501ddc89f8368b8f766e4701377d7dbaabe5", "destination": "audio/ffmpeg-devel.asc"},
+    {"file": "winlibs.sha256", "url": "https://github.com/brechtsanders/winlibs_mingw/releases/download/13.2.0posix-18.1.5-11.0.1-ucrt-r8/winlibs-x86_64-posix-seh-gcc-13.2.0-mingw-w64ucrt-11.0.1-r8.7z.sha256", "sha256": "1ce1b376ccaf53acefbed98fc403f378b5090086ccc674dae54bdf217100e05f", "destination": "compiler-runtime/winlibs.sha256"}
+  ]
+}

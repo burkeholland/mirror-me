@@ -1,6 +1,22 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"unicode/utf8"
+)
+
+func TestReceiverNameFitsDiscoveryWithoutSplittingUnicode(t *testing.T) {
+	for _, name := range []string{strings.Repeat("a", 64), strings.Repeat("\u754c", 30), "Office\x00\x01PC"} {
+		normalized := normalizeDeviceName(name, "MirrorMe")
+		if len(normalized) > maxReceiverNameBytes || !utf8.ValidString(normalized) || strings.ContainsAny(normalized, "\x00\x01") {
+			t.Fatalf("invalid discovery name: %q", normalized)
+		}
+	}
+	if name := normalizeDeviceName(strings.Repeat("\u754c", 30), "MirrorMe"); utf8.RuneCountInString(name) != 16 {
+		t.Fatalf("Unicode name was not shortened at a complete character: %q", name)
+	}
+}
 
 func TestNormalizeConfigRepairsInvalidResolution(t *testing.T) {
 	fallback := DefaultConfig()

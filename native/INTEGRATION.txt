@@ -1,0 +1,342 @@
+MirrorMe static native receiver
+==============================
+
+This is a new Windows orchestration/discovery/media host around retained LICENSED
+AirPlay-compatible low-level code. It is NOT a clean-room AirPlay implementation.
+Protocol source is pinned to leapbtw/libuxplay commit
+437f37514257d9cb513ac7fbdee743b4da85852e (1.73.6). Its LICENSE and individual file
+notices remain in the archived source. Individual protocol files are largely
+LGPL-2.1-or-later; the source distribution is GPL-3.0-or-later. Preserve that
+source, notices, local transformations, and corresponding static dependencies
+with releases. llhttp and playfair retain their own source notices/licenses.
+The Go/frontend source retains its MIT license; linking this GPL native backend
+creates a combined executable with GPL distribution obligations.
+
+The new target never compiles uxplay.cpp or upstream renderers and never links
+GStreamer, GLib, Bonjour, dnssd.dll, or a third-party runtime DLL. It does not
+install, configure, stop, or depend on a global Bonjour/mDNSResponder service.
+It uses Windows 10+ DnsServiceRegister / DnsServiceDeRegister from DNSAPI.
+Both _airplay._tcp.local and _raop._tcp.local must complete native registration
+callbacks successfully before MM_EVENT_READY. Registration has a 10-second
+deadline, stop-event cancellation, and independently owned late callback cleanup.
+The new host's /play and all HTTP URL/HLS endpoints return 501; HLS/photo bits
+are disabled, screen-mirroring bit 7 remains enabled. No HLS URL is fetched.
+
+Build
+-----
+
+From the repository root in PowerShell:
+
+  .\scripts\build-audio-codecs.ps1
+  .\scripts\build-native.ps1
+
+To test only protocol/discovery while the production media components are not
+available:
+
+  .\scripts\build-native.ps1 -ProtocolOnly
+
+ProtocolOnly explicitly links native\tests\protocol_media_stub.cpp only into
+the test executable. It is NOT a functioning production playback receiver.
+The link manifest's production field is false in that mode.
+
+The tested toolchain is Strawberry GCC 13.2.0 x64 UCRT, CMake, Ninja, Python.
+No GCC -march=native optimizations are used. All intermediate files are inside
+build\native, which is separate from build\receiver and the old engine.
+The script never replaces engine\mirrorme-receiver.exe or changes vendor files.
+The separate audio build installs static headers/archives under
+build\native-audio\install by default. Pass -AudioSdkDirectory to build-native
+when using a different audio prefix.
+
+The script verifies the pristine vendor commit, git-archives it to
+build\native\protocol, and applies the checked source transformations in
+native\patches\prepare-protocol.py. A mismatched source fragment fails the build.
+The transformations initialize/destroy the HTTP mutex, bound HTTP reads/sends,
+fix fragmented protocol parsing and malformed plist/codec boundaries, join
+naturally-exited workers, remove mirror self-join, and add identity-scoped
+session lifecycle/teardown hooks. Protocol code and crypto are still upstream
+licensed compatibility code, not reimplemented/debranded protocol ownership.
+
+native\dependencies.json pins the existing MSYS2 UCRT OpenSSL 3.6.1 and libplist
+2.7.0 binary packages AND the exact matching source archives, MSYS2 recipe
+commits, patches and additional source files. Only headers,
+STATIC libcrypto.a / libplist-2.0.a, and license notices are extracted. Existing
+build\receiver\downloads archives may satisfy the exact same checked pins.
+No package DLL, import library (*.dll.a), GStreamer/GLib SDK, or Bonjour header is
+copied into the new SDK. Audio dependencies have their separate pinned manifest
+and source build script; see native\audio-dependencies.json / AUDIO-NOTICES.txt.
+
+Corresponding-source evidence and publication gate
+-------------------------------------------------
+
+DO NOT PUBLISH THE CURRENT DEVELOPMENT BUILD. production=true in the link
+manifest means the real media implementation, not distribution readiness.
+Both link-manifest.json and source-provenance.json report distributionReady=false.
+The explicit .\scripts\build-native.ps1 -ForDistribution command rejects the
+current incomplete provenance before building. Successful tests, static linking,
+or an OS-only import table do not satisfy the source/publication gate.
+
+Normal builds preserve these inputs and verify their SHA-256 pins:
+
+  build\native\protocol-source.tar
+    The exact pristine protocol commit, including llhttp's MIT notice and
+    playfair's GPLv3 license. The patched compilation tree remains in protocol.
+
+  build\native\sources\libplist
+    Official libplist-2.7.0.tar.bz2, PKGBUILD, 003-fix-py-soext.patch,
+    and the binary package's original .PKGINFO / .BUILDINFO.
+    MSYS2 recipe commit 0c88dc07c0132ab9a93d9fe5b43da67fbde190a6.
+    COPYING, COPYING.LESSER and AUTHORS are also extracted for visibility.
+    The library is LGPL-2.1-or-later; the archive also contains GPL tools,
+    which are not linked into MirrorMe.
+
+  build\native\sources\openssl
+    Official openssl-3.6.1.tar.gz and its detached signature, PKGBUILD,
+    002-relocation.patch, pathtools.c/.h, .PKGINFO and .BUILDINFO.
+    MSYS2 recipe commit b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4.
+    LICENSE.txt and AUTHORS.md are also extracted. Original CC0 attribution
+    in MSYS2's pathtools sources is preserved alongside OpenSSL's Apache-2.0
+    license. The detached signature is retained as a recipe input; this script
+    verifies pinned SHA-256 hashes, not an independent OpenSSL PGP trust chain.
+
+The PKGBUILD SHA-256 must equal pkgbuild_sha256sum from the exact binary's
+.BUILDINFO; an upstream version tag alone is not accepted as source evidence.
+Source archive/patch hashes match those recipes. .BUILDINFO also records the
+original MSYS2 build-environment package versions and options. Rebuilding those
+recipes requires a matching MSYS2 UCRT64 makepkg-mingw environment and its
+recorded build dependencies; that environment/source rebuild has NOT yet been
+executed here. Do not describe these SDK binaries as locally source-built.
+
+The native input snapshot is build\native\sources\mirrorme. It retains the
+actual native source, headers, tests, notices, protocol transformations and build
+scripts, including uncommitted changes that a Git commit alone would miss.
+The build fails if these inputs change during compilation. The provenance
+receipt includes hashes of that snapshot, the compiler executable, every merged
+archive input, CMake configuration and actual compilation commands.
+
+FFmpeg's official archive remains under build\native-audio, with its patched
+source, build configuration and license directory. The native build verifies
+its installed archive hashes against the audio source-build receipt, manifest,
+patch pin and build-script hash. Missing/mismatched receipts cannot establish
+provenance; mismatched existing receipts fail the build. libxaac is a test-only
+fixture generator, NOT a runtime link input; preserve its separate fixture
+notices and provenance when distributing those tests.
+
+Remaining blockers are explicitly listed in native\dependencies.json:
+  - Exact matching Strawberry GCC runtime and winpthread distributor source/
+    patch bundles and runtime license notices have not been retained. Per-build
+    archive hashes identify the inputs but do not replace corresponding source.
+  - The matching OpenSSL/libplist source rebuild has not been executed.
+  - A complete corresponding-source release, including the parent Go/application
+    source and verified toolchain/rebuild inputs, has not been assembled/tested.
+
+Provide the applicable GPL/LGPL corresponding source and full notices with a
+future distribution; do not replace them with upstream homepages or binary SDK
+download links. The current generated receipt is development evidence, not a
+claim of release compliance or a self-contained corresponding-source release.
+
+Linking into the Go executable
+-----------------------------
+
+Preferred production input: build\native\libmirrorme-native.a. The build script
+merges the host, protocol, media/audio, playfair, llhttp, FFmpeg, plist, crypto,
+libstdc++, winpthread, libgcc and libgcc_eh archives using GNU ar MRI. It verifies
+the result by linking the protocol integration test with GCC, not G++, with no
+separate C++/pthread/codec archives. The original archives remain available.
+
+Exact tested link order after the cgo object files:
+
+  build\native\libmirrorme-native.a
+  -ldnsapi -lmfplat -lmfuuid -lole32 -loleaut32 -luuid
+  -luser32 -lgdi32 -lksuser -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -ladvapi32
+
+Use -static -static-libgcc for the external link. No -lstdc++ or -lwinpthread is
+required with the merged archive. Embed an application icon in the Go executable.
+The manifest includes the merged archive SHA-256, exact OS libraries and actual
+merged-probe DLL imports. A ProtocolOnly build deliberately produces no merged
+production archive.
+
+Include native\include\mirrorme.h. The C ABI is opaque; no C++ object or ownership
+crosses into Go. A receiver copies its configuration strings at creation.
+Use one mm_receiver_run call per handle, on the --receiver-worker path before
+Wails initialization. The call blocks until stop or a typed startup/runtime
+failure. mm_receiver_request_stop is callback-safe and wakes the control loop.
+mm_receiver_show_video is safe while running. The caller must join the run call
+before releasing callback context or destroying the handle; never destroy a
+handle from its own event callback or concurrently with entry into run.
+The final executable must embed a MirrorMe application icon for the native window.
+Media accepts standalone resource ID 101 or enumerates the executable's first
+RT_GROUP_ICON (including Wails resource ID 1). A static archive alone does not
+pull in icon resources. The production protocol test uses ID 1 to exercise this
+same-executable fallback; no sibling receiver executable is used.
+Media codec/configure/push APIs return zero on success and negative on failure,
+matching the current implementation and RAOP callback convention. Later
+asynchronous decoder failures arrive as typed MM_EVENT_ERROR events. The
+protocol_media_invariants test exercises the real host codec callback and real
+decoding so an incompatible return-value change cannot silently pass discovery
+tests.
+
+build\native\link-manifest.json contains absolute library locations, actual
+probe DLL imports, and the build mode. Typical static order:
+
+  build\native\lib\libmirrorme.a
+  build\native\lib\libairplay.a
+  build\native\lib\libplayfair.a
+  build\native\lib\libllhttp.a
+  <audio SDK>\lib\libavcodec.a
+  <audio SDK>\lib\libavutil.a
+  build\native\sdk\ucrt64\lib\libplist-2.0.a
+  build\native\sdk\ucrt64\lib\libcrypto.a
+
+Use -static -static-libgcc -static-libstdc++ and static winpthread. Windows
+libraries include dnsapi ws2_32 iphlpapi crypt32 bcrypt advapi32; media additionally
+uses mfplat mf mfuuid wmcodecdspuuid d3d11 dxgi dxguid ole32 oleaut32 uuid user32
+gdi32 avrt propsys shlwapi ksuser. The generated manifest is authoritative for the
+current build. CMake also supplies transitive link dependencies for native tests.
+Audit the FINAL Go executable's imports as well; a static native test executable
+does not prove how the final Go/Wails external link was configured.
+Native probe audits use binutils objdump -p and reject tool failures, empty import
+lists and any non-Windows DLL. Do not substitute Go 1.25's no-op ImportedLibraries.
+
+Lifecycle, media and identity
+----------------------------
+
+All RAOP callback slots are populated except passwd: that optional slot enables
+a separate digest-password mode and is deliberately null for configured PIN
+pairing. Upstream debug logs are discarded, never parsed for application state.
+App events are bounded typed messages without sender names/IDs, pairing material,
+keys, or PIN values. Existing receiver code is not modified by this backend.
+
+Successful SETUP assigns an opaque monotonic session identity. Socket opening,
+/info, malformed negotiation and socket closure alone never create or terminate
+a displayed session. Newest-wins removal runs synchronously on the HTTP owner,
+which joins all previous producers before admitting a replacement. A mirror
+EOF or a media MM_EVENT_SESSION_ENDED (window close) queues identity-scoped
+teardown. It cannot tear down a different newer session or join its own callback
+thread. Teardown joins RTP/NTP workers before resetting/freeing media resources.
+Only successfully presented media generates MM_EVENT_STREAMING.
+MM_EVENT_VIDEO_RECEIVED is forwarded from media's actual packet-acceptance
+callback, never synthesized before pushing a packet that media may reject.
+
+An explicit pause emits MM_EVENT_PAUSED (8), hides the last video image, and
+fences previous presentation callbacks without disconnecting the sender.
+Repeated pause/resume callbacks are idempotent. Decoder reference pictures
+survive pause and clock re-anchoring, so P-frames can resume without a new IDR.
+Known empty pause/resume markers are handled before codec payload validation;
+valid encrypted video can also resume a suspended stream without a resume
+header. Resume alone never claims live video: new VIDEO_RECEIVED and STREAMING
+events confirm acceptance and actual presentation.
+
+Video decoding consumes reference pictures even when presentation is paused
+or the receiver queue is behind. Superseded frames older than the 80 ms receiver-side
+queue budget skip BGRA conversion, not reference decoding. The newest available
+picture is still shown, even if late, so a static image is not lost. Sender/network
+age is not mistaken for time spent in this queue. The decoder reuses its
+bounded NV12 output allocation; resolution/alignment changes resize it safely.
+media_check.ps1 exercises original 1080x1920/60 FPS input, delayed P-frame
+catch-up, duplicate pause/resume, clock correction, window hiding and output
+allocation counts. These tests do not measure end-to-end phone latency.
+
+Video/audio packet callbacks make bounded byte copies and pass ntp_time_local
+unchanged as local UNIX nanoseconds. They do not apply a second NTP offset.
+Codec transitions flush video state. Session teardown resets media queues and
+clock state after producers stop. Feedback/video activity drives the configured
+idle-session timeout. Width, height, frame rate, PIN, codec preference and audio
+enablement come from mm_receiver_config.
+The native public constructor accepts width=height=0 as automatic resolution,
+normalizing its owned copy to 1920x1080 before media creation or advertisement.
+max_fps=0 independently normalizes to 60 FPS. Mixed zero/nonzero dimensions are
+invalid; explicit dimensions remain 64..8192 and explicit FPS remains 1..120.
+Caller-owned configuration is never modified by normalization.
+
+Receiver names remain nonempty, valid UTF-8 with at most 50 encoded bytes,
+excluding ASCII control characters and DEL. The shared budget is deliberate:
+RAOP's single instance label contains 12 hexadecimal address characters plus
+"@" plus the complete name, and a DNS wire label has a 63-byte limit.
+The AirPlay service uses the complete same name without that prefix.
+The current adapter attempts DNS presentation escaping by adding a backslash
+before literal "." and "\\". A combined dot/backslash name resolves through the
+local native API but FAILS exact-name multicast verification on this Windows
+machine. Do not claim those characters are faithfully advertised yet. Reproduce
+that known naming limitation with protocol_tests.exe --probe-escaped-name from
+the normal test working directory. The default tests verify the full 50-byte
+UTF-8 budget with a non-ASCII name without those reserved characters.
+DNS comparisons are ASCII-case-insensitive; Windows can change ASCII case on
+the wire. The multicast check accounts for that without ignoring Unicode bytes,
+extra characters or missing/truncated name content.
+No truncation, replacement alias or Unicode normalization is introduced.
+App/UI validation should use UTF-8 byte length, not a 64-character/rune count,
+and explain the limit before saving. Until the reserved-character wire encoding
+is corrected and verified, the faithful conservative UI policy is to reject
+dot/backslash names explicitly, not rewrite them. This request does not change
+the native/header name-acceptance semantics. Expanding the budget by silently
+changing the RAOP prefix/name is not a faithful compatibility fix.
+
+The persistent private key uses a cryptographically generated Ed25519 key, not
+a deterministic hash of device ID. Its UTF-8 key_path is converted to UTF-16.
+New keys receive a protected current-user-only DACL atomically at file creation.
+Existing files are checked for private permissions and a valid Ed25519 key;
+corrupt, nonprivate, encrypted, inaccessible, or reparse-point keys fail startup
+instead of being overwritten or triggering an interactive password prompt.
+The parent must create the containing user-private directory before run.
+
+Receive allocation and assembly limits
+-------------------------------------
+
+The checked protocol transformations enforce limits BEFORE low-level allocation,
+not just at the media queue. HTTP/RTSP Content-Length and individual/cumulative
+chunk lengths are capped at 1 MiB. Oversized, malformed, overflowed and conflicting
+lengths are rejected before body allocation or handler dispatch. URL storage is
+capped at 2048 bytes; decoded header field/value storage at 16 KiB and 64 pairs.
+Incremental wire/body checks use subtraction-safe arithmetic; allocation failures
+keep existing pointers owned and return parser errors instead of asserting.
+
+TCP mirror lengths are decoded as unsigned little-endian values and validated
+against 8 MiB before payload allocation. Prepended codec data is included in
+the output-buffer bound. Incomplete headers/payloads have a two-second monotonic
+assembly deadline, starting at the first header byte, without timing out an idle
+connection between packets. Every inner recv loop checks stop/deadline state,
+so continuous trickle traffic cannot prevent joining a producer. Socket receive
+timeouts remain short and ordinary fragmentation within the deadline is allowed.
+Repeated codec configuration replaces/frees its old SPS/PPS buffer; allocation
+failures and invalid packets exit through normal session cleanup.
+
+native\tests\protocol_receive_bounds.cpp links the real low-level library and
+intercepts malloc/calloc/realloc in THAT TEST ONLY. It checks allocation sizes,
+header-only rejection before body allocation, exact supported maxima, overflow,
+fragmentation and cumulative chunk limits. Real loopback TCP mirror probes cover
+oversized/unsigned lengths, truncated EOF, stalled partial packets, valid
+fragmented heartbeats and stop under continuous partial header/payload traffic.
+No production allocator is replaced and no encrypted-device success is implied.
+The host lifecycle test additionally sends malformed/truncated RTSP over actual
+sockets, checks the listener remains usable, and stops with an unfinished body.
+
+Validation and limits
+---------------------
+
+  ctest --test-dir build\native\cmake --output-on-failure
+
+The protocol tests run three create/run/stop/destroy cycles, real Windows DNS-SD
+resolve and multicast UDP PTR discovery for both service types on active local
+interfaces, required TXT/PIN flags, fragmented RTSP OPTIONS and binary /info,
+configured limits, freed caller-owned config strings, stable identity across
+Unicode key paths, required PIN-0000 startup, post-destroy callback quiescence,
+automatic resolution/FPS normalization, mixed-zero dimension rejection,
+and exact multicast advertisement of a full 50-byte UTF-8 name,
+malformed SETUP rejection, explicit HTTP/HLS rejection, idle window absence,
+stopping with an incomplete TCP request, DNS registration cancellation, and
+pre-start cancellation. Synthetic identity-hook tests separately check that stale
+callbacks cannot end or revive a replacement session; these are not encrypted
+streaming tests. Each probe has a deadline; no sender secrets are printed.
+The real-media host test additionally blocks an actual STREAMING callback while
+the owner ends the session: SESSION_ENDED waits for that callback/reset fence.
+It verifies that a delayed decoded frame cannot publish after replacement
+CONNECTING, and that only a new real frame can start replacement STREAMING.
+An explicitly rejected first packet must emit neither VIDEO_RECEIVED nor STREAMING.
+These are local/network protocol tests, not physical iPhone end-to-end evidence.
+
+A compatible physical iPhone/iPad must still verify Control Center discovery,
+PIN authentication, encrypted mirroring, reconnect/device switching, actual
+video/audio synchronization and user-close behavior on the shipping machine.
+Windows N/KN may require Microsoft's OS Media Feature Pack; HEVC can require an
+installed Windows codec and must fail explicitly when unsupported. Firewall or
+network isolation can prevent multicast despite successful OS registration.

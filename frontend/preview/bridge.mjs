@@ -4,7 +4,7 @@ export function exampleSettings(theme = 'light') {
     hardwareDecode: true, h265: false, preferNewestConnection: true,
     idleTimeoutSeconds: 15, requirePin: false, pinCode: '', launchAtStartup: false,
     startMinimized: false, autoStartMirroring: true, alwaysOnTop: false,
-    theme, firstRun: false,
+    theme, firstRun: false, verboseLogging: false,
   };
 }
 
@@ -42,6 +42,7 @@ export function createPreviewBridge({ notify = () => {}, now = Date.now, theme =
       GetStatus: async () => structuredClone(snapshot),
       GetVersion: async () => 'Website preview - example data',
       GetSettingsFolder: async () => 'Browser preview - no settings files are created',
+      GetLogsFolder: async () => 'Browser preview - no log files are created',
       SaveSettings: async next => {
         const name = next.deviceName.trim();
         if (!name || name.length > 64) throw new Error('Use a PC name between 1 and 64 characters.');
@@ -68,6 +69,7 @@ export function createPreviewBridge({ notify = () => {}, now = Date.now, theme =
       ShowSettingsPage: async () => { windowAction('show-app'); emit('navigate', 'settings'); },
       ShowAboutPage: async () => { windowAction('show-app'); emit('navigate', 'about'); },
       OpenSettingsFolder: async () => nativeOnly('Opening a Windows folder'),
+      OpenLogsFolder: async () => nativeOnly('Opening a Windows logs folder'),
       OpenExternalURL: async () => nativeOnly('Opening links from the app'),
       Quit: async () => { publishStatus('stopped'); windowAction('quit'); },
     },

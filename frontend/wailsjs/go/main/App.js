@@ -6,6 +6,10 @@ export function ConfirmSetupAndStart() {
   return window['go']['main']['App']['ConfirmSetupAndStart']();
 }
 
+export function GetLogsFolder() {
+  return window['go']['main']['App']['GetLogsFolder']();
+}
+
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
@@ -24,6 +28,10 @@ export function GetVersion() {
 
 export function OpenExternalURL(arg1) {
   return window['go']['main']['App']['OpenExternalURL'](arg1);
+}
+
+export function OpenLogsFolder() {
+  return window['go']['main']['App']['OpenLogsFolder']();
 }
 
 export function OpenSettingsFolder() {

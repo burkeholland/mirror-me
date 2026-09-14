@@ -6,11 +6,15 @@ param(
     [string]$Configuration = "Release",
     [ValidateRange(1, 32)]
     [int]$Parallel = 4,
-    [switch]$SkipSelfTest
+    [switch]$SkipSelfTest,
+    [switch]$TestVideoWindow
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+if ($SkipSelfTest -and $TestVideoWindow) {
+    throw "TestVideoWindow requires the receiver self-tests."
+}
 
 $root = Split-Path -Parent $PSScriptRoot
 $receiver = Join-Path $root "receiver"
@@ -22,6 +26,7 @@ $source = Join-Path $build "libuxplay"
 $native = Join-Path $build "native"
 $patch = Join-Path $receiver "patches\windows-receiver.patch"
 $videoPatch = Join-Path $receiver "patches\video-lifecycle.patch"
+$timingPatch = Join-Path $receiver "patches\video-timing.patch"
 $engine = Join-Path $root "engine"
 $executable = Join-Path $engine "mirrorme-receiver.exe"
 $lockPath = Join-Path $receiver "dependencies.json"
@@ -226,6 +231,8 @@ try {
     Invoke-Native $git ($applyArgs + @($patch))
     Invoke-Native $git ($applyArgs + @("--check", $videoPatch))
     Invoke-Native $git ($applyArgs + @($videoPatch))
+    Invoke-Native $git ($applyArgs + @("--check", $timingPatch))
+    Invoke-Native $git ($applyArgs + @($timingPatch))
 
     Invoke-Native $cmake @(
         "--fresh", "-S", $receiver, "-B", $native, "-G", "Ninja",
@@ -251,6 +258,13 @@ try {
         Invoke-ReceiverProbe "--self-test" 0 "MIRRORME_RECEIVER_SELF_TEST_OK"
         Invoke-ReceiverProbe "--media-self-test" 0 "MIRRORME_MEDIA_TEST_OK"
         Invoke-ReceiverProbe "--media-self-test-software" 0 "MIRRORME_MEDIA_TEST_OK"
+        Invoke-ReceiverProbe "--media-self-test-timing" 0 "MIRRORME_MEDIA_TEST_OK"
+        Invoke-ReceiverProbe "--media-self-test-timing-negative" 0 "MIRRORME_MEDIA_TEST_OK"
+        Invoke-ReceiverProbe "--media-self-test-timing-on-time" 0 "MIRRORME_MEDIA_TEST_OK"
+        if ($TestVideoWindow) {
+            Invoke-ReceiverProbe "--media-self-test-window" 0 "MIRRORME_MEDIA_TEST_OK"
+            Invoke-ReceiverProbe "--media-self-test-timing-window" 0 "MIRRORME_MEDIA_TEST_OK"
+        }
         Invoke-ReceiverProbe "--media-self-test-invalid" 1
         Invoke-ReceiverProbe "-help" 0 "-nh"
         $unicodeName = "MirrorMe $([char]0x00e9)$([char]0x6f22)$([char]::ConvertFromUtf32(0x1f4f1))"
@@ -263,15 +277,18 @@ try {
     }
     $binaryHash = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash.ToLowerInvariant()
     [ordered]@{
-        receiverVersion = "1.0.0"
+        receiverVersion = (Get-Item -LiteralPath $builtExecutable).VersionInfo.ProductVersion
         uxplayCommit = $lock.uxplay.commit
         configuration = $Configuration
         compiler = $compiler.Trim()
         dependencyManifestSha256 = (Get-FileHash -LiteralPath $lockPath -Algorithm SHA256).Hash.ToLowerInvariant()
         patchSha256 = (Get-FileHash -LiteralPath $patch -Algorithm SHA256).Hash.ToLowerInvariant()
         videoPatchSha256 = (Get-FileHash -LiteralPath $videoPatch -Algorithm SHA256).Hash.ToLowerInvariant()
+        timingPatchSha256 = (Get-FileHash -LiteralPath $timingPatch -Algorithm SHA256).Hash.ToLowerInvariant()
+        brandingIconSha256 = (Get-FileHash -LiteralPath (Join-Path $receiver "resources\mirrorme.ico") -Algorithm SHA256).Hash.ToLowerInvariant()
         executableSha256 = $binaryHash
         offlineChecksPassed = (-not $SkipSelfTest)
+        videoWindowChecksPassed = [bool]$TestVideoWindow
         builtAtUtc = [DateTime]::UtcNow.ToString("o")
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $build "build-manifest.json") -Encoding UTF8
     Write-Host "Built $executable"

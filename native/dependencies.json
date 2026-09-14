@@ -1,0 +1,95 @@
+{
+  "protocol": {
+    "repository": "https://github.com/leapbtw/libuxplay.git",
+    "commit": "437f37514257d9cb513ac7fbdee743b4da85852e",
+    "version": "1.73.6",
+    "license": "GPL-3.0-or-later; individual protocol files LGPL-2.1-or-later",
+    "retained": "Licensed protocol, pairing, FairPlay, HTTP/RTP and crypto compatibility code. Not a clean-room implementation."
+  },
+  "packageBaseUrl": "https://repo.msys2.org/mingw/ucrt64",
+  "packages": [
+    {
+      "name": "libplist",
+      "file": "mingw-w64-ucrt-x86_64-libplist-2.7.0-3-any.pkg.tar.zst",
+      "sha256": "f799bb20db57b0d34a14659b8794658f638276c703fa7fee3ecfa47aee54d255",
+      "source": "https://github.com/libimobiledevice/libplist/releases/tag/2.7.0",
+      "license": "LGPL-2.1-or-later (library); source archive also contains GPL-2.0-or-later tools",
+      "recipeCommit": "0c88dc07c0132ab9a93d9fe5b43da67fbde190a6",
+      "recipeSha256FromBuildInfo": "144012571f9ed35c8bf447e9a5d8e7c0689fc4acccd552821fa93b75978aecae",
+      "sourceInputs": [
+        {
+          "file": "PKGBUILD",
+          "url": "https://raw.githubusercontent.com/msys2/MINGW-packages/0c88dc07c0132ab9a93d9fe5b43da67fbde190a6/mingw-w64-libplist/PKGBUILD",
+          "sha256": "144012571f9ed35c8bf447e9a5d8e7c0689fc4acccd552821fa93b75978aecae"
+        },
+        {
+          "file": "libplist-2.7.0.tar.bz2",
+          "url": "https://github.com/libimobiledevice/libplist/releases/download/2.7.0/libplist-2.7.0.tar.bz2",
+          "sha256": "7ac42301e896b1ebe3c654634780c82baa7cb70df8554e683ff89f7c2643eb8b"
+        },
+        {
+          "file": "003-fix-py-soext.patch",
+          "url": "https://raw.githubusercontent.com/msys2/MINGW-packages/0c88dc07c0132ab9a93d9fe5b43da67fbde190a6/mingw-w64-libplist/003-fix-py-soext.patch",
+          "sha256": "c9190d4697bc3d97fa20b66a54f2b9f8fe2527560376e2dae8d168e79cbd272c"
+        }
+      ]
+    },
+    {
+      "name": "openssl",
+      "file": "mingw-w64-ucrt-x86_64-openssl-3.6.1-1-any.pkg.tar.zst",
+      "sha256": "ad33a107baaad9e689612c6137b1f9ca7d7e6b118dab632e414b2cfa4f21865c",
+      "source": "https://github.com/openssl/openssl/releases/tag/openssl-3.6.1",
+      "license": "Apache-2.0; MSYS2 pathtools additions carry original CC0 notices",
+      "recipeCommit": "b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4",
+      "recipeSha256FromBuildInfo": "6ab518bc5ab9a4776a324d0099b9b3c1756616c37aa99cf4a09a2927deef65e4",
+      "sourceInputs": [
+        {
+          "file": "PKGBUILD",
+          "url": "https://raw.githubusercontent.com/msys2/MINGW-packages/b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4/mingw-w64-openssl/PKGBUILD",
+          "sha256": "6ab518bc5ab9a4776a324d0099b9b3c1756616c37aa99cf4a09a2927deef65e4"
+        },
+        {
+          "file": "openssl-3.6.1.tar.gz",
+          "url": "https://github.com/openssl/openssl/releases/download/openssl-3.6.1/openssl-3.6.1.tar.gz",
+          "sha256": "b1bfedcd5b289ff22aee87c9d600f515767ebf45f77168cb6d64f231f518a82e"
+        },
+        {
+          "file": "openssl-3.6.1.tar.gz.asc",
+          "url": "https://github.com/openssl/openssl/releases/download/openssl-3.6.1/openssl-3.6.1.tar.gz.asc",
+          "sha256": "a549571f98ac883a6eca7a2c21021a9d2129e6f4bcad2a261f9bd2487fb80f4b"
+        },
+        {
+          "file": "002-relocation.patch",
+          "url": "https://raw.githubusercontent.com/msys2/MINGW-packages/b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4/mingw-w64-openssl/002-relocation.patch",
+          "sha256": "3e9a8abb6ff5fb7bdb450742fb7bd85513a4abbe85594228620379bcac7c02ef"
+        },
+        {
+          "file": "pathtools.c",
+          "url": "https://raw.githubusercontent.com/msys2/MINGW-packages/b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4/mingw-w64-openssl/pathtools.c",
+          "sha256": "ebf471173f5ee9c4416c10a78760cea8afaf1a4a6e653977321e8547ce7bf3c0"
+        },
+        {
+          "file": "pathtools.h",
+          "url": "https://raw.githubusercontent.com/msys2/MINGW-packages/b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4/mingw-w64-openssl/pathtools.h",
+          "sha256": "1585ef1b61cf53a2ca27049c11d49e0834683dfda798f03547761375df482a90"
+        }
+      ]
+    }
+  ],
+  "toolchain": {
+    "tested": "Strawberry Perl GCC 13.2.0 x86_64-w64-mingw32 UCRT, CMake, Ninja",
+    "runtime": "static libstdc++, libgcc, winpthread",
+    "minimumWindows": "Windows 10 with native DNS-SD service registration APIs",
+    "sourceProvenanceComplete": false,
+    "sourceProvenanceGap": "Installed Strawberry libstdc++, libgcc, libgcc_eh and winpthread archives are hashed per build, but the exact distributor source/patch bundles and runtime notices have not yet been retained and matched."
+  },
+  "distribution": {
+    "ready": false,
+    "policy": "Development builds only until corresponding sources, notices, and rebuild inputs for every statically linked library are retained and independently verified.",
+    "remainingGaps": [
+      "Exact Strawberry GCC runtime and winpthread distributor sources/patches/notices are not retained and matched.",
+      "OpenSSL/libplist binaries are still the pinned MSYS2 SDK archives; the matching source recipes/patches are retained, but their source rebuild has not been executed in this project.",
+      "A complete corresponding-source release bundle, including native application source, dependency archives, patches, build configuration, and toolchain inputs, has not yet been assembled and verified."
+    ]
+  }
+}

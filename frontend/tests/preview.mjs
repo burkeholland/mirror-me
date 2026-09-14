@@ -11,7 +11,10 @@ let settings = {
   requirePin: params.get('pin') === '1',
   pinCode: params.get('pin') === '1' ? '2468' : '',
 };
-let snapshot = snapshotFixture(params.get('state') || (settings.firstRun && params.get('step') !== '2' ? 'stopped' : 'advertising'));
+function receiverSnapshot(status) {
+  return { ...snapshotFixture(status), backend: params.get('backend') === 'native' ? 'native' : 'legacy' };
+}
+let snapshot = receiverSnapshot(params.get('state') || (settings.firstRun && params.get('step') !== '2' ? 'stopped' : 'advertising'));
 if (params.get('video') === '1') snapshot.videoReceived = true;
 if (params.get('download') === '1') {
   snapshot.setupKind = 'runtime';
@@ -27,7 +30,7 @@ function emit(name, event) {
 }
 
 function setStatus(status) {
-  snapshot = snapshotFixture(status);
+  snapshot = receiverSnapshot(status);
   emit('engine-status', { Snapshot: snapshot, Activity: `Preview: ${status}` });
 }
 
@@ -36,6 +39,7 @@ window.go = { main: { App: {
   GetStatus: async () => structuredClone(snapshot),
   GetVersion: async () => 'UI preview',
   GetSettingsFolder: async () => 'Preview only - no files are changed',
+  GetLogsFolder: async () => 'Preview only - no log files are created',
   SaveSettings: async next => {
     calls.push(['save', structuredClone(next)]);
     settings = { ...next, deviceName: next.deviceName.trim() };
@@ -66,6 +70,7 @@ window.go = { main: { App: {
   },
   ShowMirroredScreen: async () => snapshot.status === 'mirroring',
   OpenSettingsFolder: async () => { calls.push(['open-folder']); },
+  OpenLogsFolder: async () => { calls.push(['open-logs-folder']); },
   OpenExternalURL: async url => { calls.push(['open-url', url]); },
   Quit: async () => { calls.push(['quit']); },
 } } };

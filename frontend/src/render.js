@@ -1,5 +1,5 @@
 import { state, hasDraftChanges } from './state.js';
-import { escHtml, escAttr, statusMeta, formatElapsedSince, formatClock, resolutionLabel } from './format.js';
+import { escHtml, escAttr, statusMeta, formatElapsedSince, resolutionLabel, deviceLabel, MAX_PC_NAME_BYTES } from './format.js';
 import { icon } from './icons.js';
 
 const SECTIONS = [['connection', 'Connection'], ['picture', 'Picture & sound'], ['app', 'App']];
@@ -118,10 +118,12 @@ function renderPage() {
 function deviceScene() {
   return `<div class="device-scene" data-scene="${state.status.status}" aria-hidden="true">
     <div class="scene-desktop"><div class="desktop-display">
+      <span class="desktop-window-title">iPhone screen</span>
       ${icon(state.status.status === 'mirroring' ? 'monitor-play' : 'cast', 'desktop-symbol')}
       <span class="desktop-taskbar"></span></div><div class="desktop-stand"></div></div>
     <div class="scene-phone"><span class="phone-speaker"></span>${icon('cast', 'phone-symbol')}<span class="phone-home"></span></div>
     <span class="scene-wireless">${icon('wifi')}</span>
+    <span class="scene-caption">Separate video window</span>
   </div>`;
 }
 
@@ -165,8 +167,6 @@ function renderHome() {
           attrs: 'title="Picture and sound settings"',
         })}</div>
     </section>
-    <p class="home-hint">${snapshot.status === 'mirroring' ? 'Your mirrored screen has its own window. Closing MirrorMe keeps it running in the tray.' : 'Keep your iPhone and this PC on the same network.'}</p>
-    ${connectionDetails('home-details')}
   </div>`;
 }
 
@@ -187,7 +187,8 @@ function connectionDescription(snapshot, slow) {
       : slow
       ? `${escHtml(snapshot.deviceName || 'Your iPhone')} was found, but video hasn't arrived. Stop Screen Mirroring on your iPhone, then try again.`
       : `${escHtml(snapshot.deviceName || 'Your iPhone')} was found. Waiting for its screen to arrive.`;
-    case 'mirroring': return `${escHtml(snapshot.deviceName || 'Your iPhone')} is sharing its screen with this PC. Bring the video window forward whenever you need it.`;
+    case 'mirroring': return `${escHtml(snapshot.deviceName || 'Your iPhone')} is sharing its screen in <strong>MirrorMe - iPhone screen</strong>. Bring that window forward whenever you need it.`;
+    case 'paused': return "The receiver paused the video. Unlock your iPhone to resume. If it doesn't resume, stop <strong>Screen Mirroring</strong> on your iPhone, then choose this PC again.";
     case 'error': return 'The receiver could not stay ready. Try again, or check the connection guide for help.';
     default: return 'The receiver has not reported a usable state. Try starting it again.';
   }
@@ -232,6 +233,8 @@ function homeActions(status, slow) {
     ${button('stop-mirroring', 'Stop receiving', { quiet: true, disabled: blocked })}`;
   if (status === 'mirroring') return `${button('show-mirrored-screen', 'Show screen', { primary: true, icon: 'expand' })}
     ${button('stop-mirroring', 'Stop mirroring', { quiet: true, disabled: blocked })}`;
+  if (status === 'paused') return `${button('stop-mirroring', 'Stop mirroring', { disabled: state.busyAction === 'stop' })}
+    ${button('open-guide', 'Connection help', { quiet: true, id: 'home-guide' })}`;
   return `${button('start-mirroring', status === 'stopped' ? 'Start receiving' : 'Try again', {
     primary: true, icon: status === 'stopped' ? 'play' : 'refresh', disabled: blocked,
   })}${button('open-guide', 'Connection guide', { quiet: true, id: 'home-guide' })}`;
@@ -253,6 +256,7 @@ function renderOnboarding() {
   const second = state.setupStep === 2;
   const ready = state.status.status === 'advertising';
   const mirrored = state.status.status === 'mirroring';
+  const paused = state.status.status === 'paused';
   const connecting = state.status.status === 'connecting';
   const setupTitle = mirrored ? "You're connected" : ready ? 'Now, pick up your iPhone'
     : connectionTitle(state.status, state.connectionSlow);
@@ -272,11 +276,12 @@ function renderOnboarding() {
       ${mirrored ? `<div class="onboarding-success">${icon('check')}<p>${escHtml(state.status.deviceName || 'Your iPhone')} is mirroring.</p>
         ${button('show-mirrored-screen', 'Show screen', { primary: true, icon: 'expand' })}</div>` : ready ? connectionSteps()
         : connecting ? connectionProgress(state.connectionSlow)
+        : paused ? '<p class="setup-next">The separate video window is hidden until video resumes.</p>'
         : `<p class="setup-next">${icon('phone')}Once this PC is ready, we'll show you how to connect your iPhone.</p>`}
       ${pinPanel()}
       <div class="onboarding-footer">
         ${button('setup-back', 'Back', { quiet: true, icon: 'arrow-left', disabled: state.busy || state.saving })}
-        ${button('dismiss-first-run', state.saving ? 'Saving...' : ready || mirrored ? 'Done' : 'Back to Mirror', { primary: ready, disabled: state.saving || state.busy })}
+        ${button('dismiss-first-run', state.saving ? 'Saving...' : ready || mirrored || paused ? 'Done' : 'Back to Mirror', { primary: ready, disabled: state.saving || state.busy })}
       </div>
     </section>` : `<form class="onboarding-surface" id="setup-form">
       <div class="setup-intro">
@@ -285,7 +290,7 @@ function renderOnboarding() {
       </div>
       <div class="setup-name-row"><div><label for="setup-name">What should your iPhone call this PC?</label>
         <p id="setup-name-hint">This name appears in Screen Mirroring.</p></div>
-        <div class="setup-name-input"><input class="input" id="setup-name" value="${escAttr(state.setupName)}" maxlength="64"
+        <div class="setup-name-input"><input class="input" id="setup-name" value="${escAttr(state.setupName)}" maxlength="${MAX_PC_NAME_BYTES}"
           autocomplete="off" spellcheck="false" required aria-describedby="setup-name-hint name-error"
           aria-invalid="${Boolean(state.fieldError)}" ${state.saving ? 'disabled' : ''}>
           <p class="field-error" id="name-error" ${state.fieldError ? '' : 'hidden'}>${escHtml(state.fieldError)}</p></div>
@@ -330,7 +335,7 @@ function textRow(field, label, description, value) {
   return `<div class="setting-row"><div class="setting-copy"><label for="field-${field}">${label}</label>
     <p id="hint-${field}">${description}</p></div><div class="setting-control">
     <input class="input" type="text" id="field-${field}" data-field="${field}" value="${escAttr(value)}"
-      maxlength="64" spellcheck="false" autocomplete="off" aria-describedby="hint-${field} name-error"
+      maxlength="${MAX_PC_NAME_BYTES}" spellcheck="false" autocomplete="off" aria-describedby="hint-${field} name-error"
       aria-invalid="${Boolean(state.fieldError)}">
     <p id="name-error" class="field-error" ${state.fieldError ? '' : 'hidden'}>${escHtml(state.fieldError)}</p></div></div>`;
 }
@@ -370,7 +375,9 @@ function pictureSettings() {
     + selectRow('maxFps', 'Maximum frame rate', 'Higher limits need more network bandwidth.', FPS, settings.maxFps))}
     ${settingsGroup('Sound', toggleRow('audioEnabled', 'Play iPhone audio', "Use this PC's speakers for mirrored sound.", settings.audioEnabled))}
     ${disclosure('advanced-picture', 'Advanced picture settings',
-      toggleRow('hardwareDecode', 'Use hardware acceleration', 'Let your graphics processor handle video decoding.', settings.hardwareDecode)
+      (state.status.backend === 'native'
+        ? '<div class="setting-row"><div class="setting-copy"><strong>Windows video decoder</strong><p>This preview uses software decoding. Hardware decoding is not enabled.</p></div></div>'
+        : toggleRow('hardwareDecode', 'Use hardware acceleration', 'Let your graphics processor handle video decoding.', settings.hardwareDecode))
       + toggleRow('h265', 'Allow HEVC video', 'Enable the H.265 codec for compatible devices.', settings.h265), 'settings-disclosure')}
     <p class="settings-note">These are quality limits, not a measurement of the live stream. Your iPhone and network determine the final picture.</p>`;
 }
@@ -383,21 +390,24 @@ function appSettings() {
       toggleRow('autoStartMirroring', 'Start receiving automatically', 'Be ready for your iPhone as soon as the app opens.', settings.autoStartMirroring)
       + toggleRow('startMinimized', 'Open in the system tray', 'Keep the control window out of the way.', settings.startMinimized))}
     ${disclosure('windows-startup', 'Windows startup',
-      toggleRow('launchAtStartup', 'Launch when I sign in', 'Start MirrorMe in the tray when you sign in to Windows.', settings.launchAtStartup), 'settings-disclosure')}`;
-}
-
-function activityList() {
-  return state.activity.length
-    ? `<ol class="activity-list">${state.activity.map(item => `<li><time>${escHtml(formatClock(item.time))}</time><span>${escHtml(item.text)}</span></li>`).join('')}</ol>`
-    : '<p class="empty-activity">No connection activity in this window yet.</p>';
+      toggleRow('launchAtStartup', 'Launch when I sign in', 'Start MirrorMe in the tray when you sign in to Windows.', settings.launchAtStartup), 'settings-disclosure')}
+    ${settingsGroup('Troubleshooting', toggleRow('verboseLogging', 'Verbose logging',
+      'Save receiver events and quality settings to local files. No screen content, pairing codes or packet data.', settings.verboseLogging))}
+    <p data-log-warning role="alert" class="field-error" ${state.logWarning ? '' : 'hidden'}>${escHtml(state.logWarning)}</p>
+    <p class="settings-note">Two log files, up to 1 MB each. Turning logging off keeps existing files.</p>
+    <p class="settings-path">${escHtml(state.logsFolder)}</p>
+    <div class="button-row">${button('open-logs-folder', 'Open logs folder', { quiet: true, small: true })}
+      ${button('copy-logs-path', 'Copy logs path', { quiet: true, small: true, icon: 'copy' })}</div>
+    ${connectionDetails('settings-details')}`;
 }
 
 function connectionDetails(key) {
   return disclosure(key, 'Connection details', `<dl class="diagnostics">
     <div><dt>Receiver</dt><dd data-diagnostic-status>${escHtml(statusMeta(state.status.status).label)}</dd></div>
+    ${state.status.backend === 'native' ? '<div><dt>Implementation</dt><dd>Built into MirrorMe</dd></div>' : ''}
     <div><dt>Version</dt><dd>${escHtml(state.version || 'Development')}</dd></div>
-    <div><dt>Device</dt><dd data-diagnostic-device>${escHtml(state.status.deviceName || 'Not connected')}</dd></div>
-  </dl><div data-activity-list>${activityList()}</div>
+    <div><dt>Device</dt><dd data-diagnostic-device>${escHtml(deviceLabel(state.status))}</dd></div>
+  </dl>
   ${button('copy-diagnostics', 'Copy details', { id: `copy-${key}`, quiet: true, small: true, icon: 'copy' })}`, 'connection-details');
 }
 
@@ -405,7 +415,9 @@ function helpAnswers() {
   return `${disclosure('help-discovery', "My PC isn't in Screen Mirroring", `<p>Keep your iPhone and PC on the same trusted network. A guest network or VPN may prevent them from finding each other.</p>
     <p>Make sure MirrorMe says <strong>Ready to connect</strong>. If Windows asks about network access, allow the MirrorMe receiver on your private network. Do not turn off your firewall.</p>`)}
     ${disclosure('help-connecting', 'My iPhone is stuck on Connecting', `<p>Finding your iPhone and receiving its video are separate steps. MirrorMe only marks the session as mirroring after the receiver reports video.</p>
-      <p>On your iPhone, stop Screen Mirroring. Choose <strong>Try again</strong> in MirrorMe, then select this PC again on your iPhone. If it still stalls, the connection details can help explain what happened.</p>`)}
+      <p>On your iPhone, stop Screen Mirroring. Choose <strong>Try again</strong> in MirrorMe, then select this PC again on your iPhone. Connection details and logging are in <strong>Settings &gt; App &gt; Troubleshooting</strong>.</p>`)}
+    ${disclosure('help-paused', 'Mirroring is paused', `<p>Paused means the receiver reported a pause, not that MirrorMe detected a locked phone from missing video.</p>
+      <p>Unlock your iPhone to resume. If video doesn't resume, stop <strong>Screen Mirroring</strong> on your iPhone, then choose this PC again. The video window stays hidden while paused; you can still stop mirroring in MirrorMe.</p>`)}
     ${disclosure('help-video', 'The picture is black or sound is missing', `<p>Some apps block screen mirroring of protected video. Try the iPhone Home Screen or a photo first.</p>
       <p>For sound, enable <strong>Play iPhone audio</strong> in Picture &amp; sound, and check your PC's volume and audio output. For an unstable picture, try 720p at 30 fps.</p>`)}
     ${disclosure('help-tray', 'What happens when I close the window?', `<p>MirrorMe keeps receiving in the system tray, near the Windows clock. Use its tray menu to show the app, stop receiving, or quit completely.</p>
@@ -413,12 +425,17 @@ function helpAnswers() {
 }
 
 function renderAbout() {
+  const native = state.status.backend === 'native';
+  const receiverCredits = native
+    ? [['AirPlay protocol', 'https://github.com/leapbtw/libuxplay'], ['FFmpeg', 'https://ffmpeg.org'],
+      ['OpenSSL', 'https://openssl.org'], ['libplist', 'https://github.com/libimobiledevice/libplist']]
+    : [['UxPlay', 'https://github.com/FDH2/UxPlay'], ['libuxplay', 'https://github.com/leapbtw/libuxplay'],
+      ['GStreamer', 'https://gstreamer.freedesktop.org/']];
   return `<div class="page help-page">${heading('Help &amp; about')}${errorNotice()}
     <section class="help-intro"><div class="about-mark" aria-hidden="true">${icon('cast')}</div>
       <div><h2>MirrorMe</h2><p>iPhone screen mirroring, made for Windows.</p><span class="version-label">Version ${escHtml(state.version || 'Development')}</span></div>
       ${button('open-guide', 'Connection guide', { id: 'about-guide', primary: true, icon: 'phone' })}</section>
     <section class="help-section"><h2>A little help</h2>${helpAnswers()}</section>
-    ${connectionDetails('about-details')}
     ${disclosure('shortcuts', 'Keyboard shortcuts', `<dl class="shortcuts">
       <div><dt>Open Settings</dt><dd><kbd>Ctrl</kbd> <kbd>,</kbd></dd></div>
       <div><dt>Save changes</dt><dd><kbd>Ctrl</kbd> <kbd>S</kbd></dd></div>
@@ -427,12 +444,13 @@ function renderAbout() {
     ${disclosure('support-files', 'Settings &amp; support files', `<p>Your preferences are stored on this PC.</p>
       <p class="settings-path">${escHtml(state.settingsFolder)}</p><div class="button-row">
       ${button('open-settings-folder', 'Open folder', { small: true })}${button('copy-settings-folder', 'Copy path', { quiet: true, small: true, icon: 'copy' })}</div>`)}
-    ${disclosure('credits', 'Built with open source', `<p>MirrorMe uses UxPlay to receive AirPlay streams, GStreamer for picture and sound, and Wails for its Windows interface. The receiver runs in the background and stops when you quit.</p>
+    ${disclosure('credits', 'Built with open source', `<p>${native
+      ? 'AirPlay protocol code and audio codecs are built into MirrorMe. Windows handles video decoding and audio output. No separate receiver download or discovery service is installed.'
+      : 'MirrorMe uses UxPlay to receive AirPlay streams, GStreamer for picture and sound, and Wails for its Windows interface. The receiver runs in the background and stops when you quit.'}</p>
       <div class="credit-links">${[
-        ['UxPlay', 'https://github.com/FDH2/UxPlay'], ['libuxplay', 'https://github.com/leapbtw/libuxplay'],
-        ['GStreamer', 'https://gstreamer.freedesktop.org/'], ['Wails', 'https://wails.io'],
+        ...receiverCredits, ['Wails', 'https://wails.io'],
         ['Postrboard', 'https://github.com/burkeholland/postrboard-design'], ['Lucide', 'https://lucide.dev'],
-      ].map(([label, url]) => `<a href="${url}" id="credit-${label}" data-action="open-link" data-url="${url}">${label}${icon('arrow-up-right')}</a>`).join('')}</div>
+      ].map(([label, url]) => `<a href="${url}" id="credit-${label.toLowerCase().replaceAll(' ', '-')}" data-action="open-link" data-url="${url}">${label}${icon('arrow-up-right')}</a>`).join('')}</div>
       <p class="settings-note">License information is included with the application. MirrorMe is not affiliated with Apple.</p>`)}
     <footer class="about-footer"><p>Quit stops the receiver and closes MirrorMe.</p>${button('quit', 'Quit MirrorMe')}</footer>
   </div>`;
@@ -453,7 +471,7 @@ function renderDialog() {
         id: 'dialog-close', quiet: true, small: true, icon: 'close', attrs: 'data-dialog-focus',
       })}</header>
     <div class="dialog-body">${errorNotice()}${receiverName('guide-copy-name')}
-      ${connectionSteps()}${pinPanel()}
+      ${state.status.status === 'paused' ? `<h3>Mirroring is paused</h3><p>${connectionDescription(state.status, false)}</p>` : connectionSteps()}${pinPanel()}
       <div class="guide-notes"><p>${icon('wifi')}Keep both devices on the same network.</p>
         <p>${icon('info')}On an iPhone with a Home button, swipe up from the bottom to open Control Center.</p></div>
       ${disclosure('guide-trouble', 'Still not connecting?', `<p>Check that MirrorMe is ready to connect. If your phone is stuck, stop Screen Mirroring on the phone, restart receiving in MirrorMe, then choose this PC again.</p>
@@ -499,9 +517,12 @@ export function refreshReceiverStatus(app) {
   const status = app.querySelector('[data-diagnostic-status]');
   if (status) status.textContent = meta.label;
   const device = app.querySelector('[data-diagnostic-device]');
-  if (device) device.textContent = state.status.deviceName || 'Not connected';
-  const activity = app.querySelector('[data-activity-list]');
-  if (activity) activity.innerHTML = activityList();
+  if (device) device.textContent = deviceLabel(state.status);
+  const warning = app.querySelector('[data-log-warning]');
+  if (warning) {
+    warning.textContent = state.logWarning;
+    warning.hidden = !state.logWarning;
+  }
 }
 
 export function refreshWindowControls(app) {

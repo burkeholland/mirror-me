@@ -1,7 +1,7 @@
 import './vendor/postrboard.css';
 import './style.css';
 import {
-  state, load, receiveEngineEvent, receiveSettingsUpdate, navigate, tickConnection, syncWindowState,
+  state, load, receiveEngineEvent, receiveSettingsUpdate, receiveLogWarning, navigate, tickConnection, syncWindowState,
 } from './state.js';
 import { renderApp, refreshToasts, refreshReceiverStatus, refreshWindowControls, refreshElapsed } from './render.js';
 import { bindEvents, bindShortcuts } from './events.js';
@@ -29,6 +29,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 // Subscribe before the initial requests: live status always wins over a slow snapshot.
 EventsOn('engine-status', event => receiveEngineEvent(event, render));
 EventsOn('settings-updated', settings => receiveSettingsUpdate(settings, render));
+EventsOn('log-warning', message => receiveLogWarning(message, render));
 EventsOn('navigate', route => navigate(route, render));
 load(render);
 

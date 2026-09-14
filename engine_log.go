@@ -24,6 +24,7 @@ const (
 	factVideoReceived
 	factStreaming
 	factVideoStopped
+	factReceiverNotice
 	factWarning
 	factFatalError
 )
@@ -78,11 +79,18 @@ func parseLogLine(line string) (logFact, bool) {
 		fact.timestamp = ts
 		fact.hasTimestamp = true
 	}
+	// Production libuxplay prefixes LOGGER_ERR messages; offline probes and
+	// adapter failures may emit the same protocol marker without that prefix.
+	nativeError := strings.TrimPrefix(line, "*** ERROR: ")
+	nativeWarning := strings.TrimPrefix(line, "*** WARNING: ")
 
 	switch {
-	case reFatalDNSSD.MatchString(line):
+	case strings.HasPrefix(nativeWarning, "MIRRORME_RECEIVER_WARNING: "):
+		fact.kind = factReceiverNotice
+		fact.message = strings.TrimPrefix(nativeWarning, "MIRRORME_RECEIVER_WARNING: ")
+	case reFatalDNSSD.MatchString(nativeError):
 		fact.kind = factFatalError
-		fact.message = strings.TrimSpace(strings.TrimPrefix(line, "MIRRORME_RECEIVER_ERROR:"))
+		fact.message = strings.TrimSpace(strings.TrimPrefix(nativeError, "MIRRORME_RECEIVER_ERROR:"))
 	case reWarningLostConn.MatchString(line):
 		fact.kind = factWarning
 		fact.message = line

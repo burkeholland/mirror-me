@@ -1,0 +1,71 @@
+Original MirrorMe audio test fixtures
+====================================
+
+All tones in this directory were generated specifically for MirrorMe tests.
+They contain mathematical sine waves, not recorded speech, music, or borrowed
+media: left channel 997 Hz and right channel 1499 Hz, amplitude 0.25.
+The original generated media is dedicated to the public domain under CC0 1.0:
+https://creativecommons.org/publicdomain/zero/1.0/
+No FFmpeg FATE samples or media with uncertain redistribution rights are used.
+
+Fixtures and their exact generation commands, packet counts, rates, channels,
+codec cookies, SHA-256 hashes and encoder versions are in provenance.json.
+Generate them with:
+  python native\tests\audio_generate_fixtures.py
+Generation requires a local ffmpeg/ffprobe executable for original tones,
+ALAC and AAC-LC encoding/container parsing. These are test/development tools;
+production never launches them. Python 3.12+ and the project's existing
+Strawberry GCC/CMake/Ninja and Git tools build the test-only ELD encoder.
+
+AAC-ELD encoder:
+  Ittiam Systems libxaac, Apache License 2.0.
+  https://github.com/ittiam-systems/libxaac
+  Commit 6c771f2ccdef83ebc6dbf7694b1a0ce9c0585d46
+  Official source archive SHA-256:
+  11ee5690d0b78c34dc6eb517a22a0a611bf1a7e66d141057a3062467f36afd1c
+  Full license: LIBXAAC-LICENSE.txt (unchanged from the source archive).
+  native/tests/audio_eld_core.patch disables the encoder's unconditional
+  LD-SBR selection for AOT39, selecting its existing core-only ELD path.
+  No transform/quantizer/bitstream encoding implementation is replaced.
+  This is a test-only modified source build; no libxaac binary is distributed
+  or linked into MirrorMe. Original source and builds remain under
+  build/native-audio/. Source and patch pins are in audio-dependencies.json.
+
+The generator verifies actual encoder-emitted ASC, not merely an "ELD" label:
+  aac-eld-44100-480.mma: f8e85000, AOT39, stereo, 44100 Hz, 480 samples.
+  aac-eld-48000-512.mma: f8e64000, AOT39, stereo, 48000 Hz, 512 samples.
+The encoder's .txt metadata supplies the exact access-unit boundaries.
+The native tests decode every packet and verify count, amplitude, nonzero
+samples and independent channel frequencies. This is real ELD decoding
+coverage, NOT a test that feeds LC samples to an ELD configuration.
+Mono ELD/960-sample LC configuration support is not claimed as real-media
+decode coverage by these fixtures. Live Apple-device interoperability must
+still be checked separately; these are synthetic codec conformance tests.
+
+ALAC fixtures:
+  alac-44100-16-352 exercises AirPlay's 352-frame packet size.
+  alac-48000-24 exercises three full 4096-frame, 24-bit stereo packets.
+  ffprobe parses actual M4A packet bytes and the 36-byte cookie; this is not
+  an M4A container supplied to the production decoder. FFmpeg's ALAC encoder
+  advertises a 4096-frame maximum cookie even for the short 352-frame packet.
+  The decoder reconstructs AirPlay's negotiated 352 maximum for that test.
+  .s16le references are original PCM; tests require sample-for-sample equality
+  after the specified 24-to-16-bit conversion.
+
+AAC-LC fixtures:
+  Raw access units extracted with ffprobe from the original M4A.
+  Separately muxed ADTS fixtures are split using their actual header lengths;
+  each ADTS payload is asserted byte-equal to its corresponding raw packet.
+  AAC priming/padding is retained: a raw-packet decoder has no MP4 edit list,
+  so tests count the actual 1024 decoded samples per access unit, not trimmed
+  container play duration.
+
+MMAUDIO1 fixture container (test-only; all integers little-endian):
+  8 bytes magic "MMAUDIO1"
+  uint32 codec, samples_per_packet, sample_rate, channels
+  uint64 audio_format, total_decoded_frames
+  uint32 cookie_length, packet_count
+  cookie_length raw cookie/ASC bytes
+  For each packet: uint32 byte_length, uint32 expected_frames, packet bytes.
+This framing is only a deterministic test fixture wrapper. The tests pass
+the stored packet bytes, one access unit per call, into the production C ABI.

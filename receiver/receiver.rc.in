@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include <windows.h>
+101 ICON "@CMAKE_CURRENT_SOURCE_DIR@/resources/mirrorme.ico"
+
+1 VERSIONINFO
+FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Burke Holland"
+            VALUE "FileDescription", "MirrorMe video receiver"
+            VALUE "FileVersion", "@PROJECT_VERSION@"
+            VALUE "ProductName", "MirrorMe"
+            VALUE "ProductVersion", "@PROJECT_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

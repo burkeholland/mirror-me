@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -19,15 +21,17 @@ type App struct {
 	store  *ConfigStore
 	engine *Engine
 	tray   *SystemTray
+	logger *VerboseLogger
 
 	// startHidden is true when launched via the Run-key autostart entry
 	// (MirrorMe.exe --startup), so the window never flashes on login.
 	startHidden bool
 
-	mu        sync.RWMutex
-	config    Config
-	loadError string
-	saveMu    sync.Mutex
+	mu         sync.RWMutex
+	config     Config
+	loadError  string
+	logWarning string
+	saveMu     sync.Mutex
 }
 
 // NewApp constructs the App and loads persisted settings. Engine/tray
@@ -52,6 +56,11 @@ func NewApp(startHidden bool) *App {
 // startup is a Wails OnStartup hook.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.logger = newVerboseLogger(a.GetLogsFolder(), a.setLogWarning)
+	if err := a.logger.SetEnabled(a.currentConfig().VerboseLogging); err != nil {
+		a.setLogWarning(fmt.Sprintf("Verbose logging could not start: %v", err))
+	}
+	a.logEvent("app_start", EngineSnapshot{Status: StatusStopped})
 
 	engine, err := NewEngine(a.handleEngineEvent)
 	if err != nil {
@@ -120,6 +129,12 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.tray != nil {
 		a.tray.Stop()
 	}
+	if a.logger != nil {
+		a.logEvent("app_shutdown", a.GetStatus())
+		if err := a.logger.Close(); err != nil {
+			a.setLogWarning(fmt.Sprintf("Verbose logging could not finish: %v", err))
+		}
+	}
 }
 
 func (a *App) currentConfig() Config {
@@ -135,6 +150,7 @@ func (a *App) GetSettings() Config {
 	defer a.mu.RUnlock()
 	config := a.config.Clone()
 	config.LoadError = a.loadError
+	config.LogWarning = a.logWarning
 	return config
 }
 
@@ -160,6 +176,19 @@ func (a *App) SaveSettings(next Config) (Config, error) {
 		}
 	}
 
+	if a.logger != nil && normalized.VerboseLogging != current.VerboseLogging {
+		if !normalized.VerboseLogging {
+			a.logEvent("logging_disabled", a.GetStatus())
+		}
+		if err := a.logger.SetEnabled(normalized.VerboseLogging); err != nil {
+			if normalized.LaunchAtStartup != current.LaunchAtStartup {
+				err = errors.Join(err, setLaunchAtStartup(current.LaunchAtStartup))
+			}
+			a.setLogWarning(fmt.Sprintf("Verbose logging could not change: %v", err))
+			return current, err
+		}
+	}
+
 	if a.ctx != nil {
 		if normalized.AlwaysOnTop != current.AlwaysOnTop {
 			wailsruntime.WindowSetAlwaysOnTop(a.ctx, normalized.AlwaysOnTop)
@@ -170,6 +199,11 @@ func (a *App) SaveSettings(next Config) (Config, error) {
 	}
 
 	if err := a.store.Save(normalized); err != nil {
+		if a.logger != nil && normalized.VerboseLogging != current.VerboseLogging {
+			if rollbackErr := a.logger.SetEnabled(current.VerboseLogging); rollbackErr != nil {
+				a.setLogWarning(fmt.Sprintf("Verbose logging could not restore its previous setting: %v", rollbackErr))
+			}
+		}
 		if normalized.LaunchAtStartup != current.LaunchAtStartup {
 			_ = setLaunchAtStartup(current.LaunchAtStartup)
 		}
@@ -179,7 +213,11 @@ func (a *App) SaveSettings(next Config) (Config, error) {
 	a.mu.Lock()
 	a.config = normalized.Clone()
 	a.loadError = ""
+	if normalized.VerboseLogging != current.VerboseLogging {
+		a.logWarning = ""
+	}
 	a.mu.Unlock()
+	a.logEvent("settings_saved", a.GetStatus())
 
 	if a.engine != nil && a.engine.IsRunning() && configAffectsEngineArgs(current, normalized) {
 		if err := a.engine.Start(normalized); err != nil {
@@ -187,15 +225,18 @@ func (a *App) SaveSettings(next Config) (Config, error) {
 			// failed. Surface it as an engine event rather than a save
 			// error, since from the user's perspective their settings did
 			// save correctly.
+			snapshot := a.engine.Snapshot()
+			snapshot.Status, snapshot.LastError = StatusError, err.Error()
 			a.handleEngineEvent(EngineEvent{
-				Snapshot: EngineSnapshot{Status: StatusError, LastError: err.Error()},
+				Snapshot: snapshot,
 				Activity: fmt.Sprintf("Could not apply new settings to the running engine: %v", err),
 			})
 		}
 	}
 
-	a.emitSettingsUpdated(normalized)
-	return normalized, nil
+	saved := a.GetSettings()
+	a.emitSettingsUpdated(saved)
+	return saved, nil
 }
 
 // RegeneratePinCode replaces the current PIN with a new random 4-digit
@@ -209,7 +250,11 @@ func (a *App) RegeneratePinCode() (Config, error) {
 // GetStatus returns the mirroring engine's current status snapshot.
 func (a *App) GetStatus() EngineSnapshot {
 	if a.engine == nil {
-		return EngineSnapshot{Status: StatusError, LastError: a.engineUnavailableMessage()}
+		snapshot := EngineSnapshot{Status: StatusError, LastError: a.engineUnavailableMessage(), Backend: "legacy"}
+		if selfContainedReceiver {
+			snapshot.Backend = "native"
+		}
+		return snapshot
 	}
 	return a.engine.Snapshot()
 }
@@ -231,8 +276,8 @@ func (a *App) StopMirroring() error {
 	return a.engine.Stop()
 }
 
-// ConfirmSetupAndStart requests Bonjour installation/start through the
-// normal Windows permission prompt, then starts the background receiver.
+// ConfirmSetupAndStart is retained for older frontends. The self-contained
+// receiver starts directly, without an installer or elevated service.
 func (a *App) ConfirmSetupAndStart() error {
 	if a.engine == nil {
 		return errors.New(a.engineUnavailableMessage())
@@ -275,6 +320,33 @@ func (a *App) OpenSettingsFolder() error {
 		dir = dir[:idx]
 	}
 	return exec.Command("explorer", dir).Start()
+}
+
+func (a *App) GetLogsFolder() string {
+	return filepath.Join(filepath.Dir(a.store.Path()), "logs")
+}
+
+func (a *App) OpenLogsFolder() error {
+	dir := a.GetLogsFolder()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create logs folder: %w", err)
+	}
+	return exec.Command("explorer", dir).Start()
+}
+
+func (a *App) setLogWarning(message string) {
+	a.mu.Lock()
+	a.logWarning = message
+	a.mu.Unlock()
+	if a.ctx != nil {
+		wailsruntime.EventsEmit(a.ctx, "log-warning", message)
+	}
+}
+
+func (a *App) logEvent(kind string, snapshot EngineSnapshot) {
+	if a.logger != nil {
+		a.logger.Log(makeLogRecord(kind, a.currentConfig(), snapshot))
+	}
 }
 
 // OpenExternalURL opens a link in the user's default browser. Restricted to
@@ -349,7 +421,7 @@ func (a *App) trayMenuState() TrayMenuState {
 	if snap.Status != StatusStopped && snap.Status != StatusError {
 		label = "Stop receiving"
 	}
-	if snap.Status == StatusMirroring {
+	if snap.Status == StatusMirroring || snap.Status == StatusPaused {
 		label = "Stop mirroring"
 	}
 	return TrayMenuState{
@@ -384,6 +456,8 @@ func trayTooltipFor(snap EngineSnapshot) string {
 		return "MirrorMe - mirroring"
 	case StatusConnecting:
 		return "MirrorMe - connecting…"
+	case StatusPaused:
+		return "MirrorMe - paused"
 	case StatusAdvertising:
 		return "MirrorMe - ready for a device"
 	case StatusStarting:
@@ -402,6 +476,7 @@ func trayTooltipFor(snap EngineSnapshot) string {
 // surfaces states that need the user's attention (setup required, error)
 // even if the window is currently hidden in the tray.
 func (a *App) handleEngineEvent(ev EngineEvent) {
+	a.logEvent("receiver_event", ev.Snapshot)
 	if a.ctx != nil {
 		wailsruntime.EventsEmit(a.ctx, "engine-status", ev)
 	}

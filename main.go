@@ -14,6 +14,9 @@ import (
 var assets embed.FS
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == receiverWorkerArgument {
+		os.Exit(runReceiverWorker(os.Stdin, os.Stdout, createNativeReceiver))
+	}
 	// The Run-key autostart entry launches "MirrorMe.exe --startup" so the
 	// window never flashes visible during a normal Windows login.
 	app := NewApp(isStartupLaunch(os.Args[1:]))

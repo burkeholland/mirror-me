@@ -17,7 +17,7 @@
 
 #include "uxplay_api.h"
 
-int run_media_probe(bool window, bool software, bool broken);
+#include "media_probe.h"
 
 namespace {
 
@@ -229,10 +229,20 @@ int wmain(int argc, wchar_t* wide_argv[]) {
         if (argc == 2 && (arguments[1] == "--media-self-test" ||
                           arguments[1] == "--media-self-test-window" ||
                           arguments[1] == "--media-self-test-software" ||
+                          arguments[1] == "--media-self-test-timing" ||
+                          arguments[1] == "--media-self-test-timing-negative" ||
+                          arguments[1] == "--media-self-test-timing-on-time" ||
+                          arguments[1] == "--media-self-test-timing-window" ||
                           arguments[1] == "--media-self-test-invalid")) {
-            return run_media_probe(arguments[1] == "--media-self-test-window",
+            const auto& mode = arguments[1];
+            const ProbeTiming timing = mode == "--media-self-test-timing-negative" ? ProbeTiming::buffered_ahead :
+                mode == "--media-self-test-timing-on-time" ? ProbeTiming::on_time :
+                (mode == "--media-self-test-timing" || mode == "--media-self-test-timing-window") ?
+                    ProbeTiming::buffered_behind : ProbeTiming::disabled;
+            return run_media_probe(mode == "--media-self-test-window" || mode == "--media-self-test-timing-window",
                                    arguments[1] == "--media-self-test-software",
-                                   arguments[1] == "--media-self-test-invalid");
+                                   arguments[1] == "--media-self-test-invalid",
+                                   timing);
         }
 
         std::vector<char*> argv;

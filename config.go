@@ -33,24 +33,33 @@ type Config struct {
 
 	// Connection behaviour
 	PreferNewestConnection bool `json:"preferNewestConnection"`
-	IdleTimeoutSeconds      int  `json:"idleTimeoutSeconds"`
+	IdleTimeoutSeconds     int  `json:"idleTimeoutSeconds"`
 
 	// Security
 	RequirePin bool   `json:"requirePin"`
 	PinCode    string `json:"pinCode"`
 
 	// App behaviour
-	LaunchAtStartup     bool   `json:"launchAtStartup"`
-	StartMinimized      bool   `json:"startMinimized"`
-	AutoStartMirroring  bool   `json:"autoStartMirroring"`
-	AlwaysOnTop         bool   `json:"alwaysOnTop"`
-	Theme               string `json:"theme"`
-	FirstRun            bool   `json:"firstRun"`
+	LaunchAtStartup    bool   `json:"launchAtStartup"`
+	StartMinimized     bool   `json:"startMinimized"`
+	AutoStartMirroring bool   `json:"autoStartMirroring"`
+	AlwaysOnTop        bool   `json:"alwaysOnTop"`
+	Theme              string `json:"theme"`
+	FirstRun           bool   `json:"firstRun"`
+
+	// Troubleshooting: opt-in, structured app/receiver lifecycle logging.
+	// See verbose_log.go. Off by default; never captures packet-level data.
+	VerboseLogging bool `json:"verboseLogging"`
 
 	// Transient, never persisted: surfaced to the UI when the settings
 	// file could not be loaded so the user knows defaults were applied.
 	// ConfigStore.Save always clears this before writing to disk.
 	LoadError string `json:"loadError,omitempty"`
+
+	// Transient, never persisted: surfaced to the UI when the verbose
+	// logger could not be enabled/disabled or hit a write/rotation error.
+	// ConfigStore.Save always clears this before writing to disk.
+	LogWarning string `json:"logWarning,omitempty"`
 }
 
 // Clone returns a deep copy. Config has no reference types today, but Clone
@@ -66,22 +75,23 @@ func DefaultConfig() Config {
 		name = "MirrorMe"
 	}
 	return Config{
-		DeviceName:              name,
-		Resolution:              ResolutionAuto,
-		MaxFPS:                  0,
-		AudioEnabled:            true,
-		HardwareDecode:          true,
-		H265:                    false,
-		PreferNewestConnection:  true,
-		IdleTimeoutSeconds:      15,
-		RequirePin:              false,
-		PinCode:                 "",
-		LaunchAtStartup:         false,
-		StartMinimized:          false,
-		AutoStartMirroring:      true,
-		AlwaysOnTop:             false,
-		Theme:                   "system",
-		FirstRun:                true,
+		DeviceName:             normalizeDeviceName(name, "MirrorMe"),
+		Resolution:             ResolutionAuto,
+		MaxFPS:                 0,
+		AudioEnabled:           true,
+		HardwareDecode:         true,
+		H265:                   false,
+		PreferNewestConnection: true,
+		IdleTimeoutSeconds:     15,
+		RequirePin:             false,
+		PinCode:                "",
+		LaunchAtStartup:        false,
+		StartMinimized:         false,
+		AutoStartMirroring:     true,
+		AlwaysOnTop:            false,
+		Theme:                  "system",
+		FirstRun:               true,
+		VerboseLogging:         false,
 	}
 }
 
@@ -143,8 +153,10 @@ func (s *ConfigStore) Save(config Config) error {
 		return fmt.Errorf("create settings directory: %w", err)
 	}
 
-	// LoadError is a transient, UI-only signal and must never be persisted.
+	// LoadError/LogWarning are transient, UI-only signals and must never
+	// be persisted.
 	config.LoadError = ""
+	config.LogWarning = ""
 
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {

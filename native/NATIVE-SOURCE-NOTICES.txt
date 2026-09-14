@@ -1,0 +1,171 @@
+MirrorMe native source provenance and distribution notes
+=======================================================
+
+This is a native dependency source inventory, not release approval or legal
+advice. It does not certify physical Apple-device interoperability. No binary
+publication is performed by the collector.
+
+Collect and verify (PowerShell 7.2+, existing tools, no rebuild or installs):
+  .\scripts\collect-native-sources.ps1
+  .\scripts\collect-native-sources.ps1 -Offline
+
+The collector writes only build/native-sources. It never modifies shared native
+archives. The distributable source kit is build/native-sources/bundle, NOT the
+entire parent directory: discovery/download caches contain vendor binary SDKs
+used solely for matching checks. Do not ship those SDKs automatically.
+collection-report.json separates established correspondence from remaining
+release checks. file-inventory.json gives SHA-256 for every collected file
+except the inventory itself. Copy the report, inventory and full license texts
+with the source kit. Preserve original source-file copyrights and notices.
+
+Exact MSYS2 binary-to-source correspondence
+-----------------------------------------
+The OpenSSL and libplist static libraries currently used by the native build
+come from pinned MSYS2 UCRT64 packages. Version labels alone do not establish
+matching sources. This collection verifies the following complete chain:
+
+  pinned package SHA-256
+    -> packaged .BUILDINFO/.PKGINFO/.MTREE
+    -> exact .BUILDINFO pkgbuild_sha256sum
+    -> byte-identical PKGBUILD at an immutable MINGW-packages commit
+    -> every upstream source/patch/addition hash listed in that PKGBUILD
+    -> packaged static archive equals the installed native SDK archive.
+
+OpenSSL 3.6.1-1:
+  Recipe commit b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4
+  PKGBUILD SHA-256
+    6ab518bc5ab9a4776a324d0099b9b3c1756616c37aa99cf4a09a2927deef65e4
+  Source openssl-3.6.1.tar.gz SHA-256
+    b1bfedcd5b289ff22aee87c9d600f515767ebf45f77168cb6d64f231f518a82e
+  Corresponding compiled library: libcrypto.a (not a dynamically loaded DLL).
+  Recipe adds 002-relocation.patch and pathtools.c/pathtools.h.
+  OpenSSL: Apache License 2.0. The added path tools are written by Ray Donnelly,
+  2014, under CC0; their headers and complete CC0 legal text are preserved.
+  Source includes a bundled Perl Text::Template build helper; its license is
+  also preserved. No assertion is made that this build helper is in the exe.
+
+libplist 2.7.0-3:
+  Recipe commit 0c88dc07c0132ab9a93d9fe5b43da67fbde190a6
+  PKGBUILD SHA-256
+    144012571f9ed35c8bf447e9a5d8e7c0689fc4acccd552821fa93b75978aecae
+  Source libplist-2.7.0.tar.bz2 SHA-256
+    7ac42301e896b1ebe3c654634780c82baa7cb70df8554e683ff89f7c2643eb8b
+  Corresponding compiled library: libplist-2.0.a.
+  Recipe applies 003-fix-py-soext.patch and regenerates autotools files.
+  The library and included libcnary are LGPL-2.1-or-later. Package utilities
+  also carry GPL-2.0-or-later; those utilities are not linked into MirrorMe.
+  COPYING, COPYING.LESSER and libcnary/COPYING are all included.
+
+The recipes themselves are BSD-3-Clause; the upstream MINGW-packages LICENSE
+is included. Hashes of each patch and added source file are in
+native/source-dependencies.json and rechecked by the collector.
+
+What is and is not proved for the MSYS2 packages
+----------------------------------------------
+Exact source/recipe correspondence and static-archive equality are proved.
+The historical package binaries have NOT been rebuilt byte-for-byte locally.
+Their full .BUILDINFO environment lists are included, rather than conflating
+their compilers with the current app compiler:
+  OpenSSL: GCC 15.2.0-10, MinGW 13.0.0.r453.gfd36ef357.
+  libplist: GCC 15.2.0-8, MinGW 13.0.0.r391.g848cce552.
+Matching MinGW runtime notice versions are included in addition to the final
+toolchain's notices. These historical MSYS2 compiler environments have not
+been reconstructed or archived in full. This is a binary-reproduction gap,
+not a claim that mere upstream version strings establish correspondence.
+
+The collected recipes and source archives can be rebuilt in a compatible
+MSYS2 UCRT64 development environment. For historical reproduction, first
+restore the exact tool/package versions recorded in .BUILDINFO and the
+corresponding makepkg configuration. From the recipe directory, the standard
+MSYS2 invocation is:
+  MINGW_ARCH=ucrt64 makepkg-mingw --syncdeps --cleanbuild --force
+Review the preserved PKGBUILD before execution. The collector never executes
+downloaded recipes and never installs build dependencies.
+
+Protocol and audio
+------------------
+Protocol source is the complete libuxplay tree at
+  437f37514257d9cb513ac7fbdee743b4da85852e
+from https://github.com/leapbtw/libuxplay, not a claimed clean-room rewrite.
+The complete pinned source archive, native patched protocol snapshot, and
+native/patches/prepare-protocol.py are collected. Overall/playfair code is
+GPL-3.0-or-later; individual protocol files carry LGPL-2.1-or-later notices;
+llhttp is MIT (Copyright Fedor Indutny, 2018). Full supplied licenses remain.
+
+Audio is source-built FFmpeg 8.0.1 (LGPL-2.1-or-later), with the pinned
+strict-ALAC patch and exact static build configuration. The original archive,
+patch, build script, manifest, full upstream COPYING files and LICENSE.md are
+preserved, and compiled archive hashes are rechecked. Detailed audio terms
+and configuration provenance are in native/AUDIO-NOTICES.txt.
+
+Original test audio is CC0. The Apache-2.0 libxaac source and configuration
+patch used to generate real AAC-ELD test media are preserved as TEST-ONLY
+inputs. libxaac is not linked into the production application.
+
+Rebuild inputs include the complete current native source tree, selected
+native build scripts, required test icon/video inputs, and current CMake
+configuration. The protocol archive is upstream/pristine; protocol/patched
+is the modified tree used in build/native/protocol. That snapshot can be
+placed at build/native/protocol when rebuilding directly through CMake.
+The existing build-native.ps1 path additionally expects a pristine Git
+checkout of the pinned protocol commit at receiver/vendor/libuxplay.
+
+Compiler runtimes: what must be preserved
+----------------------------------------
+The current compiler is the WinLibs GCC 13.2.0, MinGW-w64 11.0.1 UCRT,
+POSIX-thread-model r8 build packaged on 2024-05-04 and shipped by Strawberry.
+Its fixed-release original archive is identified and SHA-256-verified:
+  winlibs-x86_64-posix-seh-gcc-13.2.0-mingw-w64ucrt-11.0.1-r8.7z
+  54535ca325de2cf84679bc17846e9a2356acd042ceb21e424450836cde02ab9e
+The installed libstdc++.a, libgcc.a, libgcc_eh.a and libwinpthread.a are
+verified byte-for-byte against that archive, not just by reported versions.
+Their precise hashes and vendor paths are in source-dependencies.json.
+Installed header license statements and vendor/installed version metadata
+are included as supporting evidence.
+
+GCC libstdc++/libgcc are GPLv3-or-later with GCC Runtime Library Exception 3.1.
+The full COPYING3 and COPYING.RUNTIME texts are included from the immutable
+GCC 13.2.0 release commit. Under the exception's terms, target code combining
+covered runtime code with independent modules may be conveyed under the
+independent modules' terms when all target code was generated by eligible
+compilation processes. Normal GCC compilation, alone or with GPL-compatible
+tools, is eligible; proprietary processing of GCC intermediate code is not.
+The exception does not remove MirrorMe/protocol/codec GPL or LGPL obligations.
+
+For the identified final executable, this does not require bundling the
+entire unrelated GCC compiler source merely because GCC runtime routines
+are statically linked. Preserve the actual GPL/exception notices and verify
+the eligibility condition for the final build. This conclusion is NOT a
+blanket permission to redistribute standalone compiler or runtime SDK
+archives without their own GPL/source analysis. The collector intentionally
+does not put standalone runtime binary archives into the source bundle.
+
+MinGW-w64's own COPYING.MinGW-w64-runtime.txt explicitly says it is the
+notice set to copy with applications built using its runtime. Its complete
+notice set is retained (including gdtoa and other incorporated copyrights),
+rather than assuming all MinGW code is public domain. The final toolchain's
+winpthreads COPYING includes MIT and the Lockless Inc. BSD-style notices;
+both are retained. No corresponding-source obligation is imposed by those
+permissive runtime terms merely for inclusion in the final executable.
+The current collection does not claim to have rebuilt WinLibs itself.
+
+Remaining application distribution work
+---------------------------------------
+No unresolved upstream-source or recipe-hash gap remains for the two pinned
+MSYS2 libraries after a successful collection. However, the kit is not by
+itself a complete corresponding-source delivery for the final MirrorMe exe.
+Before publication, the application owner still must:
+  - Freeze the final application/native source revision, rebuild, and bind
+    the executable hash to that exact complete source/rebuild package.
+  - Include all applicable Go/frontend/application sources and dependency
+    notices, build/install instructions, and any required installation
+    information; those are outside this bounded native collection.
+  - Deliver the full applicable license texts/notices and recipients'
+    GPL/LGPL source/rebuild/relink rights under the selected distribution
+    method. A URL to an upstream homepage or a binary SDK is not enough.
+  - Recollect when native pins, SDK archives, runtime archives or final
+    source/build inputs change. Preserve .BUILDINFO and exact package
+    recipes even if a newer package has the same upstream version.
+
+Historical bit-reproducibility, patent rights, trademarks and physical-device
+interoperability are separate questions and are not certified here.

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?$')]
-    [string]$Version = "0.1.0-preview.1"
+    [string]$Version = "0.1.1-preview.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,6 +22,14 @@ try {
     $lock = Get-Content -LiteralPath (Join-Path $root "receiver\dependencies.json") -Raw | ConvertFrom-Json
     foreach ($path in @($app, $receiver, (Join-Path $vendor "LICENSE"))) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Build input is missing: $path" }
+    }
+    $expectedVersion = $Version.Split('-')[0]
+    foreach ($binary in @($app, $receiver)) {
+        $info = (Get-Item -LiteralPath $binary).VersionInfo
+        $actualVersion = [version]::new($info.ProductMajorPart, $info.ProductMinorPart, $info.ProductBuildPart, $info.ProductPrivatePart)
+        if ($actualVersion.ToString(3) -ne $expectedVersion -or $actualVersion.Revision -ne 0) {
+            throw "Build $binary for $expectedVersion before packaging; its embedded version is '$actualVersion'."
+        }
     }
     if ((git -C $vendor rev-parse HEAD) -ne $lock.uxplay.commit -or $LASTEXITCODE -ne 0) {
         throw "The native source does not match its pinned commit."
@@ -60,7 +68,7 @@ try {
     foreach ($file in (Get-ChildItem -LiteralPath (Join-Path $root "receiver") -File)) {
         Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $source "receiver")
     }
-    foreach ($folder in @("patches", "tests")) {
+    foreach ($folder in @("patches", "tests", "resources")) {
         Copy-Item -LiteralPath (Join-Path $root "receiver\$folder") -Destination (Join-Path $source "receiver") -Recurse
     }
     Copy-Item -LiteralPath (Join-Path $root "scripts\build-receiver.ps1") -Destination (Join-Path $source "scripts")

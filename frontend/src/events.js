@@ -2,7 +2,7 @@ import {
   state, load, navigate, selectSettingsSection, openPictureSettings, setDraftField,
   revertDraft, saveDraft, regeneratePin, beginSetup, dismissFirstRun,
   startMirroring, stopMirroring, confirmSetupAndStart, showMirroredScreen,
-  openSettingsFolder, copySettingsFolder, copyDeviceName, copyDiagnostics,
+  openSettingsFolder, openLogsFolder, copyLogsPath, copySettingsFolder, copyDeviceName, copyDiagnostics,
   openExternalURL, minimiseWindow, toggleMaximiseWindow, hideWindow, quitApp,
   openDialog, closeDialog, finishNavigation, dismissToast,
 } from './state.js';
@@ -52,6 +52,8 @@ export function bindEvents(app, render) {
       case 'reload': await load(render); break;
       case 'open-link': await openExternalURL(control.dataset.url, render); break;
       case 'quit': await quitApp(render); break;
+      case 'open-logs-folder': await openLogsFolder(render); break;
+      case 'copy-logs-path': await copyLogsPath(render); break;
     }
   });
 

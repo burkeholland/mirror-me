@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // validResolutions is the set of resolution presets the Settings UI can
 // produce. Anything else found on disk is repaired back to auto.
@@ -18,8 +21,9 @@ var validThemes = map[string]bool{
 }
 
 const (
-	minFPS = 0 // 0 means "no cap"
-	maxFPS = 120
+	maxReceiverNameBytes = 50 // RAOP's address prefix uses the rest of its DNS label.
+	minFPS               = 0  // 0 selects the receiver's automatic frame rate.
+	maxFPS               = 120
 
 	minIdleTimeoutSeconds = 0 // 0 means "never reset"
 	maxIdleTimeoutSeconds = 3600
@@ -58,6 +62,7 @@ func NormalizeConfig(next Config, fallback Config) (Config, error) {
 	}
 
 	normalized.LoadError = ""
+	normalized.LogWarning = ""
 
 	return normalized, nil
 }
@@ -70,18 +75,17 @@ func normalizeDeviceName(name string, fallback string) string {
 	if trimmed == "" {
 		trimmed = "MirrorMe"
 	}
-	// The engine's "-n" value is a single CLI token; strip characters that
-	// would corrupt the generated arguments file or an mDNS TXT record.
+	trimmed = strings.ToValidUTF8(trimmed, "")
 	trimmed = strings.Map(func(r rune) rune {
-		switch r {
-		case '\n', '\r', '\t', '"':
+		if r < 32 || r == 127 || r == '"' {
 			return -1
-		default:
-			return r
 		}
+		return r
 	}, trimmed)
-	if len(trimmed) > 64 {
-		trimmed = trimmed[:64]
+	trimmed = strings.TrimSpace(trimmed)
+	for len(trimmed) > maxReceiverNameBytes {
+		_, size := utf8.DecodeLastRuneInString(trimmed)
+		trimmed = trimmed[:len(trimmed)-size]
 	}
 	if trimmed == "" {
 		trimmed = "MirrorMe"
