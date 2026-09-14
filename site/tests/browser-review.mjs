@@ -15,20 +15,23 @@ const url = process.argv[2] || local.url;
 const profile = await mkdtemp(join(tmpdir(), 'mirrorme-site-review-'));
 const edge = join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
 const browser = spawn(edge, ['--headless=new', '--no-first-run', '--disable-background-networking', '--disable-extensions', '--disable-sync', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { windowsHide: true, stdio: 'ignore' });
-browser.on('error', error => { console.error(error); });
+let launchError;
+browser.on('error', error => { launchError = error; });
 let socket;
 const results = [];
 const exceptions = [];
 const failures = [];
 const requests = [];
-const requestTypes = [];
 const loaded = new Set();
-const contexts = new Map();
 const pending = new Map();
 let id = 0;
 async function until(condition, name, timeout = 15000) {
   const end = Date.now() + timeout;
-  while (Date.now() < end) { if (await condition()) return; await delay(40); }
+  while (Date.now() < end) {
+    if (launchError) throw launchError;
+    if (await condition()) return;
+    await delay(40);
+  }
   throw new Error(`Timed out: ${name}`);
 }
 try {
@@ -48,18 +51,13 @@ try {
       pending.delete(message.id);
       if (message.error) request.reject(new Error(message.error.message)); else request.resolve(message.result);
     }
-    if (message.method === 'Runtime.exceptionThrown') exceptions.push(message.params.exceptionDetails.text);
+    if (message.method === 'Runtime.exceptionThrown') exceptions.push(message.params.exceptionDetails.exception?.description || message.params.exceptionDetails.text);
     if (message.method === 'Network.loadingFailed' && !message.params.canceled) failures.push(message.params.errorText);
     if (message.method === 'Network.responseReceived' && message.params.response.status >= 400) failures.push(`${message.params.response.status} ${message.params.response.url}`);
     if (message.method === 'Network.requestWillBeSent' && /^https?:/.test(message.params.request.url)) {
-      requests.push(message.params.request.url);
-      requestTypes.push(message.params.type);
+      requests.push({ url: message.params.request.url, type: message.params.type });
     }
     if (message.method === 'Page.lifecycleEvent' && message.params.name === 'DOMContentLoaded') loaded.add(message.params.loaderId);
-    if (message.method === 'Runtime.executionContextCreated' && message.params.context.auxData?.isDefault) {
-      contexts.set(message.params.context.auxData.frameId, message.params.context.id);
-    }
-    if (message.method === 'Runtime.executionContextsCleared') contexts.clear();
   });
   const send = (method, params = {}) => new Promise((resolve, reject) => {
     const key = ++id;
@@ -67,8 +65,8 @@ try {
     pending.set(key, { resolve, reject, timer });
     socket.send(JSON.stringify({ id: key, method, params }));
   });
-  const evaluate = async (expression, contextId) => {
-    const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true, ...(contextId ? { contextId } : {}) });
+  const evaluate = async expression => {
+    const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
     return result.result.value;
   };
@@ -81,224 +79,119 @@ try {
     await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: dark ? 'dark' : 'light' }, { name: 'prefers-reduced-motion', value: reduced ? 'reduce' : 'no-preference' }] });
     const result = await send('Page.navigate', { url });
     await until(() => loaded.has(result.loaderId), 'load requested document');
-    await until(() => evaluate('document.querySelector("#demo")?.dataset.ready === "true"'), 'initialize the shared app');
+    await imagesReady();
   }
-  const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
-  const app = expression => evaluate(`(() => {
-    const document = globalThis.document.querySelector('#app-preview').contentDocument;
-    const window = document.defaultView;
-    const getComputedStyle = window.getComputedStyle.bind(window);
-    return (${expression});
-  })()`);
-  const appClick = selector => app(`document.querySelector(${JSON.stringify(selector)}).click()`);
-  const appUntil = (expression, name) => until(() => app(expression), name);
-  const field = (name, value) => app(`(() => {
-    const e = document.querySelector('#field-' + ${JSON.stringify(name)});
-    e.focus();
-    if (e.type === 'checkbox') e.checked = ${JSON.stringify(value)}; else e.value = ${JSON.stringify(value)};
-    e.dispatchEvent(new window.Event(e.tagName === 'SELECT' || e.type === 'checkbox' ? 'change' : 'input', { bubbles: true }));
-  })()`);
-  async function key(name, code, virtual, modifiers = 0, text) {
-    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code, windowsVirtualKeyCode: virtual, modifiers, ...(text ? { text } : {}) });
-    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code, windowsVirtualKeyCode: virtual, modifiers });
+  async function imagesReady() {
+    await until(() => evaluate(`[...document.images].filter(image => image.getClientRects().length).every(image => image.complete && image.naturalWidth > 0)`), 'load visible static images');
   }
-  const layout = `(() => {
-    const ids = [...document.querySelectorAll('[id]')].map(e => e.id);
-    return {
-      overflow: document.documentElement.scrollWidth > window.innerWidth,
-      clipped: [...document.querySelectorAll('button, input, select, textarea, iframe')].filter(e => e.getClientRects().length && !e.closest('[hidden]') && (e.getBoundingClientRect().left < -1 || e.getBoundingClientRect().right > window.innerWidth + 1)).map(e => e.id || e.className),
-      duplicates: ids.filter((id, i) => ids.indexOf(id) !== i),
-      missingLabels: [...document.querySelectorAll('button, input, select, textarea')].filter(e => !e.textContent.trim() && !e.getAttribute('aria-label') && !e.getAttribute('aria-labelledby') && !e.labels?.length).map(e => e.id),
-      brokenReferences: [...document.querySelectorAll('[aria-controls], [aria-labelledby], [aria-describedby]')].flatMap(e => ['aria-controls', 'aria-labelledby', 'aria-describedby'].flatMap(attr => (e.getAttribute(attr) || '').split(' ').filter(id => id && !document.getElementById(id))))
-    };
-  })()`;
   async function inspect(name) {
-    const data = { page: await evaluate(layout), app: await app(layout) };
-    for (const [surface, value] of Object.entries(data)) {
-      assert.equal(value.overflow, false, `${name} ${surface}: overflow`);
-      assert.deepEqual(value.clipped, [], `${name} ${surface}: clipped controls`);
-      assert.deepEqual(value.duplicates, [], `${name} ${surface}: duplicate IDs`);
-      assert.deepEqual(value.missingLabels, [], `${name} ${surface}: unlabeled controls`);
-      assert.deepEqual(value.brokenReferences, [], `${name} ${surface}: broken ARIA references`);
+    const data = await evaluate(`(() => {
+      const visible = e => e.getClientRects().length > 0;
+      const preview = document.querySelector('#demo');
+      const image = [...preview.querySelectorAll('.app-screenshot')].find(visible);
+      const ids = [...document.querySelectorAll('[id]')].map(e => e.id);
+      const desk = document.querySelector('.preview-desk');
+      const deskStyle = getComputedStyle(desk);
+      const appBox = document.querySelector('.app-frame').getBoundingClientRect();
+      const phone = document.querySelector('.video-panel');
+      const phoneBox = document.querySelector('.video-window').getBoundingClientRect();
+      const screenBox = document.querySelector('.mirrored-screen').getBoundingClientRect();
+      return {
+        width: innerWidth,
+        phoneVisible: visible(phone),
+        previewTopDifference: Math.abs(appBox.top - phoneBox.top),
+        previewGap: phoneBox.left - appBox.right,
+        phoneRatio: visible(phone) ? screenBox.width / screenBox.height : null,
+        fullWidthDifference: desk.clientWidth - parseFloat(deskStyle.paddingLeft) - parseFloat(deskStyle.paddingRight) - appBox.width,
+        overflow: document.documentElement.scrollWidth > innerWidth,
+        clipped: [...document.querySelectorAll('button, img, h1')].filter(visible).filter(e => {
+          const box = e.getBoundingClientRect(); return box.left < -1 || box.right > innerWidth + 1;
+        }).map(e => e.id || e.className),
+        duplicates: ids.filter((id, i) => ids.indexOf(id) !== i),
+        controls: preview.querySelectorAll('iframe, button, input, select, textarea, a, [tabindex]').length,
+        removed: document.querySelectorAll('.demo-controls, .details-section, #rotate, #motion, #reset').length,
+        image: image?.getAttribute('src'),
+        ratio: image?.getBoundingClientRect().width / image?.getBoundingClientRect().height,
+        alt: image?.alt,
+        mode: document.documentElement.dataset.mode,
+        text: document.body.textContent,
+        motion: getComputedStyle(document.querySelector('.photo-image svg')).animationName,
+      };
+    })()`);
+    assert.equal(data.overflow, false, `${name}: overflow`);
+    assert.deepEqual(data.clipped, [], `${name}: clipped content`);
+    assert.deepEqual(data.duplicates, [], `${name}: duplicate IDs`);
+    assert.equal(data.controls, 0, `${name}: the preview must be static`);
+    assert.equal(data.removed, 0, `${name}: removed sections remain absent`);
+    assert.equal(data.image, `./assets/app-${data.mode}.png`);
+    assert.ok(Math.abs(data.ratio - 1040 / 760) < 0.01, `${name}: screenshot proportions`);
+    assert.ok(data.alt.length > 0);
+    assert.doesNotMatch(data.text, /ux\s*play|About this preview|Sample image/i);
+    assert.match(data.text, /17\.9 MB executable/);
+    assert.match(data.text, /Windows download not yet available/);
+    assert.doesNotMatch(data.text, /Older v0\.1\.0|Download Windows preview|separate receiver setup/);
+    assert.equal(data.motion, 'none');
+    if (data.width >= 768) {
+      assert.equal(data.phoneVisible, true, `${name}: show the iPhone on tablet and desktop`);
+      assert.ok(data.previewTopDifference < 1, `${name}: both windows must share a row`);
+      assert.ok(data.previewGap >= 12, `${name}: keep a gap between the windows`);
+      assert.ok(Math.abs(data.phoneRatio - 0.5) < 0.01, `${name}: preserve the iPhone screen proportions`);
+    } else {
+      assert.equal(data.phoneVisible, false, `${name}: hide the iPhone on small screens`);
+      assert.ok(Math.abs(data.fullWidthDifference) < 1, `${name}: app uses the full preview width`);
     }
-    assert.equal(await evaluate('getComputedStyle(document.querySelector("#app-preview")).transform'), 'none', 'The real UI is not shrunk with CSS transforms');
+    delete data.text;
     results.push({ name, ...data });
   }
   async function screenshot(name) {
-    await delay(350);
     const image = await send('Page.captureScreenshot', { format: 'png' });
     await writeFile(join(output, `${name}.png`), Buffer.from(image.data, 'base64'));
   }
   try {
-    for (const width of [1440, 1024, 768, 390, 320]) {
+    for (const width of [1920, 1440, 1280, 1024, 800, 768, 767, 700, 390, 320]) {
       for (const dark of [false, true]) {
-        const prefix = `${width}-${dark ? 'dark' : 'light'}`;
+        const name = `${width}-${dark ? 'dark' : 'light'}`;
         await open(width, dark);
-        assert.equal(await evaluate('document.querySelector("#demo").dataset.phase'), 'mirroring');
-        assert.equal(await evaluate('document.querySelector("#video-window").hidden'), false);
-        assert.equal(await evaluate('document.querySelector("#connect")'), null);
-        assert.equal(await evaluate('document.querySelectorAll(".sample").length'), 1);
-        assert.equal(await evaluate('document.querySelector(".sample").classList.contains("photos")'), true);
-        assert.equal(await evaluate('document.querySelector("[data-content], #demo-note, .note-editor, .notes, .clock")'), null);
-        assert.equal(await evaluate('document.querySelector("#headline").innerText'), 'Mirror your iPhone\nto Windows.');
-        assert.ok(await evaluate(`document.querySelector('#demo').getBoundingClientRect().top < ${width < 700 ? 600 : 400}`), 'the app preview appears near the top of the page');
-        assert.match(await app('document.querySelector("#connection-title").textContent'), /mirroring/i);
-        assert.equal(await app('getComputedStyle(document.querySelector("#page-title")).fontSize'), '26px');
-        assert.equal(await app('document.querySelector("#nav-settings").textContent.includes("Settings")'), true);
-        await inspect(`${prefix}-immediately-interactive`);
-        if (width === 1440 || width === 390) {
-          await screenshot(`${prefix}-page`);
-          await evaluate('document.querySelector("#demo").scrollIntoView()');
-          await screenshot(prefix);
-        }
-        await appClick('#nav-settings');
-        assert.equal(await app('document.querySelector("#field-deviceName").value'), 'Studio PC');
-        await field('deviceName', 'Example desk');
-        assert.equal(await app('document.activeElement.id'), 'field-deviceName');
-        assert.equal(await app('document.querySelector("[data-save-bar]").hidden'), false);
-        await appClick('#action-save-settings');
-        await appUntil('document.querySelector("[data-save-bar]").hidden', 'save real Settings draft');
-        await field('deviceName', 'Unsaved example');
-        await appClick('#nav-home');
-        await appUntil('Boolean(document.querySelector("dialog[open]"))', 'unsaved changes dialog');
-        await appClick('#action-discard-and-leave');
-        await appUntil('document.querySelector("#nav-home").getAttribute("aria-current") === "page"', 'discard and leave');
-        assert.equal(await app('document.querySelector(".receiver-name strong").textContent'), 'Example desk');
-        await appClick('#nav-settings');
-        await appClick('#tab-picture');
-        await field('resolution', '1920x1080');
-        await appClick('#action-revert-settings');
-        assert.equal(await app('document.querySelector("#field-resolution").value'), 'auto');
-        await inspect(`${prefix}-real-settings`);
-        if (width === 1440) await screenshot(`${prefix}-settings`);
-        await click('#rotate');
-        assert.equal(await evaluate('document.querySelector("#rotate").getAttribute("aria-pressed")'), 'true');
-        await inspect(`${prefix}-separate-landscape-video`);
-        const ratio = await evaluate('(() => { const r = document.querySelector("#mirrored-screen").getBoundingClientRect(); return r.width / r.height; })()');
-        assert.ok(Math.abs(ratio - 2) < 0.01, 'the photo rotates to landscape');
-        await click('#motion');
-        assert.equal(await evaluate('getComputedStyle(document.querySelector(".photo-image svg")).animationPlayState'), 'paused');
-        await click('#motion');
-        assert.equal(await evaluate('getComputedStyle(document.querySelector(".photo-image svg")).animationPlayState'), 'running');
-        await inspect(`${prefix}-photo-motion`);
+        assert.equal(await evaluate('document.documentElement.dataset.mode'), dark ? 'dark' : 'light');
+        await inspect(name);
+        await evaluate('document.querySelector(".app-screenshot").click()');
+        assert.equal(await evaluate('location.href'), url, 'clicking the screenshot does not launch a demo');
+        if ([1440, 768, 767, 390].includes(width)) await screenshot(`${name}-page`);
       }
     }
     await open(1440, false, true);
-    assert.equal(await evaluate('document.querySelector("#motion").checked'), false);
-    assert.equal(await evaluate('getComputedStyle(document.querySelector(".photo-image svg")).animationName'), 'none');
-    await click('#motion');
-    assert.equal(await evaluate('getComputedStyle(document.querySelector(".photo-image svg")).animationName'), 'none', 'the system reduced-motion preference still takes priority');
-    await click('#motion');
-
-    await appClick('#window-minimise');
-    await until(() => evaluate('document.querySelector("#app-preview").hidden'), 'minimize app');
-    assert.equal(await evaluate('document.querySelector("#video-window").hidden'), false);
-    await click('#restore-app');
-    await appClick('#window-hide');
-    await until(() => evaluate('document.querySelector("#app-preview").hidden'), 'hide app to example tray');
-    assert.equal(await evaluate('document.querySelector("#demo").dataset.phase'), 'mirroring');
-    await click('#restore-app');
-    await appClick('#window-maximise');
-    await until(() => evaluate('document.querySelector("#preview-desk").dataset.appExpanded === "true"'), 'maximize app');
-    await appUntil('document.querySelector("#window-maximise").getAttribute("aria-label") === "Restore"', 'real restore caption');
-    await inspect('expanded-real-app');
-    await appClick('#window-maximise');
-    await until(() => evaluate('document.querySelector("#preview-desk").dataset.appExpanded === "false"'), 'restore app');
-    await click('#minimise-video');
-    assert.equal(await evaluate('document.querySelector("#video-window").hidden'), true);
-    await appClick('#action-show-mirrored-screen');
-    await until(() => evaluate('document.activeElement.id === "video-window"'), 'Show screen focuses separate video');
-    assert.equal(await evaluate('document.querySelector("#video-window").hidden'), false);
-    await click('#maximise-video');
-    await inspect('expanded-separate-video');
-    await click('#maximise-video');
-    await click('#close-video');
-    await appUntil('document.querySelector("[data-receiver-label]").textContent !== "Mirroring"', 'close video reaches app');
-    assert.equal(await evaluate('document.querySelector("#video-window").hidden'), true);
-    await click('#restore-video');
-    await appUntil('Boolean(document.querySelector("#action-show-mirrored-screen"))', 'reconnect example');
-    await appClick('#action-stop-mirroring');
-    await until(() => evaluate('document.querySelector("#demo").dataset.phase === "stopped"'), 'real Stop stops the example');
-    await appClick('#action-start-mirroring');
-    await until(() => evaluate('document.querySelector("#demo").dataset.phase === "advertising"'), 'real Start starts receiving, not fake video');
-    await click('#restore-video');
-    await appUntil('Boolean(document.querySelector("#action-show-mirrored-screen"))', 'reconnect from ready');
-    await inspect('app-and-video-lifecycle');
-
-    await app('document.querySelector("#nav-home").focus()');
-    await key(',', 'Comma', 188, 2);
-    await appUntil('Boolean(document.querySelector("#tab-app"))', 'Ctrl+comma opens real Settings');
-    await field('deviceName', 'Keyboard example');
-    await key('s', 'KeyS', 83, 2);
-    await appUntil('document.querySelector("[data-save-bar]").hidden', 'Ctrl+S saves real Settings');
-    await app('document.querySelector("#tab-connection").focus()');
-    await key('ArrowRight', 'ArrowRight', 39);
-    assert.equal(await app('document.querySelector("#tab-picture").getAttribute("aria-selected")'), 'true');
-    await key('F1', 'F1', 112);
-    await appUntil('Boolean(document.querySelector("dialog[open]"))', 'F1 opens real connection guide');
-    assert.match(await app('document.querySelector("dialog").textContent'), /Keyboard example/);
-    await key('Escape', 'Escape', 27);
-    await appUntil('!document.querySelector("dialog")', 'Escape closes connection guide');
-    await appClick('#tab-app');
-    await field('theme', 'dark');
-    assert.equal(await app('document.documentElement.dataset.mode'), 'dark');
-    await appClick('#action-revert-settings');
-    assert.equal(await app('document.documentElement.dataset.mode'), 'light');
-    await field('theme', 'dark');
-    await appClick('#nav-home');
-    await appClick('#action-save-and-leave');
-    await appUntil('Boolean(document.querySelector("#connection-title"))', 'save theme and navigate');
-    assert.equal(await app('document.documentElement.dataset.mode'), 'dark');
-    await appClick('#copy-home-name');
-    await appUntil('document.querySelector("[data-app-error]")?.textContent.includes("browser preview")', 'clipboard explains preview boundary');
-    await inspect('keyboard-dialogs-themes-and-native-limit');
-    await click('#reset');
-    await appUntil('!document.querySelector("[data-app-error]")', 'reset clears error');
-    assert.equal(await app('document.querySelector(".receiver-name strong").textContent'), 'Studio PC');
-    assert.equal(await evaluate('document.querySelector("#rotate").getAttribute("aria-pressed")'), 'false');
-    assert.equal(await evaluate('document.querySelector("#motion").checked'), false);
-    await click('#theme');
-    await appUntil('document.documentElement.dataset.mode === "dark"', 'page theme synchronizes app');
-    await appClick('#nav-settings');
-    await appClick('#tab-connection');
-    await field('requirePin', true);
-    await appClick('#action-save-settings');
-    await appUntil('Boolean(document.querySelector("output.pin-code"))', 'real pairing setting');
-    assert.equal(await app('document.querySelector("output.pin-code").textContent'), '2468');
-    await appClick('#action-regenerate-pin');
-    await appUntil('document.querySelector("output.pin-code").textContent === "1357"', 'new example pairing code');
-    await appClick('#nav-about');
-    await app('document.querySelector("#disclosure-support-files").click()');
-    await appClick('#action-open-settings-folder');
-    await appUntil('document.querySelector("[data-app-error]")?.textContent.includes("browser preview")', 'folder action explains boundary');
-    await appClick('#action-quit');
-    await until(() => evaluate('document.querySelector("#app-preview").hidden && document.querySelector("#demo").dataset.phase === "stopped"'), 'quit example');
-    await click('#reset');
-    await appUntil('Boolean(document.querySelector("#connection-title"))', 'reset restores app');
-    await inspect('pairing-and-reset');
-    assert.equal(await evaluate('localStorage.length + sessionStorage.length'), 0, 'no persistent browser settings');
-    assert.deepEqual(await evaluate('indexedDB.databases()'), [], 'no browser database');
-
-    await evaluate(`window.postMessage({ channel: 'mirrorme-website-preview', type: 'status', status: 'stopped' }, location.origin)`);
-    const tree = await send('Page.getFrameTree');
-    const child = tree.frameTree.childFrames.find(child => child.frame.url.includes('/preview/index.html'));
-    const context = contexts.get(child.frame.id);
-    assert.ok(context, 'find the iframe execution context');
-    await evaluate(`window.postMessage({ channel: 'mirrorme-website-preview', type: 'close-video' }, location.origin)`, context);
+    await send('Page.bringToFront');
+    await evaluate('document.querySelector("#theme").focus()');
+    assert.equal(await evaluate('document.activeElement.id'), 'theme', 'theme switch receives keyboard focus');
+    for (const type of ['keyDown', 'keyUp']) {
+      await send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, ...(type === 'keyDown' ? { text: '\r' } : {}) });
+    }
+    await imagesReady();
+    assert.equal(await evaluate('document.documentElement.dataset.mode'), 'dark');
+    assert.equal(await evaluate('document.querySelector("#theme").getAttribute("aria-label")'), 'Use light theme');
+    await inspect('keyboard-theme-and-reduced-motion');
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] });
     await delay(80);
-    assert.equal(await evaluate('document.querySelector("#demo").dataset.phase'), 'mirroring', 'ignore messages from the wrong source');
+    assert.equal(await evaluate('document.documentElement.dataset.mode'), 'dark', 'explicit theme choice wins over system changes');
+    const tree = await send('Page.getFrameTree');
+    assert.equal(tree.frameTree.childFrames?.length || 0, 0, 'no embedded app is loaded');
     await send('Emulation.setEmulatedMedia', { features: [{ name: 'forced-colors', value: 'active' }] });
     await inspect('high-contrast');
+    await send('Emulation.setScriptExecutionDisabled', { value: true });
+    await open(390);
+    assert.equal(await evaluate('document.querySelector("#theme").hidden'), true);
+    await inspect('static-content-without-javascript');
     assert.deepEqual(exceptions, [], 'no browser exceptions');
-    assert.deepEqual(failures, [], 'no failed assets or blocked scripts');
-    assert.deepEqual(requests.filter(request => new URL(request).origin !== new URL(url).origin), [], 'no third-party runtime requests');
-    assert.deepEqual(requestTypes.filter(type => ['Fetch', 'XHR', 'WebSocket'].includes(type)), [], 'only static assets are requested');
+    assert.deepEqual(failures, [], 'no failed images or blocked scripts');
+    assert.deepEqual(requests.filter(request => new URL(request.url).origin !== new URL(url).origin), [], 'no third-party requests');
+    assert.deepEqual(requests.filter(request => ['Fetch', 'XHR', 'WebSocket'].includes(request.type) || new URL(request.url).pathname.includes('/preview/')), [], 'no app runtime or data requests');
   } catch (error) {
+    console.error(JSON.stringify({ exceptions, failures, theme: await evaluate('({ mode: document.documentElement.dataset.mode, focus: document.activeElement.id, label: document.querySelector("#theme")?.getAttribute("aria-label") })') }));
     await screenshot('failure');
     throw error;
   }
   await writeFile(join(output, 'results.json'), JSON.stringify({ url, scenarios: results, exceptions, failures }, null, 2));
-  console.log(`Passed ${results.length} website scenarios; shared app, immediate video, real Settings, separate windows, keyboard, native boundaries, and project-base assets verified.`);
+  console.log(`Passed ${results.length} website scenarios; static screenshots, responsive layouts, themes, keyboard and no-JavaScript use verified.`);
   console.log(`Screenshots: ${output}`);
 } finally {
   for (const request of pending.values()) clearTimeout(request.timer);

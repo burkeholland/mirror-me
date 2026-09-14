@@ -1,6 +1,6 @@
 import {
   GetSettings, SaveSettings, RegeneratePinCode, GetStatus, StartMirroring,
-  StopMirroring, ConfirmSetupAndStart, ShowMirroredScreen, GetVersion,
+  StopMirroring, ShowMirroredScreen, GetVersion,
   GetSettingsFolder, OpenSettingsFolder, GetLogsFolder, OpenLogsFolder, OpenExternalURL, Quit,
 } from '../wailsjs/go/main/App';
 import {
@@ -348,7 +348,6 @@ async function receiverCommand(action, command, render) {
 
 export const startMirroring = render => receiverCommand('start', StartMirroring, render);
 export const stopMirroring = render => receiverCommand('stop', StopMirroring, render);
-export const confirmSetupAndStart = render => receiverCommand('setup', ConfirmSetupAndStart, render);
 
 export async function showMirroredScreen(render) {
   if (state.status.status === 'paused') return;

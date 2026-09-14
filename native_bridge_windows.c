@@ -1,4 +1,4 @@
-//go:build windows && amd64 && !legacy_receiver
+//go:build windows && amd64 && !native_contracts
 
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native/include/mirrorme.h"

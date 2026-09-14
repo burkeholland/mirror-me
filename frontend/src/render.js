@@ -174,16 +174,10 @@ function renderHome() {
 function connectionDescription(snapshot, slow) {
   switch (snapshot.status) {
     case 'stopped': return "Make this PC available, then connect from your iPhone's Screen Mirroring menu.";
-    case 'starting': return snapshot.setupKind === 'runtime'
-      ? snapshot.setupProgress >= 100 ? 'Download complete. Checking the receiver and its video decoder before installing.'
-        : `Downloading receiver files from GitHub: ${Math.max(0, Math.min(100, Number(snapshot.setupProgress) || 0))}%. You can cancel at any time.`
-      : 'Starting the receiver and making this PC discoverable on your network.';
-    case 'needs-setup': return snapshot.setupKind === 'runtime'
-      ? 'Download 113 MB of receiver files once from the UxPlay Windows project on GitHub. MirrorMe checks the download before installing it. No separate desktop app is opened.'
-      : 'Allow Bonjour, the discovery service that helps your iPhone find this PC. Windows may ask for administrator permission.';
+    case 'starting': return 'Starting the built-in receiver and making this PC discoverable on your network.';
     case 'advertising': return 'On your iPhone, open <strong>Control Center</strong>, tap <strong>Screen Mirroring</strong>, then choose this PC.';
     case 'connecting': return snapshot.videoReceived
-      ? slow ? 'Video has arrived, but Windows has not displayed it. Try software decoding in Picture & sound, then reconnect.'
+      ? slow ? 'Video has arrived, but Windows has not displayed it. Try 720p at 30 fps in Picture & sound, then reconnect.'
         : 'Video has arrived. Opening your mirrored screen in its own window.'
       : slow
       ? `${escHtml(snapshot.deviceName || 'Your iPhone')} was found, but video hasn't arrived. Stop Screen Mirroring on your iPhone, then try again.`
@@ -196,10 +190,6 @@ function connectionDescription(snapshot, slow) {
 }
 
 function connectionTitle(snapshot, slow) {
-  if (snapshot.setupKind === 'runtime') {
-    if (snapshot.status === 'needs-setup') return 'One download before you connect';
-    if (snapshot.status === 'starting') return 'Getting mirroring ready';
-  }
   if (snapshot.status === 'connecting') {
     if (snapshot.videoReceived) return slow ? 'Your video is waiting to open' : 'Opening your mirrored screen';
     if (slow) return "Waiting for your iPhone's video";
@@ -229,7 +219,6 @@ function homeActions(status, slow) {
   if (status === 'connecting') return `${slow ? button('start-mirroring', 'Try again', { primary: true, icon: 'refresh', disabled: blocked }) : ''}${cancel}
     ${slow && state.status.videoReceived ? button('picture-settings', 'Picture & sound', { quiet: true, id: 'video-recovery-settings' }) : ''}
     ${slow ? button('open-guide', 'Connection help', { quiet: true, id: 'home-guide' }) : ''}`;
-  if (status === 'needs-setup') return `${button('confirm-setup', state.status.setupKind === 'runtime' ? 'Download receiver files' : 'Allow discovery', { primary: true, icon: 'shield', disabled: blocked })}${cancel}`;
   if (status === 'advertising') return `${button('open-guide', 'How to connect', { primary: true, id: 'home-guide', icon: 'phone' })}
     ${button('stop-mirroring', 'Stop receiving', { quiet: true, disabled: blocked })}`;
   if (status === 'mirroring') return `${button('show-mirrored-screen', 'Show screen', { primary: true, icon: 'expand' })}
@@ -376,9 +365,7 @@ function pictureSettings() {
     + selectRow('maxFps', 'Maximum frame rate', 'Higher limits need more network bandwidth.', FPS, settings.maxFps))}
     ${settingsGroup('Sound', toggleRow('audioEnabled', 'Play iPhone audio', "Use this PC's speakers for mirrored sound.", settings.audioEnabled))}
     ${disclosure('advanced-picture', 'Advanced picture settings',
-      (state.status.backend === 'native'
-        ? '<div class="setting-row"><div class="setting-copy"><strong>Windows video decoder</strong><p>This preview uses software decoding. Hardware decoding is not enabled.</p></div></div>'
-        : toggleRow('hardwareDecode', 'Use hardware acceleration', 'Let your graphics processor handle video decoding.', settings.hardwareDecode))
+      '<div class="setting-row"><div class="setting-copy"><strong>Windows video decoder</strong><p>This preview uses software decoding. Hardware decoding is not enabled.</p></div></div>'
       + toggleRow('h265', 'Allow HEVC video', 'Enable the H.265 codec for compatible devices.', settings.h265), 'settings-disclosure')}
     <p class="settings-note">These are quality limits, not a measurement of the live stream. Your iPhone and network determine the final picture.</p>`;
 }
@@ -415,12 +402,10 @@ function helpAnswers() {
 }
 
 function renderAbout() {
-  const native = state.status.backend === 'native';
-  const receiverCredits = native
-    ? [['AirPlay protocol', 'https://github.com/leapbtw/libuxplay'], ['FFmpeg', 'https://ffmpeg.org'],
-      ['OpenSSL', 'https://openssl.org'], ['libplist', 'https://github.com/libimobiledevice/libplist']]
-    : [['UxPlay', 'https://github.com/FDH2/UxPlay'], ['libuxplay', 'https://github.com/leapbtw/libuxplay'],
-      ['GStreamer', 'https://gstreamer.freedesktop.org/']];
+  const receiverCredits = [
+    ['AirPlay protocol', 'https://github.com/leapbtw/libuxplay'], ['FFmpeg', 'https://ffmpeg.org'],
+    ['OpenSSL', 'https://openssl.org'], ['libplist', 'https://github.com/libimobiledevice/libplist'],
+  ];
   return `<div class="page help-page">${heading('Help &amp; about')}${errorNotice()}
     <section class="help-intro"><div class="about-mark" aria-hidden="true">${brandMark}</div>
       <div><h2>MirrorMe</h2><p>iPhone screen mirroring, made for Windows.</p><span class="version-label">Version ${escHtml(state.version || 'Development')}</span></div>
@@ -434,9 +419,7 @@ function renderAbout() {
     ${disclosure('support-files', 'Settings &amp; support files', `<p>Your preferences are stored on this PC.</p>
       <p class="settings-path">${escHtml(state.settingsFolder)}</p><div class="button-row">
       ${button('open-settings-folder', 'Open folder', { small: true })}${button('copy-settings-folder', 'Copy path', { quiet: true, small: true, icon: 'copy' })}</div>`)}
-    ${disclosure('credits', 'Built with open source', `<p>${native
-      ? 'AirPlay protocol code and audio codecs are built into MirrorMe. Windows handles video decoding and audio output. No separate receiver download or discovery service is installed.'
-      : 'MirrorMe uses UxPlay to receive AirPlay streams, GStreamer for picture and sound, and Wails for its Windows interface. The receiver runs in the background and stops when you quit.'}</p>
+    ${disclosure('credits', 'Built with open source', `<p>AirPlay protocol code and audio codecs are built into MirrorMe. Windows handles video decoding and audio output. No separate receiver download or discovery service is installed.</p>
       <div class="credit-links">${[
         ...receiverCredits, ['Wails', 'https://wails.io'],
         ['Postrboard', 'https://github.com/burkeholland/postrboard-design'], ['Lucide', 'https://lucide.dev'],

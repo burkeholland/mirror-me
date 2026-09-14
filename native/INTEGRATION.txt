@@ -41,8 +41,7 @@ The link manifest's production field is false in that mode.
 
 The tested toolchain is Strawberry GCC 13.2.0 x64 UCRT, CMake, Ninja, Python.
 No GCC -march=native optimizations are used. All intermediate files are inside
-build\native, which is separate from build\receiver and the old engine.
-The script never replaces engine\mirrorme-receiver.exe or changes vendor files.
+build\native. The script does not modify the pristine vendor checkout.
 The separate audio build installs static headers/archives under
 build\native-audio\install by default. Pass -AudioSdkDirectory to build-native
 when using a different audio prefix.
@@ -59,8 +58,8 @@ licensed compatibility code, not reimplemented/debranded protocol ownership.
 native\dependencies.json pins the existing MSYS2 UCRT OpenSSL 3.6.1 and libplist
 2.7.0 binary packages AND the exact matching source archives, MSYS2 recipe
 commits, patches and additional source files. Only headers,
-STATIC libcrypto.a / libplist-2.0.a, and license notices are extracted. Existing
-build\receiver\downloads archives may satisfy the exact same checked pins.
+STATIC libcrypto.a / libplist-2.0.a, and license notices are extracted.
+Verified package archives are cached in build\native\downloads.
 No package DLL, import library (*.dll.a), GStreamer/GLib SDK, or Bonjour header is
 copied into the new SDK. Audio dependencies have their separate pinned manifest
 and source build script; see native\audio-dependencies.json / AUDIO-NOTICES.txt.
@@ -204,7 +203,7 @@ All RAOP callback slots are populated except passwd: that optional slot enables
 a separate digest-password mode and is deliberately null for configured PIN
 pairing. Upstream debug logs are discarded, never parsed for application state.
 App events are bounded typed messages without sender names/IDs, pairing material,
-keys, or PIN values. Existing receiver code is not modified by this backend.
+keys, or PIN values.
 
 Successful SETUP assigns an opaque monotonic session identity. Socket opening,
 /info, malformed negotiation and socket closure alone never create or terminate

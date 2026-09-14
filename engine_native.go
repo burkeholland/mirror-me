@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
 )
 
-func newSelfContainedEngine(onEvent EngineEventHandler) (*Engine, error) {
+func NewEngine(onEvent EngineEventHandler) (*Engine, error) {
+	if !nativeReceiverAvailable {
+		return nil, errors.New("the built-in receiver is unavailable in this build; use a Windows x64 production build")
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		return nil, fmt.Errorf("locate the installed application: %w", err)
@@ -25,7 +27,7 @@ func newSelfContainedEngine(onEvent EngineEventHandler) (*Engine, error) {
 	}
 	return &Engine{
 		exePath: executable, engineDir: filepath.Dir(executable), onEvent: onEvent,
-		status: StatusStopped, startupTimeout: startupDeadline, builtin: true,
+		status: StatusStopped, startupTimeout: startupDeadline,
 		nativeDeviceID: deviceID, nativeKeyPath: keyPath,
 	}, nil
 }
@@ -152,11 +154,7 @@ func (e *Engine) handleWorkerDiagnostic(generation uint64, _ string) {
 	}
 }
 
-func closeWorkerInput(run *receiverProcess, builtin bool) {
-	if builtin {
-		_ = run.sendCommand(workerCommand{Command: "stop"})
-	} else {
-		_, _ = io.WriteString(run.input, "stop\n")
-	}
+func closeWorkerInput(run *receiverProcess) {
+	_ = run.sendCommand(workerCommand{Command: "stop"})
 	_ = run.input.Close()
 }

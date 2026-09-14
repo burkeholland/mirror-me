@@ -219,7 +219,7 @@ func (a *App) SaveSettings(next Config) (Config, error) {
 	a.mu.Unlock()
 	a.logEvent("settings_saved", a.GetStatus())
 
-	if a.engine != nil && a.engine.IsRunning() && configAffectsEngineArgs(current, normalized) {
+	if a.engine != nil && a.engine.IsRunning() && configAffectsReceiver(current, normalized) {
 		if err := a.engine.Start(normalized); err != nil {
 			// Settings are already safely persisted; only the live restart
 			// failed. Surface it as an engine event rather than a save
@@ -250,11 +250,7 @@ func (a *App) RegeneratePinCode() (Config, error) {
 // GetStatus returns the mirroring engine's current status snapshot.
 func (a *App) GetStatus() EngineSnapshot {
 	if a.engine == nil {
-		snapshot := EngineSnapshot{Status: StatusError, LastError: a.engineUnavailableMessage(), Backend: "legacy"}
-		if selfContainedReceiver {
-			snapshot.Backend = "native"
-		}
-		return snapshot
+		return EngineSnapshot{Status: StatusError, LastError: a.engineUnavailableMessage(), Backend: "native"}
 	}
 	return a.engine.Snapshot()
 }
@@ -274,15 +270,6 @@ func (a *App) StopMirroring() error {
 		return nil
 	}
 	return a.engine.Stop()
-}
-
-// ConfirmSetupAndStart is retained for older frontends. The self-contained
-// receiver starts directly, without an installer or elevated service.
-func (a *App) ConfirmSetupAndStart() error {
-	if a.engine == nil {
-		return errors.New(a.engineUnavailableMessage())
-	}
-	return a.engine.ConfirmSetupAndStart(a.currentConfig())
 }
 
 // ShowMirroredScreen brings the mirrored video window to the foreground.
@@ -462,8 +449,6 @@ func trayTooltipFor(snap EngineSnapshot) string {
 		return "MirrorMe - ready for a device"
 	case StatusStarting:
 		return "MirrorMe - starting…"
-	case StatusNeedsSetup:
-		return "MirrorMe - setup required"
 	case StatusError:
 		return "MirrorMe - error"
 	default:
@@ -473,7 +458,7 @@ func trayTooltipFor(snap EngineSnapshot) string {
 
 // handleEngineEvent is the Engine's onEvent callback: it forwards the
 // snapshot to the frontend, keeps the tray tooltip current, and proactively
-// surfaces states that need the user's attention (setup required, error)
+// surfaces receiver errors that need the user's attention
 // even if the window is currently hidden in the tray.
 func (a *App) handleEngineEvent(ev EngineEvent) {
 	a.logEvent("receiver_event", ev.Snapshot)
@@ -483,7 +468,7 @@ func (a *App) handleEngineEvent(ev EngineEvent) {
 	if a.tray != nil {
 		a.tray.UpdateTooltip(trayTooltipFor(ev.Snapshot))
 	}
-	if ev.Snapshot.Status == StatusNeedsSetup || ev.Snapshot.Status == StatusError {
+	if ev.Snapshot.Status == StatusError {
 		a.ShowWindow()
 		if a.tray != nil && ev.Activity != "" {
 			a.tray.Notify("MirrorMe", ev.Activity)

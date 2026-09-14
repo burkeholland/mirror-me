@@ -193,7 +193,7 @@ try {
   };
 
   for (const theme of ['light', 'dark']) {
-    for (const status of ['stopped', 'starting', 'needs-setup', 'advertising', 'connecting', 'mirroring', 'error']) {
+    for (const status of ['stopped', 'starting', 'advertising', 'connecting', 'mirroring', 'paused', 'error']) {
       await open(`state=${status}&theme=${theme}`);
       await check(`${status}-${theme}`);
       assert.equal(await evaluate("Boolean(document.querySelector('.home-hint, .connection-details, .activity-list'))"), false,
@@ -210,6 +210,11 @@ try {
       }
       if (section === 'picture') await screenshot(`settings-${theme}`);
     }
+  }
+  for (const theme of ['light', 'dark']) {
+    await open(`state=mirroring&backend=native&theme=${theme}&name=Studio%20PC`);
+    await check(`website-screenshot-${theme}`);
+    await screenshot(`website-${theme}`);
   }
   await open('state=advertising&backend=native');
   await check('native-receiver-ready');
@@ -235,9 +240,8 @@ try {
   for (const [name, query] of [
     ['welcome', 'onboarding=1'],
     ['setup-ready', 'onboarding=1&step=2'],
-    ['setup-permission', 'onboarding=1&step=2&state=needs-setup'],
-    ['setup-download', 'onboarding=1&step=2&state=needs-setup&download=1'],
-    ['download-progress', 'onboarding=1&step=2&state=starting&download=1'],
+    ['setup-starting', 'onboarding=1&step=2&state=starting'],
+    ['setup-error', 'onboarding=1&step=2&state=error'],
     ['video-output', 'state=connecting&video=1'],
     ['video-output-recovery', 'state=connecting&video=1&slow=1'],
     ['ready', 'state=advertising&pin=1'],
@@ -247,7 +251,7 @@ try {
   ]) {
     await open(query, 760, 560);
     await check(`${name}-minimum-window`);
-    if (['welcome', 'ready', 'setup-permission'].includes(name)) await screenshot(`${name}-minimum-window`);
+    if (['welcome', 'ready', 'setup-starting'].includes(name)) await screenshot(`${name}-minimum-window`);
   }
   await open('state=connecting&slow=1&theme=dark');
   await until(() => evaluate('window.__mirrorMePreview.state.connectionSlow'), 'display video-wait recovery');

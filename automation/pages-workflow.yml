@@ -26,9 +26,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Restore frontend dependencies
         run: npm ci --prefix frontend
-      - name: Build the shared app preview
-        run: npm run build:site-preview --prefix frontend
-      - name: Check interactive preview and source freshness
+      - name: Check committed static screenshots and source freshness
         run: node --test site/tests/demo.test.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

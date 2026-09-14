@@ -1,11 +1,11 @@
-//go:build !windows || !amd64 || legacy_receiver
+//go:build !windows || !amd64 || native_contracts
 
 package main
 
 import "errors"
 
-const selfContainedReceiver = false
+const nativeReceiverAvailable = false
 
 func createNativeReceiver(workerOptions, func(int, string)) (nativeReceiverSession, error) {
-	return nil, errors.New("this build does not contain the native receiver; build for Windows x64 without the legacy_receiver tag")
+	return nil, errors.New("this build does not contain the native receiver; use a Windows x64 production build")
 }

@@ -80,8 +80,8 @@ test('title bar and About use the unchanged website brand mark', async () => {
   }
 });
 
-test('startup, connection, and discovery setup can all be cancelled', () => {
-  for (const status of ['starting', 'connecting', 'needs-setup']) {
+test('startup and connection can both be cancelled', () => {
+  for (const status of ['starting', 'connecting']) {
     state.status = { status };
     const button = buttonHTML(renderHTML(), 'stop-mirroring');
     assert.ok(button, `missing Cancel for ${status}`);
@@ -356,30 +356,21 @@ test('a failed onboarding save never starts the receiver or skips a step', async
   assert.equal(state.error, 'Save failed');
 });
 
-test('onboarding explains administrator permission before asking for it', () => {
+test('onboarding connects directly without downloads or service installation', () => {
   state.settings.firstRun = true;
   state.setupStep = 2;
-  state.status = { status: 'needs-setup' };
+  state.status = snapshotFixture('advertising');
   const html = renderHTML();
-  assert.match(html, /Bonjour/);
-  assert.match(html, /administrator permission/);
-  assert.ok(buttonHTML(html, 'confirm-setup'));
-  assert.doesNotMatch(buttonHTML(html, 'dismiss-first-run'), /btn-primary/);
+  assert.match(html, /Screen Mirroring/);
+  assert.doesNotMatch(html, /Bonjour|administrator permission|Download receiver|confirm-setup/);
+  assert.ok(buttonHTML(html, 'dismiss-first-run'));
 });
 
-test('runtime setup explains the upstream download before asking for permission', () => {
-  state.status = { status: 'needs-setup', setupKind: 'runtime' };
+test('built-in receiver startup stays cancellable', () => {
+  state.status = snapshotFixture('starting');
   const html = renderHTML();
-  assert.match(html, /Download 113 MB/);
-  assert.match(html, /UxPlay Windows project on GitHub/);
-  assert.match(buttonHTML(html, 'confirm-setup'), /Download receiver files/);
-  assert.doesNotMatch(html, /Allow discovery/);
-});
-
-test('runtime download reports progress and stays cancellable', () => {
-  state.status = { status: 'starting', setupKind: 'runtime', setupProgress: 42 };
-  const html = renderHTML();
-  assert.match(html, /GitHub: 42%/);
+  assert.match(html, /Starting the built-in receiver/);
+  assert.doesNotMatch(html, /Downloading|Allow discovery|confirm-setup/);
   assert.doesNotMatch(buttonHTML(html, 'stop-mirroring'), /\bdisabled\b/);
 });
 
@@ -460,7 +451,7 @@ test('received video is distinct from rendered video and points to display setti
   state.connectionSlow = true;
   html = renderHTML();
   assert.match(html, /Windows has not displayed it/);
-  assert.match(html, /software decoding/);
+  assert.match(html, /720p at 30 fps/);
   assert.ok(buttonHTML(html, 'picture-settings'));
 });
 
@@ -570,16 +561,18 @@ test('generating a new pairing code does not discard unrelated edits', async () 
   assert.equal(state.settings.deviceName, settingsFixture.deviceName);
 });
 
-test('all original settings remain reachable in the three categories', () => {
+test('all supported settings remain reachable without the obsolete decoder toggle', () => {
   state.route = 'settings';
   let html = '';
   for (const section of ['connection', 'picture', 'app']) {
     state.settingsSection = section;
     html += renderHTML();
   }
-  for (const field of Object.keys(settingsFixture).filter(key => !['firstRun', 'pinCode'].includes(key))) {
+  for (const field of Object.keys(settingsFixture).filter(key => !['firstRun', 'pinCode', 'hardwareDecode'].includes(key))) {
     assert.match(html, new RegExp(`data-field="${field}"`), `missing ${field}`);
   }
+  assert.match(html, /Windows video decoder/);
+  assert.doesNotMatch(html, /data-field="hardwareDecode"/);
 });
 
 test('advanced controls start collapsed and remember an opened disclosure', () => {
@@ -682,7 +675,7 @@ test('names and logging warnings are rendered as text, not markup', () => {
 });
 
 test('connection details are absent and opt-in logging remains in Settings App', () => {
-  for (const status of ['stopped', 'starting', 'needs-setup', 'advertising', 'connecting', 'mirroring', 'paused', 'error']) {
+  for (const status of ['stopped', 'starting', 'advertising', 'connecting', 'mirroring', 'paused', 'error']) {
     state.status = { status, backend: 'native' };
     for (const route of ['home', 'settings', 'about']) {
       state.route = route;

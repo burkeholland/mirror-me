@@ -12,14 +12,10 @@ let settings = {
   pinCode: params.get('pin') === '1' ? '2468' : '',
 };
 function receiverSnapshot(status) {
-  return { ...snapshotFixture(status), backend: params.get('backend') === 'native' ? 'native' : 'legacy' };
+  return { ...snapshotFixture(status), backend: 'native' };
 }
 let snapshot = receiverSnapshot(params.get('state') || (settings.firstRun && params.get('step') !== '2' ? 'stopped' : 'advertising'));
 if (params.get('video') === '1') snapshot.videoReceived = true;
-if (params.get('download') === '1') {
-  snapshot.setupKind = 'runtime';
-  snapshot.setupProgress = 42;
-}
 const listeners = new Map();
 const calls = [];
 let command = 0;
@@ -63,10 +59,6 @@ window.go = { main: { App: {
     calls.push(['stop']);
     command++;
     setStatus('stopped');
-  },
-  ConfirmSetupAndStart: async () => {
-    calls.push(['setup']);
-    setStatus('advertising');
   },
   ShowMirroredScreen: async () => snapshot.status === 'mirroring',
   OpenSettingsFolder: async () => { calls.push(['open-folder']); },

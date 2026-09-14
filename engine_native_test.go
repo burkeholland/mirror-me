@@ -59,7 +59,7 @@ func runNativeFixture(mode string) int {
 func TestNativeWorkerStartsWithoutRuntimeOrBonjour(t *testing.T) {
 	engine, run := launchFixture(t, "native-ready", 3*time.Second)
 	waitForStatus(t, engine, StatusAdvertising)
-	if !engine.builtin || engine.runtime != nil || engine.Snapshot().Backend != "native" {
+	if engine.Snapshot().Backend != "native" {
 		t.Fatal("native receiver fell back to runtime setup")
 	}
 	if len(run.cmd.Args) != 2 || run.cmd.Args[1] != receiverWorkerArgument || run.cmd.Path != os.Args[0] {
@@ -107,7 +107,6 @@ func TestNativeWorkerStartupDeadlineDoesNotRecommendBonjour(t *testing.T) {
 
 func TestNativeWorkerStateRequiresAcceptedAndRenderedVideo(t *testing.T) {
 	engine, _ := newTestEngine()
-	engine.builtin = true
 	engine.status = StatusAdvertising
 	send := func(kind int, message string) {
 		t.Helper()
@@ -149,7 +148,6 @@ func TestNativeWorkerStateRequiresAcceptedAndRenderedVideo(t *testing.T) {
 
 func TestNativeConnectingDiagnosticIsNotADeviceName(t *testing.T) {
 	engine, _ := newTestEngine()
-	engine.builtin = true
 	engine.status = StatusAdvertising
 	data, err := json.Marshal(workerEvent{
 		Protocol: workerProtocolVersion, Kind: workerConnecting, Message: "Mirroring session negotiated.",
@@ -178,7 +176,6 @@ func TestNativePauseResumesOnlyAfterAcceptedAndPresentedVideo(t *testing.T) {
 	for _, initial := range []EngineStatus{StatusConnecting, StatusMirroring} {
 		t.Run(string(initial), func(t *testing.T) {
 			engine, events := newTestEngine()
-			engine.builtin = true
 			engine.status = initial
 			engine.videoReceived = true
 			originalStart := time.Now().Add(-time.Minute)
@@ -224,7 +221,6 @@ func TestNativePauseResumesOnlyAfterAcceptedAndPresentedVideo(t *testing.T) {
 
 func TestNativePausedSessionEndsWithoutStalePresentationRevivingIt(t *testing.T) {
 	engine, events := newTestEngine()
-	engine.builtin = true
 	engine.status = StatusMirroring
 	engine.deviceName, engine.deviceModel = "Known iPhone", "Known model"
 	sendNativeEvent(t, engine, 1, workerPaused)
@@ -251,7 +247,7 @@ func TestNativePausedSessionEndsWithoutStalePresentationRevivingIt(t *testing.T)
 }
 
 func TestNativePauseIgnoresInactiveStatusesAndSupersededWorkers(t *testing.T) {
-	for _, status := range []EngineStatus{StatusStopped, StatusStarting, StatusNeedsSetup, StatusAdvertising, StatusError} {
+	for _, status := range []EngineStatus{StatusStopped, StatusStarting, StatusAdvertising, StatusError} {
 		t.Run(string(status), func(t *testing.T) {
 			engine, events := newTestEngine()
 			engine.status = status
@@ -280,7 +276,6 @@ func TestNativePauseIgnoresInactiveStatusesAndSupersededWorkers(t *testing.T) {
 
 func TestNativePausedVideoCannotBeShown(t *testing.T) {
 	engine, _ := newTestEngine()
-	engine.builtin = true
 	engine.status = StatusPaused
 	// A paused request must return before accessing any native window or process.
 	engine.run = &receiverProcess{}
@@ -291,7 +286,6 @@ func TestNativePausedVideoCannotBeShown(t *testing.T) {
 
 func TestNativeDiagnosticOutputCannotLeakIntoActivity(t *testing.T) {
 	engine, events := newTestEngine()
-	engine.builtin = true
 	engine.status = StatusAdvertising
 	engine.handleWorkerDiagnostic(1, "private key material must not be copied")
 	engine.handleWorkerDiagnostic(1, "another raw diagnostic")

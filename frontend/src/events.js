@@ -1,7 +1,7 @@
 import {
   state, load, navigate, selectSettingsSection, openPictureSettings, setDraftField,
   revertDraft, saveDraft, regeneratePin, beginSetup, dismissFirstRun,
-  startMirroring, stopMirroring, confirmSetupAndStart, showMirroredScreen,
+  startMirroring, stopMirroring, showMirroredScreen,
   openSettingsFolder, openLogsFolder, copyLogsPath, copySettingsFolder, copyDeviceName,
   openExternalURL, minimiseWindow, toggleMaximiseWindow, hideWindow, quitApp,
   openDialog, closeDialog, finishNavigation, dismissToast,
@@ -34,7 +34,6 @@ export function bindEvents(app, render) {
       case 'start-mirroring': await startMirroring(render); break;
       case 'stop-mirroring': await stopMirroring(render); break;
       case 'show-mirrored-screen': await showMirroredScreen(render); break;
-      case 'confirm-setup': await confirmSetupAndStart(render); break;
       case 'setup-back': state.setupStep = 1; state.focusTarget = 'setup-name'; render(); break;
       case 'dismiss-first-run': await dismissFirstRun(render); break;
       case 'save-settings': await saveDraft(render); break;

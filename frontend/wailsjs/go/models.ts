@@ -55,8 +55,6 @@ export namespace main {
 	    // Go type: time
 	    connectedAt?: any;
 	    videoReceived: boolean;
-	    setupKind?: string;
-	    setupProgress: number;
 	    lastError?: string;
 	    pinCode?: string;
 	    backend: string;
@@ -72,8 +70,6 @@ export namespace main {
 	        this.deviceModel = source["deviceModel"];
 	        this.connectedAt = this.convertValues(source["connectedAt"], null);
 	        this.videoReceived = source["videoReceived"];
-	        this.setupKind = source["setupKind"];
-	        this.setupProgress = source["setupProgress"];
 	        this.lastError = source["lastError"];
 	        this.pinCode = source["pinCode"];
 	        this.backend = source["backend"];

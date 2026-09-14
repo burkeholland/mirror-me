@@ -4,6 +4,10 @@ The Go application and `frontend\` code are covered by the root MIT
 [`LICENSE`](LICENSE). The native receiver and its dependencies are licensed
 separately. The MIT license does not relicense any third-party component.
 
+This notice covers the current self-contained source build, the static
+website, and development tools. The external-receiver build and its download
+have been retired; only the self-contained implementation is maintained.
+
 ## Self-contained native source build
 
 The default Windows x64 build links the new `native\` host, Windows media and
@@ -17,6 +21,27 @@ The original protocol copyrights and licenses are retained. OpenSSL and
 libplist are statically linked; audio decoding uses the separately pinned
 codec build. Native build manifests and notices record those inputs.
 
+| Component in the native build | License information | Source / exact-input record |
+|---|---|---|
+| libuxplay 1.73.6 protocol and PlayFair code | GPL-3.0-or-later; individual protocol files LGPL-2.1-or-later | [Pinned protocol and SDK inputs](native/dependencies.json), commit `437f37514257d9cb513ac7fbdee743b4da85852e`; [upstream](https://github.com/leapbtw/libuxplay) |
+| llhttp, retained with the protocol source | MIT; Copyright Fedor Indutny, 2018 | Included in the pinned protocol tree; [native source notices](native/NATIVE-SOURCE-NOTICES.txt) |
+| OpenSSL 3.6.1 (`libcrypto`, MSYS2 package 3.6.1-1) | Apache-2.0; MSYS2 path-tool additions carry CC0 notices | [Source and recipe pins](native/source-dependencies.json); [upstream](https://github.com/openssl/openssl) |
+| libplist 2.7.0 and libcnary (MSYS2 package 2.7.0-3) | LGPL-2.1-or-later; GPL utilities in the source archive are not linked into MirrorMe | [Source and recipe pins](native/source-dependencies.json); [upstream](https://github.com/libimobiledevice/libplist) |
+| FFmpeg 8.0.1, `libavcodec` 62.11.100 and `libavutil` 60.8.100 | LGPL-2.1-or-later for the selected static audio build | [Audio pins and configuration](native/audio-dependencies.json); [full audio notices](native/AUDIO-NOTICES.txt) |
+| GCC 13.2.0 `libstdc++`, `libgcc`, `libgcc_eh` | GPL-3.0-or-later with GCC Runtime Library Exception 3.1 | [Matched toolchain archives and source notices](native/NATIVE-SOURCE-NOTICES.txt) |
+| MinGW-w64 11.0.1 UCRT and winpthreads | Component-specific permissive terms; preserve the complete MinGW runtime notice set and winpthreads MIT/BSD-style notices | [Runtime provenance and notice inventory](native/NATIVE-SOURCE-NOTICES.txt) |
+
+The selected FFmpeg build enables audio decoders, not FFmpeg executables,
+encoders, external codec libraries, or its GPL/nonfree options. This does not
+change the GPL terms of the combined MirrorMe executable. Its audio-format
+configuration also retains attribution to RPiPlay (Florian Draschbacher,
+2019) and UxPlay (F. Duncanh, 2021-23), detailed in the audio notices.
+
+Windows DNS-SD, Media Foundation, GDI and WASAPI are operating-system APIs,
+not copies of Bonjour or GStreamer. The shared Microsoft WebView2 runtime
+and Windows system fonts are supplied separately by Windows/Microsoft; this
+repository does not bundle their runtime installers or font files.
+
 **The combined native executable is subject to the applicable GPL terms.**
 The root MIT grant still covers MirrorMe's own Go/frontend sources, not the
 linked program as a whole. Distribution requires matching native and application
@@ -24,63 +49,18 @@ source, library source/build inputs, and the relevant license notices.
 Do not treat a development SDK archive or a successful local build as proof
 that a redistributable corresponding-source package is complete.
 
-The following legacy-runtime notes describe the existing published preview,
-not the self-contained build.
-
-## Background AirPlay receiver
-
-`engine\mirrorme-receiver.exe` uses UxPlay through the Windows-compatible
-[leapbtw/libuxplay](https://github.com/leapbtw/libuxplay) library, pinned to
-commit `437f37514257d9cb513ac7fbdee743b4da85852e`. This is the library
-revision used by the published `uxplay-windows` release `2.0.0.1736`.
-The original upstream project is [FDH2/UxPlay](https://github.com/FDH2/UxPlay).
-
-The receiver is GPLv3 software. MirrorMe's native adapter and build inputs
-are in `receiver\`, with the build entry point in
-`scripts\build-receiver.ps1`. The integration differs from the upstream
-desktop application: there is no Qt control window or tray icon; it accepts
-arguments directly and provides process-pipe status and shutdown control.
-Consult the receiver's source and retained license notices for its changes.
-
-MirrorMe does not launch or package the `uxplay-windows.exe` desktop wrapper
-or its Bluetooth-beacon executable. Those files may still exist in the
-original development-time `engine\` bundle but are excluded during packaging.
-
-## Multimedia and discovery libraries
-
-The public preview ZIP contains MirrorMe and its custom GPL receiver, but
-**does not redistribute the upstream DLL bundle or Bonjour installer**.
-On explicit first-run consent, the application downloads that archive directly
-from its publisher, verifies its exact hash, excludes the separate desktop
-applications, and validates its decoder. The pin is in `receiver\runtime.json`.
-
-The optional development/runtime download originates from the unmodified x64
-`uxplay-windows` release `2.0.0.1736`:
-<https://github.com/leapbtw/uxplay-windows/releases/tag/2.0.0.1736>.
-The original distribution's notices are retained in `engine\LICENSE.rtf`.
-Any additional native build dependencies are recorded by the receiver build.
-
-| Component | License information | Source |
-|---|---|---|
-| UxPlay | GPLv3 | <https://github.com/FDH2/UxPlay> |
-| mDNSResponder / dnssd | BSD-3-Clause / Apache-2.0, as specified per source file | <https://github.com/apple-oss-distributions/mDNSResponder> |
-| GStreamer and plugins | LGPL and component-specific third-party terms | <https://gstreamer.freedesktop.org/> |
-| FFmpeg and codec libraries | LGPL or GPL depending on the library and build configuration | <https://ffmpeg.org/> |
-| x264 / x265 libraries | GPL; see the respective project terms | <https://www.videolan.org/developers/x264.html>, <https://www.videolan.org/developers/x265.html> |
-| OpenSSL | Apache-2.0 for OpenSSL 3 | <https://www.openssl.org/> |
-| Qt 6 libraries retained from the original bundle | LGPL/GPL or commercial terms; not used by MirrorMe's receiver | <https://www.qt.io/licensing/> |
-
-Other bundled libraries retain their original licenses. This table is a
-summary, not a complete bill of materials or a legal determination about
-distribution.
+The detailed [native source notices](native/NATIVE-SOURCE-NOTICES.txt) and
+[audio notices](native/AUDIO-NOTICES.txt) describe patches, source archives,
+compiler-runtime notices and remaining release work. The native source
+collector preserves the full upstream license texts and file-level notices;
+the summary table above does not replace them.
 
 ## Go and frontend dependencies
 
 | Component | License | Source |
 |---|---|---|
-| Wails v2 | MIT | <https://github.com/wailsapp/wails> |
-| Vite | MIT | <https://github.com/vitejs/vite> |
-| Go and golang.org/x/sys | BSD-3-Clause | <https://go.dev/> |
+| Wails v2.15.0 | MIT | <https://github.com/wailsapp/wails> |
+| Go 1.25 and golang.org/x/sys v0.46.0 | BSD-3-Clause | <https://go.dev/>, <https://pkg.go.dev/golang.org/x/sys> |
 | Postrboard CSS 2.0.0 | MIT | <https://github.com/burkeholland/postrboard-design> |
 | Lucide 1.39.0, including Feather-derived icons | ISC / MIT | <https://lucide.dev>, <https://github.com/feathericons/feather> |
 
@@ -90,6 +70,58 @@ The Postrboard stylesheet is vendored in
 Its SHA-256 is
 `d5e7a983b3b35413223b6eebc564c79fd7d50e8e693c13b9d7e22eabeccacade`.
 The application uses Windows system fonts instead of requesting web fonts.
+
+The exact Go dependency graph, including indirect Wails/WebView2 loader
+dependencies, is in [go.mod](go.mod) and [go.sum](go.sum). Frontend package
+versions and package license metadata are pinned in
+[frontend/package-lock.json](frontend/package-lock.json). Preserve each
+dependency's original notices when packaging a build; the short table is not
+a substitute for the full transitive notice set.
+
+## Static website and artwork
+
+The website distributes Postrboard CSS and static PNG screenshots of the
+desktop frontend. Those screenshots contain the app's Lucide/Feather-derived
+icons and Postrboard styling; their copyright and license notices remain
+applicable credits even though the website no longer loads the interactive
+frontend or a browser-to-app simulation bridge.
+
+The website's stylesheet is `site\assets\postrboard.css`, with the same
+SHA-256 shown above. Website-specific credits and the full Postrboard,
+Lucide and Feather license texts are kept in
+[site/assets/NOTICE.txt](site/assets/NOTICE.txt).
+
+`site\assets\mark.svg` (the monitor-and-phone app mark) and the mountain
+illustration in `site\index.html` are original MirrorMe artwork covered by
+the root license. The PNG/ICO app icons are generated from that SVG; they
+are not a replacement license for Lucide icons used elsewhere in the UI.
+Screenshot generation uses example data, not a recording of someone's phone.
+
+## Build and test tools
+
+These are development dependencies, not additional programs shipped inside
+the MirrorMe executable or the static website.
+
+| Component | License information | Use / source |
+|---|---|---|
+| Vite 7.3.6 | MIT core; its packaged dependencies retain their own notices | Frontend build and browser-test server; [upstream](https://github.com/vitejs/vite) |
+| Pillow 12.2.0 | MIT-CMU; packaged third-party libraries retain their notices | PNG/ICO generation; [upstream license](https://github.com/python-pillow/Pillow/blob/12.2.0/LICENSE) |
+| resvg-py 0.5.0 | MIT for the Python wrapper; Rust dependencies retain their own licenses | SVG rasterization; [upstream](https://github.com/baseplate-admin/resvg-py) |
+| Microsoft Edge | Microsoft software license terms | Locally installed browser used to capture screenshots and run UI checks; not redistributed |
+| Ittiam libxaac | Apache-2.0 | Test-only AAC-ELD fixture generation; [fixture notices and exact provenance](native/tests/audio_fixtures/NOTICE.txt) |
+
+Pillow and resvg-py versions are pinned in
+[scripts/icon-requirements.txt](scripts/icon-requirements.txt). Their installed
+license files identify Pillow's MIT-CMU terms and resvg-py's MIT notice
+(Copyright 2024, baseplate-admin). Redistributed copies of these development
+tools require their own full license and dependency notices.
+
+The original generated audio-test signals are dedicated under CC0, as recorded
+in the fixture notices. Neither libxaac nor its encoder is linked into the
+production application. The fixture notice also preserves the full Apache
+license and the upstream source/configuration provenance.
+
+## Frontend and website license texts
 
 ### Postrboard
 
@@ -165,13 +197,22 @@ SOFTWARE.
 
 ## Before distributing a release
 
-The matching `MirrorMe-receiver-source.zip` release asset contains the custom
+For the **legacy `v0.1.0-preview.1` release**, the matching
+`MirrorMe-receiver-source.zip` release asset contains the custom
 adapter, both maintained patches, the build scripts and SDK pins, the original
 video fixture, and a Git bundle of the exact upstream source. The build script
 can clone that bundle without fetching the library from a moving branch.
 The public Windows ZIP includes the receiver's GPL text and aggregated Go
 dependency license notices. No closed-source restrictions are imposed on
 modifying or replacing the separately licensed receiver.
+
+That legacy source ZIP is **not** the corresponding-source package for the
+new self-contained executable. Before publishing a native binary, freeze the
+complete app/native source revision, bind the binary hash to its matching
+source and rebuild inputs, include all applicable Go/frontend/native
+dependency notices, and satisfy the applicable GPL/LGPL source and relinking
+requirements. Updating this document does not approve a binary release or
+change the distribution gate in `native\dependencies.json`.
 
 Provide the corresponding source for GPL/LGPL components as required by
 their licenses, including the exact revisions, local modifications, and

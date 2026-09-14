@@ -28,12 +28,12 @@ jobs:
         run: npm test --prefix frontend
       - name: Build embedded assets
         run: npm run build --prefix frontend
-      - name: Build the shared website preview
+      - name: Generate static app screenshots in Edge
         run: npm run build:site-preview --prefix frontend
       - name: Check website behavior and source freshness
         run: node --test site/tests/demo.test.mjs
       # Contract/UI checks do not replace the Windows native build and device checks.
       - name: Check Go contracts without the native SDK
-        run: go test -tags legacy_receiver ./...
+        run: go test -tags native_contracts ./...
       - name: Check Go diagnostics without the native SDK
-        run: go vet -tags legacy_receiver ./...
+        run: go vet -tags native_contracts ./...

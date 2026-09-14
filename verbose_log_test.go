@@ -157,7 +157,7 @@ func TestVerboseSettingPersistenceAndSaveFailure(t *testing.T) {
 	next := config
 	next.VerboseLogging = true
 	next.LogWarning = "transient"
-	if configAffectsEngineArgs(config, next) {
+	if configAffectsReceiver(config, next) {
 		t.Fatal("logging must not restart the receiver")
 	}
 	if _, err := app.SaveSettings(next); err != nil {

@@ -7,7 +7,7 @@ Push-Location $root
 try {
     & node --test .\site\tests\demo.test.mjs
     if ($LASTEXITCODE -ne 0) {
-        throw "Website checks failed. Rebuild the shared app preview with npm --prefix frontend run build:site-preview, then rerun the checks."
+        throw "Website checks failed. Regenerate app screenshots on Windows with npm --prefix frontend run build:site-preview, then rerun the checks."
     }
     $changes = & git status --porcelain -- site frontend
     if ($LASTEXITCODE -ne 0 -or $changes) { throw "Commit the website and shared frontend changes before publishing." }

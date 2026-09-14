@@ -43,7 +43,7 @@ func executableRuntimeImports(binary string) ([]string, error) {
 }
 
 func TestRuntimeImportAuditReadsRealExecutable(t *testing.T) {
-	if !selfContainedReceiver {
+	if !nativeReceiverAvailable {
 		t.Skip("the real import audit runs with the native Windows build and binutils")
 	}
 	binary, err := os.Executable()

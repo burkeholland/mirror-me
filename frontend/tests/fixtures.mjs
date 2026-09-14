@@ -22,6 +22,7 @@ export function snapshotFixture(status) {
   const connected = ['connecting', 'mirroring', 'paused'].includes(status);
   return {
     status,
+    backend: 'native',
     deviceName: connected ? 'Preview iPhone' : '',
     deviceModel: connected ? 'Preview device' : '',
     connectedAt: status === 'mirroring' ? new Date(Date.now() - 67000).toISOString() : null,

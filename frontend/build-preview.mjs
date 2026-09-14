@@ -1,30 +1,17 @@
-import { build } from 'vite';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { join, relative, resolve, sep } from 'node:path';
+import { copyFile, readdir, readFile, writeFile } from 'node:fs/promises';
+import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const frontend = fileURLToPath(new URL('.', import.meta.url));
-const destination = resolve(frontend, '..', 'site', 'preview');
-const result = await build({
-  configFile: false,
-  root: join(frontend, 'preview'),
-  base: './',
-  build: {
-    target: 'es2022',
-    outDir: destination,
-    emptyOutDir: true,
-    modulePreload: false,
-    minify: true,
-  },
+const destination = resolve(frontend, '..', 'site', 'assets');
+const review = resolve(frontend, '..', 'build', 'ui-review');
+const result = spawnSync(process.execPath, [join(frontend, 'tests', 'browser-review.mjs'), review], {
+  cwd: frontend, stdio: 'inherit',
 });
-const modules = Object.keys(result.output.filter(item => item.type === 'chunk')
-  .reduce((all, chunk) => Object.assign(all, chunk.modules), {}));
-for (const name of ['main.js', 'render.js', 'events.js', 'state.js', 'style.css']) {
-  if (!modules.some(id => id.replaceAll('\\', '/').endsWith(`/src/${name}`))) {
-    throw new Error(`The website preview did not bundle the desktop app's ${name}.`);
-  }
-}
+if (result.error) throw result.error;
+if (result.status !== 0) throw new Error(`Screenshot generation failed (${result.status ?? result.signal}).`);
 
 async function sourceFiles(folder) {
   const entries = await readdir(join(frontend, folder), { withFileTypes: true });
@@ -32,16 +19,22 @@ async function sourceFiles(folder) {
     ? sourceFiles(join(folder, entry.name)) : join(folder, entry.name)))).flat();
 }
 const sources = {};
-for (const path of [...await sourceFiles('src'), ...await sourceFiles('preview'), ...await sourceFiles('wailsjs'), 'build-preview.mjs', 'package.json', 'package-lock.json']) {
+for (const path of [
+  ...await sourceFiles('src'), ...await sourceFiles('wailsjs'),
+  'tests/browser-review.mjs', 'tests/preview.html', 'tests/preview.mjs', 'tests/fixtures.mjs',
+  'build-preview.mjs', 'package.json', 'package-lock.json',
+]) {
   const content = (await readFile(join(frontend, path), 'utf8')).replaceAll('\r\n', '\n');
   sources[path.split(sep).join('/')] = createHash('sha256').update(content).digest('hex');
 }
 const assets = {};
-for (const item of result.output) {
-  assets[item.fileName] = createHash('sha256').update(await readFile(join(destination, item.fileName))).digest('hex');
+for (const theme of ['light', 'dark']) {
+  const name = `app-${theme}.png`;
+  await copyFile(join(review, `website-${theme}.png`), join(destination, name));
+  assets[name] = createHash('sha256').update(await readFile(join(destination, name))).digest('hex');
 }
-await writeFile(join(destination, 'source-manifest.json'), JSON.stringify({
-  description: 'Built from the desktop frontend; only native calls are replaced with in-memory example behavior.',
+await writeFile(join(destination, 'app-screenshots.json'), JSON.stringify({
+  description: 'Static screenshots of the desktop frontend, rendered with example data in Edge.',
   sources, assets,
 }, null, 2) + '\n');
-console.log(`Shared app preview generated in ${relative(frontend, destination)}.`);
+console.log('Static app screenshots generated in site\\assets; no interactive app is shipped to the website.');

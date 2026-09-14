@@ -12,7 +12,6 @@ func TestTrayStatusLabelsAndScreenAvailability(t *testing.T) {
 	}{
 		{StatusStopped, "", "MirrorMe - stopped", "Start receiving", false},
 		{StatusStarting, "", "MirrorMe - starting…", "Stop receiving", false},
-		{StatusNeedsSetup, "", "MirrorMe - setup required", "Stop receiving", false},
 		{StatusAdvertising, "", "MirrorMe - ready for a device", "Stop receiving", false},
 		{StatusConnecting, "", "MirrorMe - connecting…", "Stop receiving", false},
 		{StatusMirroring, "", "MirrorMe - mirroring", "Stop mirroring", true},
@@ -35,7 +34,6 @@ func TestTrayStatusLabelsAndScreenAvailability(t *testing.T) {
 
 func TestTrayCanStopPausedMirroring(t *testing.T) {
 	engine, _ := newTestEngine()
-	engine.builtin = true
 	engine.status = StatusPaused
 	app := &App{engine: engine}
 	if app.ShowMirroredScreen() {

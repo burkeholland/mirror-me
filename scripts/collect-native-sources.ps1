@@ -50,7 +50,6 @@ function Get-Pinned([string]$file, [string]$url, [string]$expected) {
         (Join-Path $downloads $file),
         (Join-Path $output "discovery\$file"),
         (Join-Path $repo "build\native\downloads\$file"),
-        (Join-Path $repo "build\receiver\downloads\$file"),
         (Join-Path $repo "build\native-audio\$file")
     )
     foreach ($candidate in $candidates) {

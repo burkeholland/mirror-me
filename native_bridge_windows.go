@@ -1,4 +1,4 @@
-//go:build windows && amd64 && !legacy_receiver
+//go:build windows && amd64 && !native_contracts
 
 package main
 
@@ -18,7 +18,7 @@ import (
 	"unsafe"
 )
 
-const selfContainedReceiver = true
+const nativeReceiverAvailable = true
 
 type linkedNativeReceiver struct {
 	receiver *C.mm_receiver

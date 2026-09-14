@@ -17,7 +17,6 @@ export const MAX_PC_NAME_BYTES = 50;
 const STATUS_META = {
   stopped: { icon: 'monitor', tone: 'neutral', title: 'Ready when you are', label: 'Not receiving' },
   starting: { icon: 'loader', tone: 'info', title: 'Getting your PC ready', label: 'Starting', spin: true },
-  'needs-setup': { icon: 'shield', tone: 'warning', title: 'One quick Windows setup', label: 'Setup needed' },
   advertising: { icon: 'wifi', tone: 'success', title: 'Ready for your iPhone', label: 'Ready to connect' },
   connecting: { icon: 'loader', tone: 'info', title: 'Your iPhone is connecting', label: 'Connecting', spin: true },
   mirroring: { icon: 'monitor-play', tone: 'success', title: "You're mirroring", label: 'Mirroring' },

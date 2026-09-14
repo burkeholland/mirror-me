@@ -1,0 +1,32 @@
+{
+  "description": "Static screenshots of the desktop frontend, rendered with example data in Edge.",
+  "sources": {
+    "src/assets/mark.svg": "85852086ac6dfb7c04e672fd887aef867a7bf63c5b37bac65522b30772cb5b6b",
+    "src/events.js": "4c3d5e9e3109ed5f3020b8cac451d53d2b46e94e8bf7f49b6708a1f62f9f0d3a",
+    "src/format.js": "260d838c703bb8378b506e7cbbb54e8bc6ac197214d4eb9bc38b8f965d071a1c",
+    "src/icons.js": "6c136e7aa7509dbaa51fb24b55be84f3b896f1e027b51da0b27a67a7bb1b1e13",
+    "src/main.js": "4ab301181f6ad8d67d6b7429ede70ecc87c33d77ae375c7d32d6094850b7501d",
+    "src/render.js": "d397fc5baf1576eb7e7fd2d298b5e911364c940858cd7f121c1f0d08cef8800f",
+    "src/state.js": "e96377969a3fa08c13d3496755069afe20b06f1a779bfa5a3a41b40fe604f997",
+    "src/style.css": "b34f827c9b65fd41990b1353d0c5914195860e8c2065bf9098fc14f9658cba32",
+    "src/theme.js": "13158b592466fd7af532033dde1ae836f9aa6b534b54fe7cd2ce16749083866c",
+    "src/vendor/postrboard.css": "d5e7a983b3b35413223b6eebc564c79fd7d50e8e693c13b9d7e22eabeccacade",
+    "wailsjs/go/main/App.d.ts": "5603c5b423cd250fad07520949a207dfdf61b7e52392bc4c32953bc690ae3f5b",
+    "wailsjs/go/main/App.js": "43e8b4ac9352689424e12d428caaf22836a4a0f8d6f78a9678b0f36adbf3591a",
+    "wailsjs/go/models.ts": "33ef8aa0dc083b11b4229251bb2e7e3fa6d7212b8fe3ae4bbf553eef660e1231",
+    "wailsjs/runtime/package.json": "e17998421ed0ff615d8c538fa2d99a0dc46ff974e915a513a6e4f1ac47450d92",
+    "wailsjs/runtime/runtime.d.ts": "8f4ec03cac22770b665b4071a652fa952a81846c852dd557c4806fea0e4aaa69",
+    "wailsjs/runtime/runtime.js": "e25fe86d3c590de724b93e008f7637c809e54cfa76bdeff8afaf44ed89aeab0d",
+    "tests/browser-review.mjs": "f6a3de569fafeecc5640c6cb36acc9a608000dfffb95e86057a5f896c466dab6",
+    "tests/preview.html": "fae86a498073f91a3a5e21d1e46efd5feeeba314b9b334484a474de4da60bb58",
+    "tests/preview.mjs": "85c43a9bed61ff50daeb5b27c74c5215b42e8dd7ad25166db7f1c3f063258fe0",
+    "tests/fixtures.mjs": "d33dfcbbda0627c9b12b2ab7e67e52e588cb2845e5c26a42ac947b0870caf847",
+    "build-preview.mjs": "67c5bd0c1f2e1b276c79a1b38d81645d87de7cf88e35d085ac552f17ce2e68a9",
+    "package.json": "97726835869aad78f6d72ad04ed38d164962afc873b9c4888767846f1ba4b56e",
+    "package-lock.json": "7f80730938c312fe9bd4cb8bef6c4ae305dea441f95c443d68e70dba84314429"
+  },
+  "assets": {
+    "app-light.png": "441d16348a7e2fab1ca38adeeb76f9c6a9a6528a7180fc9b88d6a25a651ceec3",
+    "app-dark.png": "bb738c0d3e39cd8d0186b22820da9f836fb2b753a6635bb6353db03b942f971f"
+  }
+}

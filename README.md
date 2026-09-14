@@ -11,27 +11,20 @@ and a settings experience that feels at home next to the rest of Windows.
 **Preview status:** unsigned Windows x64 software, not an app-store release.
 Local discovery and real video decoding/display have been checked, but the
 [physical-iPhone checklist](#real-iphone-release-checklist) is still open.
-The website demonstration is a simulation, not a device test.
+The website shows static screenshots with example data, not a device test.
 
 [Explore the app interface](https://burkeholland.github.io/mirror-me/) |
-[Download the Windows preview](https://github.com/burkeholland/mirror-me/releases/download/v0.1.0-preview.1/MirrorMe-windows-x64.zip)
+[Build from source](#getting-started)
 
 The current **0.2.3 source build** has a built-in receiver. It uses Windows
 media and discovery APIs and statically linked protocol/audio libraries:
 no UxPlay executable, GStreamer bundle, Bonjour installation, or receiver
 download is needed. It is not a clean-room AirPlay implementation.
 
-**The public download is still the earlier 0.1.0 preview, not this rewrite.**
-For that older download, extract the **entire ZIP**, open `MirrorMe.exe`, and choose **Download receiver
-files** when prompted. This one-time, 113 MB download comes directly from the
-upstream UxPlay Windows project. MirrorMe checks its pinned SHA-256 and decodes
-a generated test frame before installing it in your local application cache.
-Setup also checks the production video-timestamp path with synchronization
-enabled, including a buffered first frame.
-The standalone UxPlay desktop app is excluded. Internet is needed for this
-setup; mirroring itself stays on your local network. Windows may warn about
-the unsigned application; verify the release checksum and source before
-choosing whether to run it.
+**No Windows download is currently published.** The external-receiver preview
+and its release assets have been removed. Build the self-contained app from
+source using the instructions below. A new binary release must include its
+matching corresponding-source and license package.
 
 ## Features in the current source build
 
@@ -94,8 +87,7 @@ choosing whether to run it.
 - **Windows 11** (or Windows 10 with the [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) installed — present by default on Windows 11).
 - Your iPhone and this PC on the **same local network**. The PC can use
   Wi-Fi or Ethernet.
-- The current native source build needs no internet connection at runtime.
-  The older public preview still needs its first receiver download.
+- The application needs no internet connection at runtime.
 - Windows N/KN editions may need Microsoft's Media Feature Pack. Optional
   HEVC support depends on an installed Windows decoder.
 
@@ -140,11 +132,9 @@ Use the script after native changes: ordinary Go caching does not track
 external static archive contents. See `native\INTEGRATION.txt` and
 `native\AUDIO-NOTICES.txt` for component builds and retained source licenses.
 
-The old backend is isolated behind the explicit `legacy_receiver` build tag.
-`build-receiver.ps1`, `copy-engine.ps1`, and `package-release.ps1` are legacy
-tools, not the packaging route for the new single-executable application.
-Do not publish a native binary without its matching corresponding-source
-and license package.
+There is no external receiver fallback, runtime downloader, or service
+installer. Do not publish a native binary without its matching
+corresponding-source and license package.
 
 `collect-native-sources.ps1` collects pinned native sources, exact MSYS2
 recipes/patches, and compiler-runtime notices into `build\native-sources\bundle`.
@@ -252,22 +242,28 @@ mirror-me/
 ├── app.go, config.go, engine*.go, security.go, ...   Go backend (Wails-bound App, settings, engine supervisor)
 ├── main.go                                            Entry point / window configuration
 ├── native/                                            Built-in Windows receiver, media, audio, tests and dependency pins
-├── receiver/                                          Legacy receiver and retained pinned protocol source checkout
+├── receiver/                                          Shared icon/video fixture and pinned protocol source checkout
 ├── frontend/src/                                      Vanilla JS/HTML/CSS UI (style.css, state.js, render.js, events.js, main.js)
 ├── build/                                             Wails build assets (icons, Windows manifest)
-├── scripts/                                            Build helper scripts (engine packaging, icon generation)
+├── scripts/                                            Native/app builds, source collection and icon generation
 └── wails.json                                          Wails project configuration
 ```
 
 ## Testing
 
-The Go suite covers settings, arguments, status parsing, and real Windows
+The Go suite covers settings, worker commands/events, and real Windows
 child-process startup, timeout, cancellation, failure, and cleanup:
 
 ```powershell
 go vet ./...
 go test -race ./...
 ```
+
+For Windows CI without the native SDK, `go test -tags native_contracts ./...`
+and `go vet -tags native_contracts ./...` exercise the same supervisor and
+worker contracts with test fixtures. That tag supplies an explicit
+unavailable-native stub, not a different receiver, and cannot produce a
+working application. Production verification still requires the native build.
 
 Frontend regressions cover onboarding, cancellation, delayed video, staged
 settings, pairing codes, theme handling, accessibility markup, and races
@@ -293,19 +289,14 @@ frontend bundle.
 
 ### Website app preview
 
-The landing page embeds the **same frontend entry point, styles, and controls**
-as the Windows app. `frontend\preview\bridge.mjs` replaces only the Wails/native
-boundary with in-memory example settings and an already-connected example
-iPhone. Video is shown in a separate window representation, matching the
-desktop architecture. This is not live AirPlay or remote control of a phone.
+The landing page shows static light/dark screenshots of the real desktop
+frontend beside an example image. It does not embed a running app, simulate
+connections, or expose interactive Settings. Only the page's theme switch and
+links are interactive. Both windows stay side by side at widths of 768 pixels
+and above; below that, only the app screenshot is shown at full width.
 
-The preview can save/revert example settings, show dialogs, change themes,
-and simulate window and connection actions. Clipboard, Windows folders,
-external app links, and runtime installation report that they are unavailable
-instead of pretending to change the computer. Nothing is persisted between
-page loads; no camera, microphone, screen-capture, or receiver access occurs.
-
-Rebuild after changing the frontend, then check the generated site:
+Regenerate screenshots on Windows with Edge after changing the frontend, then
+check the generated site:
 
 ```powershell
 npm --prefix frontend run build:site-preview
@@ -313,12 +304,14 @@ node --test .\site\tests\demo.test.mjs
 node .\site\tests\browser-review.mjs
 ```
 
-The separate Vite build writes `site\preview`; it does not modify the native
-app's `frontend\dist` bundle. A source/asset hash manifest and automated checks
-prevent the committed preview from silently drifting away from the app.
-Browser checks cover both windows at desktop/mobile sizes, immediate
-interactivity, actual Settings drafts and dialogs, keyboard controls, themes,
-reduced motion, and browser-only behavior. Screenshots go to `build\site-review`.
+The screenshot builder runs the existing frontend browser checks using example
+data, then writes two PNGs and `app-screenshots.json` into `site\assets`.
+It does not modify the native app's `frontend\dist` bundle. The manifest ties
+the screenshots to their source and asset hashes. Website browser checks cover
+desktop/mobile layouts, static content, image loading, keyboard navigation,
+themes, reduced motion, and use without JavaScript. Review images go to
+`build\site-review`. The executable size shown describes the current source
+build, not an available public download.
 
 Commit the source and generated assets together. `scripts\publish-site.ps1`
 checks freshness and publishes the committed `site` subtree to `gh-pages`
@@ -352,42 +345,6 @@ These include real H.264 window pixels, landscape/portrait 4K, real AAC-ELD
 and ALAC audio, and barriers preventing old frames from reviving ended
 sessions. They do not establish physical-device interoperability.
 
-### Legacy receiver checks
-
-The older backend also retains its timestamp/decoder regressions:
-
-```powershell
-.\engine\mirrorme-receiver.exe --media-self-test
-.\engine\mirrorme-receiver.exe --media-self-test-software
-# Exercise the real timestamp callback, with synchronization enabled:
-.\engine\mirrorme-receiver.exe --media-self-test-timing
-.\engine\mirrorme-receiver.exe --media-self-test-timing-negative
-.\engine\mirrorme-receiver.exe --media-self-test-timing-on-time
-# Opens a temporary real Windows video window, without a network receiver:
-.\engine\mirrorme-receiver.exe --media-self-test-window
-.\engine\mirrorme-receiver.exe --media-self-test-timing-window
-# An intentionally broken pipeline must exit nonzero and report its error:
-.\engine\mirrorme-receiver.exe --media-self-test-invalid
-```
-
-The no-window checks must not emit the streaming marker, even after their
-test sink processes decoded frames. The window check must report rendered
-video and the correct native title/icons, not merely a selected codec or
-PLAYING pipeline. `build-receiver.ps1 -TestVideoWindow` includes both real
-window checks; its normal offline suite includes the timestamp regressions.
-
-The timestamp regression reproduces a confirmed startup defect: a buffered
-first frame caused the phone-to-PC clock offset to be applied twice on retry,
-potentially scheduling video far into the future while audio played. The
-callback now converts the original timestamp once per attempt and preserves
-the incoming packet. This does not disable synchronization or force a
-different decoder or graphics backend.
-
-To verify the complete first-run download in a fresh temporary cache:
-`$env:MIRRORME_RUNTIME_TEST='1'; go test -run '^TestRuntimeOfficialDownloadAndDecoder$' -count=1 -v`.
-This downloads the pinned 113 MB archive from GitHub; normal unit tests
-use local test servers and do not download it.
-
 ### Real-iPhone release checklist
 
 These items require a physical device and are not implied by a passing UI
@@ -414,17 +371,6 @@ and broad device reliability are not established by generated-frame checks.
 - [ ] Exercise sleep/wake and a network interruption, and confirm recovery.
 - [ ] Quit MirrorMe and confirm that its receiver and discovery records stop.
 
-For an opt-in **legacy** local integration check, stop other receiver instances and
-run the following from the project root. This starts the actual bundled
-receiver, confirms AirPlay and RAOP service discovery through Bonjour, and
-stops it again without changing saved settings:
-
-```powershell
-$env:MIRRORME_LIVE_TEST = '1'
-go test -tags legacy_receiver -run '^TestReceiverLiveStartupAndDiscovery$' -count=1 -v
-Remove-Item Env:MIRRORME_LIVE_TEST
-```
-
 ## Troubleshooting
 
 - **My iPhone can't find this PC.** Confirm both devices are on the same
@@ -432,10 +378,6 @@ Remove-Item Env:MIRRORME_LIVE_TEST
   that receiving is started (Mirror shows **Ready for your iPhone**,
   not **Not receiving**). Corporate/public Wi-Fi networks that isolate clients from
   each other will also block AirPlay discovery.
-- **An older preview keeps asking for Bonjour.** The native source build does
-  not need Bonjour. For the older public preview, make sure you approve the UAC prompt
-  that appears after **Allow discovery** — if it's dismissed or times out,
-  select **Allow discovery** again.
 - **My iPhone stays on Connecting.** Stop Screen Mirroring on the phone,
   choose **Try again** in MirrorMe, then select this PC again on the phone.
   Enable **Verbose logging** in **Settings > App > Troubleshooting** before
@@ -449,15 +391,9 @@ Remove-Item Env:MIRRORME_LIVE_TEST
   Mirroring menu and check the status on the Mirror screen. The native build
   distinguishes accepted packets from actually displayed frames and reports
   decoder/display failures explicitly. Protected video may not support mirroring.
-- **The older preview's receiver download fails.** Keep an internet connection for setup,
-  cancel and retry. Failed hashes, incomplete ZIPs, and failed decoder checks
-  are not installed. Runtime files are cached under
-  `%LOCALAPPDATA%\MirrorMe\receiver`; settings remain in `%APPDATA%`.
 - **The receiver times out.** Read the error on Home and try again. Allow
   MirrorMe through Windows Firewall on your trusted private network;
   do not disable the firewall.
-- **An old uxplay-windows icon is still present.** Quit the standalone
-  `uxplay-windows` application. Current MirrorMe builds never launch it.
 - **Video is choppy or audio is out of sync.** Try lowering the resolution
   or frame rate in Settings, or move closer to your Wi-Fi router.
 - **Where are my settings stored?** `%APPDATA%\MirrorMe\settings.json` —
@@ -478,8 +414,6 @@ redistributing this app.
 - [UxPlay](https://github.com/FDH2/UxPlay) — upstream AirPlay compatibility work.
 - [leapbtw/libuxplay](https://github.com/leapbtw/libuxplay) — the
   pinned source of retained low-level protocol compatibility code.
-- [leapbtw/uxplay-windows](https://github.com/leapbtw/uxplay-windows) — the
-  source of the older public preview's multimedia runtime and Bonjour installer.
 - [FFmpeg](https://ffmpeg.org) — statically linked audio decoders in the native build.
 - [Wails](https://wails.io) — the Go + web application framework MirrorMe is
   built on.

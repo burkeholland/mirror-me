@@ -51,9 +51,7 @@ function Invoke-MergedProbe([string]$program, [string]$directory) {
     } finally { $process.Dispose() }
 }
 function Verified-Archive($package) {
-    $cached = Join-Path $root "build\receiver\downloads\$($package.file)"
     $destination = Join-Path $build "downloads\$($package.file)"
-    if (Test-Path -LiteralPath $cached) { $destination = $cached }
     if (-not (Test-Path -LiteralPath $destination)) {
         Invoke-WebRequest -UseBasicParsing -Uri "$($lock.packageBaseUrl)/$($package.file)" -OutFile "$destination.part"
         if ((Get-FileHash "$destination.part" -Algorithm SHA256).Hash -ne $package.sha256) {
