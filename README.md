@@ -17,6 +17,8 @@ The website shows static screenshots with example data, not a device test.
 [Download the Windows preview](https://github.com/burkeholland/mirror-me/releases/download/v0.2.3-preview.1/MirrorMe-0.2.3-windows-x64.zip) |
 [Matching source and checksums](https://github.com/burkeholland/mirror-me/releases/tag/v0.2.3-preview.1)
 
+[Privacy notice](PRIVACY.md)
+
 The current **0.2.3 source build** has a built-in receiver. It uses Windows
 media and discovery APIs and statically linked protocol/audio libraries:
 no UxPlay executable, GStreamer bundle, Bonjour installation, or receiver
@@ -139,6 +141,22 @@ external static archive contents. See `native\INTEGRATION.txt` and
 There is no external receiver fallback, runtime downloader, or service
 installer. Do not publish a native binary without its matching
 corresponding-source and license package.
+
+### WinGet packaging
+
+The manifests in `packaging\winget\manifests\b\BurkeHolland\MirrorMe\0.2.3`
+describe the existing unsigned preview ZIP, not a new application build.
+They preserve its license files and declare the WebView2 runtime dependency.
+The WinGet version matches the executable's `0.2.3` version; its GitHub release
+tag is `v0.2.3-preview.1`. Inclusion in this repository does not mean Microsoft
+has accepted the package into its catalog.
+
+Validate the manifests with `winget validate --manifest <manifest-directory>`.
+Local installation testing requires enabling WinGet's `LocalManifestFiles`
+administrator setting; restore its original setting after testing.
+Use `scripts\test-app-lifecycle.ps1 -Executable <exe-path> -TestDirectory <new-directory>`
+to exercise first-run and receiver-running launch/Quit cycles in separate
+AppData profiles. This is not a physical-iPhone compatibility test.
 
 `collect-native-sources.ps1` collects pinned native sources, exact MSYS2
 recipes/patches, and compiler-runtime notices into `build\native-sources\bundle`.

@@ -6,6 +6,7 @@
 /build/site-review/
 /build/releases/
 /build/release-stage/
+/build/winget-*/
 /engine/
 /receiver/vendor/
 /receiver/libuxplay.bundle
