@@ -50,6 +50,14 @@ test('website notices preserve the complete frontend license texts without retir
   assert.doesNotMatch(notices + appNotices, /legacy-download|Legacy preview|receiver.runtime\.json|build-receiver\.ps1/);
 });
 
+test('the website exposes the application privacy notice', async () => {
+  assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/blob\/main\/PRIVACY\.md">Privacy<\/a>/);
+  const privacy = await readFile(new URL('../../PRIVACY.md', import.meta.url), 'utf8');
+  assert.match(privacy, /Verbose logging is off by default/);
+  assert.match(privacy, /optional\s+pairing PIN/);
+  assert.match(privacy, /does not automatically send these files/);
+});
+
 test('static app screenshots match the current frontend sources', async () => {
   const assetsRoot = new URL('../assets/', import.meta.url);
   const manifest = JSON.parse(await readFile(new URL('app-screenshots.json', assetsRoot), 'utf8'));
