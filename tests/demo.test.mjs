@@ -30,8 +30,8 @@ test('the landing page is concise and excludes the removed section and runtime n
 
 test('the page links the self-contained preview and its sources without retired downloads', () => {
   assert.match(html, /17\.9 MB executable\.<\/strong> Built-in receiver\./);
-  assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/releases\/download\/v0\.2\.3-preview\.1\/MirrorMe-0\.2\.3-windows-x64\.zip"/);
-  assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/releases\/tag\/v0\.2\.3-preview\.1"/);
+  assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/releases\/download\/v0\.2\.4-preview\.1\/MirrorMe-0\.2\.4-windows-x64\.zip"/);
+  assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/releases\/tag\/v0\.2\.4-preview\.1"/);
   assert.match(html, /Source, licenses &amp; checksums/);
   assert.doesNotMatch(html, /Windows download not yet available|v0\.1\.0|separate receiver setup/);
   assert.match(html, /Unsigned/);
