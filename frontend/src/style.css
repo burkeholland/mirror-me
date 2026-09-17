@@ -181,7 +181,7 @@ label.setting-row:hover { background: color-mix(in srgb, var(--bg) 55%, transpar
 .setting-control .input { width: 100%; font-size: 13px; }
 .input { font-size: 14px; border-color: var(--border); border-bottom-color: var(--input-border); padding-inline: var(--space-3); }
 .input:focus { border-bottom-color: var(--accent-surface); }
-.input.select { padding-right: var(--space-6); background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px; background-size: 5px 5px, 5px 5px; }
+.input.select { padding-block: 0; padding-right: var(--space-6); background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px; background-size: 5px 5px, 5px 5px; }
 .switch { position: relative; display: inline-flex; flex-shrink: 0; padding: var(--space-2) 0; }
 .switch-track { display: block; width: 40px; height: 20px; border-radius: var(--radius-pill); background: transparent; }
 .switch-track::after { top: 3px; left: 3px; width: 12px; height: 12px; background: var(--text-muted); box-shadow: none; }

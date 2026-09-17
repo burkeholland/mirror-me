@@ -14,21 +14,21 @@ Local discovery and real video decoding/display have been checked, but the
 The website shows static screenshots with example data, not a device test.
 
 [Explore the app interface](https://burkeholland.github.io/mirror-me/) |
-[Download the Windows preview](https://github.com/burkeholland/mirror-me/releases/download/v0.2.3-preview.1/MirrorMe-0.2.3-windows-x64.zip) |
-[Matching source and checksums](https://github.com/burkeholland/mirror-me/releases/tag/v0.2.3-preview.1)
+[Download the Windows preview](https://github.com/burkeholland/mirror-me/releases/download/v0.2.4-preview.1/MirrorMe-0.2.4-windows-x64.zip) |
+[Matching source and checksums](https://github.com/burkeholland/mirror-me/releases/tag/v0.2.4-preview.1)
 
 [Privacy notice](PRIVACY.md)
 
-The current **0.2.3 source build** has a built-in receiver. It uses Windows
+The current **0.2.4 source build** has a built-in receiver. It uses Windows
 media and discovery APIs and statically linked protocol/audio libraries:
 no UxPlay executable, GStreamer bundle, Bonjour installation, or receiver
 download is needed. It is not a clean-room AirPlay implementation.
 
-**The public 0.2.3 preview is self-contained.** Extract the Windows ZIP and
+**The public 0.2.4 preview is self-contained.** Extract the Windows ZIP and
 open `MirrorMe.exe`. It is unsigned, so Windows may show an unknown-publisher
 warning. Compare `SHA256SUMS.txt` on the release page before running it.
 The same release includes the full license notices and
-`MirrorMe-0.2.3-source.zip`, with the frozen application source, matching
+`MirrorMe-0.2.4-source.zip`, with the frozen application source, matching
 dependency sources, build recipes and a verified `REBUILD.ps1`.
 The old external-receiver preview remains retired.
 
@@ -144,11 +144,11 @@ corresponding-source and license package.
 
 ### WinGet packaging
 
-The manifests in `packaging\winget\manifests\b\BurkeHolland\MirrorMe\0.2.3`
-describe the existing unsigned preview ZIP, not a new application build.
+The manifests under `packaging\winget\manifests\b\BurkeHolland\MirrorMe\<version>`
+describe a published unsigned preview ZIP; they do not build the application.
 They preserve its license files and declare the WebView2 runtime dependency.
-The WinGet version matches the executable's `0.2.3` version; its GitHub release
-tag is `v0.2.3-preview.1`. Inclusion in this repository does not mean Microsoft
+Each WinGet version matches the executable version. GitHub release tags use
+`v<version>-preview.1`. Inclusion in this repository does not mean Microsoft
 has accepted the package into its catalog.
 
 Validate the manifests with `winget validate --manifest <manifest-directory>`.

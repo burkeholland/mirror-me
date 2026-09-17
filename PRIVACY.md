@@ -1,7 +1,7 @@
 # MirrorMe privacy notice
 
 Effective September 15, 2026. This notice describes the native-receiver
-Windows preview, including version 0.2.3.
+Windows preview, versions 0.2.3 and later.
 
 ## Screen and audio
 

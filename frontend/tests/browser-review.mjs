@@ -144,12 +144,17 @@ try {
         const bounds = element.getBoundingClientRect();
         return bounds.left < -1 || bounds.right > innerWidth + 1;
       }).map(element => element.id || element.className);
+    const clippedSelects = [...document.querySelectorAll('select')].filter(visible).filter(select => {
+      const style = getComputedStyle(select);
+      const contentHeight = select.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      return contentHeight < parseFloat(style.fontSize) * 1.2;
+    }).map(select => select.id);
     return {
       width: innerWidth, height: innerHeight,
       pageOverflow: document.documentElement.scrollWidth > innerWidth,
       shellOverflow: document.querySelector('.shell').scrollWidth > document.querySelector('.shell').clientWidth,
       duplicateIds: ids.filter((id, index) => ids.indexOf(id) !== index),
-      invalidReferences, overflow,
+      invalidReferences, overflow, clippedSelects,
       heading: document.querySelector('#page-title')?.textContent,
       mode: document.documentElement.dataset.mode,
     };
@@ -159,6 +164,7 @@ try {
     assert.equal(result.pageOverflow, false, `${name}: page overflow`);
     assert.equal(result.shellOverflow, false, `${name}: content overflow`);
     assert.deepEqual(result.overflow, [], `${name}: clipped controls`);
+    assert.deepEqual(result.clippedSelects, [], `${name}: clipped select text`);
     assert.deepEqual(result.duplicateIds, [], `${name}: duplicate IDs`);
     assert.deepEqual(result.invalidReferences, [], `${name}: broken accessible references`);
     assert.deepEqual(errors, [], `${name}: browser exceptions`);

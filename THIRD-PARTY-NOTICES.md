@@ -78,7 +78,7 @@ versions and package license metadata are pinned in
 dependency's original notices when packaging a build; the short table is not
 a substitute for the full transitive notice set.
 
-The public 0.2.3 preview was compiled with Go 1.26.2. Its matching source ZIP
+The public 0.2.4 preview was compiled with Go 1.26.2. Its matching source ZIP
 includes that Go release's official source archive, the original source ZIPs
 for the complete Go module graph, and the exact Lucide package plus its
 preferred upstream source. Full native, Go and frontend license texts are
