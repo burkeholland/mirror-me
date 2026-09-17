@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 PackageIdentifier: BurkeHolland.MirrorMe
-PackageVersion: 0.2.3
+PackageVersion: 0.2.4
 PackageLocale: en-US
 Publisher: Burke Holland
 PublisherUrl: https://github.com/burkeholland
@@ -26,16 +26,17 @@ Tags:
 - mirroring
 - screen-mirroring
 ReleaseNotes: |-
-  Native-receiver preview 0.2.3 (GitHub tag v0.2.3-preview.1).
+  Native-receiver preview 0.2.4 (GitHub tag v0.2.4-preview.1).
+  Fixes clipped text in Settings dropdowns.
   Includes local discovery, a separate mirrored-screen window, audio playback, and opt-in local diagnostic logging.
   Known limitation: Quit has occasionally left the control process running after the receiver stops.
   Quit MirrorMe before upgrading or uninstalling. If it remains running, end its process in Task Manager first.
   Broad physical-device compatibility testing is still in progress.
-ReleaseNotesUrl: https://github.com/burkeholland/mirror-me/releases/tag/v0.2.3-preview.1
+ReleaseNotesUrl: https://github.com/burkeholland/mirror-me/releases/tag/v0.2.4-preview.1
 Documentations:
 - DocumentLabel: Connection guide
   DocumentUrl: https://github.com/burkeholland/mirror-me#using-mirrorme
 - DocumentLabel: Corresponding source, licenses, and checksums
-  DocumentUrl: https://github.com/burkeholland/mirror-me/releases/tag/v0.2.3-preview.1
+  DocumentUrl: https://github.com/burkeholland/mirror-me/releases/tag/v0.2.4-preview.1
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0
