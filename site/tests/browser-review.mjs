@@ -132,6 +132,8 @@ try {
     assert.match(data.text, /Source, licenses & checksums/);
     assert.equal(await evaluate("document.querySelector('.download').getAttribute('href')"),
       'https://github.com/burkeholland/mirror-me/releases/download/v0.2.4-preview.1/MirrorMe-0.2.4-windows-x64.zip');
+    assert.equal(await evaluate("document.querySelector('.store-download').getAttribute('href')"),
+      'https://apps.microsoft.com/detail/9p13s05nfnvz');
     assert.doesNotMatch(data.text, /Older v0\.1\.0|Download Windows preview|separate receiver setup/);
     assert.equal(data.motion, 'none');
     if (data.width >= 768) {
