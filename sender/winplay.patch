@@ -415,3 +415,55 @@ index 5ede0c5..77888f3 100644
      [Fact]
      public void VideoHeader_LayoutMatchesProtocol()
      {
+diff --git a/tests/WinPlay.Core.Tests/ReceiverPairingTests.cs b/tests/WinPlay.Core.Tests/ReceiverPairingTests.cs
+new file mode 100644
+index 0000000..3ec3953
+--- /dev/null
++++ b/tests/WinPlay.Core.Tests/ReceiverPairingTests.cs
+@@ -0,0 +1,46 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++using System.Net;
++using System.Net.Sockets;
++using System.Text;
++using WinPlay.Core.Hap;
++using WinPlay.Core.Rtsp;
++using Xunit;
++
++namespace WinPlay.Core.Tests;
++
++public class ReceiverPairingTests
++{
++    [Fact]
++    public async Task BeginAsync_UsesAirPlayHttpPairingHeaders()
++    {
++        using var listener = new TcpListener(IPAddress.Loopback, 0);
++        listener.Start();
++        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
++        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
++
++        Task begin = ReceiverPairing.BeginAsync(IPAddress.Loopback, port, timeout.Token);
++        using TcpClient receiver = await listener.AcceptTcpClientAsync(timeout.Token);
++        NetworkStream stream = receiver.GetStream();
++        var request = new List<byte>();
++        byte[] buffer = new byte[256];
++        while (!Encoding.ASCII.GetString(request.ToArray()).Contains("\r\n\r\n", StringComparison.Ordinal))
++        {
++            int read = await stream.ReadAsync(buffer, timeout.Token);
++            request.AddRange(buffer.AsSpan(0, read).ToArray());
++        }
++
++        byte[] forbidden = Encoding.ASCII.GetBytes(
++            "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
++        await stream.WriteAsync(forbidden, timeout.Token);
++        await Assert.ThrowsAsync<RtspException>(() => begin);
++
++        string wire = Encoding.ASCII.GetString(request.ToArray());
++        Assert.StartsWith("POST /pair-pin-start HTTP/1.1\r\n", wire);
++        Assert.Contains("User-Agent: AirPlay/320.20\r\n", wire);
++        Assert.Contains("Connection: keep-alive\r\n", wire);
++        Assert.Contains("Content-Type: application/octet-stream\r\n", wire);
++        Assert.Contains("X-Apple-HKP: 4\r\n", wire);
++        Assert.DoesNotContain("CSeq:", wire);
++        Assert.DoesNotContain("DACP-ID:", wire);
++    }
++}
