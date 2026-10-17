@@ -20,13 +20,14 @@ import (
 const castStopGracePeriod = 2 * time.Second
 
 type CastTarget struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Model     string `json:"model"`
-	Address   string `json:"address"`
-	Port      int    `json:"port"`
-	CanMirror bool   `json:"canMirror"`
-	Reason    string `json:"reason"`
+	ID                       string `json:"id"`
+	Name                     string `json:"name"`
+	Model                    string `json:"model"`
+	Address                  string `json:"address"`
+	Port                     int    `json:"port"`
+	CanMirror                bool   `json:"canMirror"`
+	SupportsTransientPairing bool   `json:"supportsTransientPairing"`
+	Reason                   string `json:"reason"`
 }
 
 type CastSnapshot struct {

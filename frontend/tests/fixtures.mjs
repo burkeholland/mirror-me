@@ -31,8 +31,8 @@ export function snapshotFixture(status) {
 }
 
 export const castTargetsFixture = [
-  { id: 'AABBCCDDEEFF', name: 'Living Room TV', model: 'AppleTV11,1', address: '192.168.1.40', port: 7000, canMirror: true, reason: '' },
-  { id: '112233445566', name: 'Kitchen speaker', model: 'AudioAccessory5,1', address: '192.168.1.41', port: 7000, canMirror: false, reason: 'Audio-only device' },
+  { id: 'AABBCCDDEEFF', name: 'Living Room TV', model: 'AppleTV11,1', address: '192.168.1.40', port: 7000, canMirror: true, supportsTransientPairing: true, reason: '' },
+  { id: '112233445566', name: 'Kitchen speaker', model: 'AudioAccessory5,1', address: '192.168.1.41', port: 7000, canMirror: false, supportsTransientPairing: true, reason: 'Audio-only device' },
 ];
 
 export function castSnapshotFixture(status = 'stopped', revision = 0) {

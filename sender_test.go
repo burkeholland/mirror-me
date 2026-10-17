@@ -13,7 +13,7 @@ import (
 
 func testCastTarget() CastTarget {
 	return CastTarget{ID: "AABBCCDDEEFF", Name: "Living Room", Model: "AppleTV11,1",
-		Address: "192.168.1.20", Port: 7000, CanMirror: true}
+		Address: "192.168.1.20", Port: 7000, CanMirror: true, SupportsTransientPairing: true}
 }
 
 func testDesktopSender() *DesktopSender {
@@ -44,6 +44,9 @@ func TestCastSnapshotsDoNotShareMutableTargets(t *testing.T) {
 	snapshot.Target.Name = "modified"
 	if s.Snapshot().Targets[0].Name != target.Name || s.Snapshot().Target.Name != target.Name {
 		t.Fatal("snapshot exposed mutable sender state")
+	}
+	if !s.Snapshot().Targets[0].SupportsTransientPairing {
+		t.Fatal("snapshot dropped the discovered pairing capability")
 	}
 }
 

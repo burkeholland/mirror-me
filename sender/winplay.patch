@@ -78,10 +78,53 @@ index a264439..a752ed2 100644
          }
          finally
          {
+diff --git a/src/WinPlay.Core/Hap/ReceiverPairing.cs b/src/WinPlay.Core/Hap/ReceiverPairing.cs
+index a87a524..0efcb16 100644
+--- a/src/WinPlay.Core/Hap/ReceiverPairing.cs
++++ b/src/WinPlay.Core/Hap/ReceiverPairing.cs
+@@ -5,8 +5,9 @@ using WinPlay.Core.Rtsp;
+ namespace WinPlay.Core.Hap;
+ 
+ /// <summary>Thrown when a receiver requires PIN pairing before it accepts a session.</summary>
+-public sealed class PairingRequiredException(string receiver)
+-    : Exception($"{receiver} requires PIN pairing (Connection Authorization) — pair once, credentials are then stored");
++public sealed class PairingRequiredException(string receiver, Exception? innerException = null)
++    : Exception($"{receiver} requires PIN pairing (Connection Authorization) — pair once, credentials are then stored",
++        innerException);
+ 
+ /// <summary>
+ /// Standalone PIN-pairing flow against a receiver: opens its own RTSP connection,
+@@ -38,9 +39,15 @@ public static class ReceiverPairing
+             {
+                 Method = "POST",
+                 Uri = endpoint,
++                Protocol = "HTTP/1.1",
+                 Body = body.Length > 0 ? body : null,
+-                ContentType = body.Length > 0 ? "application/octet-stream" : null,
+-                Headers = { ["X-Apple-HKP"] = "3" },
++                Headers =
++                {
++                    ["Connection"] = "keep-alive",
++                    ["Content-Type"] = "application/octet-stream",
++                    ["User-Agent"] = "AirPlay/320.20",
++                    ["X-Apple-HKP"] = "4",
++                },
+             }, ct).ConfigureAwait(false);
+             resp.EnsureSuccess($"POST {endpoint}");
+             return resp.Body;
 diff --git a/src/WinPlay.Core/Mirror/MirrorSession.cs b/src/WinPlay.Core/Mirror/MirrorSession.cs
-index bf6685d..e194886 100644
+index bf6685d..a3167e3 100644
 --- a/src/WinPlay.Core/Mirror/MirrorSession.cs
 +++ b/src/WinPlay.Core/Mirror/MirrorSession.cs
+@@ -15,7 +15,7 @@ namespace WinPlay.Core.Mirror;
+ 
+ /// <summary>
+ /// AirPlay 2 screen-mirroring session to an Apple TV / AirPlay-2 TV (plan §3.7). Flow:
+-/// GET /info → pair-verify (stored credentials) → encrypted RTSP → FairPlay SAP
++/// GET /info → transient pair-setup or pair-verify (stored credentials) → encrypted RTSP → FairPlay SAP
+ /// (/fp-setup, yields ekey/eiv) → SETUP audio (type 96, creates the session) → SETUP
+ /// video (type 110) → connect the TCP data channel → RECORD → NTP timing responder +
+ /// H.264 frames (128-byte header, ChaCha20-Poly1305). Video is keyed by HKDF-SHA512
 @@ -60,8 +60,8 @@ public sealed class MirrorSession : IAsyncDisposable
      private ulong _audioNonceCounter;
  
@@ -102,7 +145,55 @@ index bf6685d..e194886 100644
  
      public long FramesSent => Interlocked.Read(ref _framesSent);
      public string RtspSessionUri => $"rtsp://{_rtsp.RemoteAddress}/{_sessionId}";
-@@ -163,7 +165,7 @@ public sealed class MirrorSession : IAsyncDisposable
+@@ -91,7 +93,7 @@ public sealed class MirrorSession : IAsyncDisposable
+     /// perfectly in lock-step, in one session on one clock.
+     /// </param>
+     public static async Task<MirrorSession> ConnectAsync(IPAddress address, int port,
+-        HapPairingCredentials credentials, Action<string>? stageChanged = null,
++        HapPairingCredentials? credentials, Action<string>? stageChanged = null,
+         CancellationToken ct = default, bool withAudio = true)
+     {
+         var s = new MirrorSession(withAudio);
+@@ -108,7 +110,7 @@ public sealed class MirrorSession : IAsyncDisposable
+         }
+     }
+ 
+-    private async Task HandshakeAsync(IPAddress address, int port, HapPairingCredentials credentials, CancellationToken ct)
++    private async Task HandshakeAsync(IPAddress address, int port, HapPairingCredentials? credentials, CancellationToken ct)
+     {
+         Stage($"connecting to {address}:{port}");
+         await _rtsp.ConnectAsync(address, port, ct).ConfigureAwait(false);
+@@ -120,8 +122,27 @@ public sealed class MirrorSession : IAsyncDisposable
+         Stage($"receiver: {infoDict.GetValueOrDefault("name")} ({infoDict.GetValueOrDefault("model")})"
+             + (_receiverDisplayW > 0 ? $", display {_receiverDisplayW}x{_receiverDisplayH}" : ", display size not advertised"));
+ 
+-        Stage("pair-verify (stored credentials)");
+-        _hap = await HapVerifiedPairing.PairVerifyAsync(ReceiverPairing.MakePost(_rtsp), credentials, ct).ConfigureAwait(false);
++        if (credentials is not null)
++        {
++            Stage("pair-verify (stored credentials)");
++            _hap = await HapVerifiedPairing.PairVerifyAsync(
++                ReceiverPairing.MakePost(_rtsp), credentials, ct).ConfigureAwait(false);
++        }
++        else
++        {
++            Stage("transient pair-setup");
++            try
++            {
++                var post = ReceiverPairing.MakePost(_rtsp);
++                await post("/pair-pin-start", [], ct).ConfigureAwait(false);
++                _hap = await HapTransientPairing.PairAsync(
++                    (tlv, token) => post("/pair-setup", tlv, token), ct).ConfigureAwait(false);
++            }
++            catch (RtspException ex) when (ex.StatusCode is 401 or 403 or 470)
++            {
++                throw new PairingRequiredException($"{address}", ex);
++            }
++        }
+         _rtsp.EnableEncryption(new ChannelCrypto(_hap.ControlWriteKey, _hap.ControlReadKey));
+ 
+         Stage("FairPlay SAP handshake (/fp-setup)");
+@@ -163,7 +184,7 @@ public sealed class MirrorSession : IAsyncDisposable
              ["osVersion"] = "10.0",
              ["osBuildVersion"] = "13F69",
              ["model"] = "WinPlay1,1",
@@ -111,7 +202,7 @@ index bf6685d..e194886 100644
              ["isScreenMirroringSession"] = true,
              ["et"] = 32L,
              ["ekey"] = _fairplay.Ekey,
-@@ -441,28 +443,21 @@ public sealed class MirrorSession : IAsyncDisposable
+@@ -441,28 +462,21 @@ public sealed class MirrorSession : IAsyncDisposable
              byte[] header = MirrorVideoStream.BuildVideoHeader(payload.Length + 16, isKeyframe, _clock.FrameTimestamp);
              byte[] encrypted = _videoCipher!.Seal(header, payload);
              SendPacket(header, encrypted);
@@ -144,7 +235,7 @@ index bf6685d..e194886 100644
      }
  
      /// <summary>Drains the send queue to the TCP data channel, off the encoder thread.</summary>
-@@ -474,12 +469,13 @@ public sealed class MirrorSession : IAsyncDisposable
+@@ -474,12 +488,13 @@ public sealed class MirrorSession : IAsyncDisposable
              {
                  if (_dataStream is null) continue;
                  await _dataStream.WriteAsync(packet, ct).ConfigureAwait(false);
@@ -159,7 +250,7 @@ index bf6685d..e194886 100644
          }
      }
  
-@@ -505,7 +501,7 @@ public sealed class MirrorSession : IAsyncDisposable
+@@ -505,7 +520,7 @@ public sealed class MirrorSession : IAsyncDisposable
                  while (!_cts.IsCancellationRequested)
                  {
                      int n = await stream.ReadAsync(buf, _cts.Token).ConfigureAwait(false);
@@ -168,7 +259,7 @@ index bf6685d..e194886 100644
                      raw.Write(buf, 0, n);
                      try
                      {
-@@ -538,7 +534,7 @@ public sealed class MirrorSession : IAsyncDisposable
+@@ -538,7 +553,7 @@ public sealed class MirrorSession : IAsyncDisposable
              catch (OperationCanceledException) { }
              catch (Exception ex) when (ex is SocketException or IOException or ObjectDisposedException)
              {
@@ -177,7 +268,7 @@ index bf6685d..e194886 100644
              }
          }));
      }
-@@ -617,6 +613,7 @@ public sealed class MirrorSession : IAsyncDisposable
+@@ -617,6 +632,7 @@ public sealed class MirrorSession : IAsyncDisposable
              }
              catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or OperationCanceledException)
              {
@@ -185,7 +276,7 @@ index bf6685d..e194886 100644
                  return;
              }
          }
-@@ -630,11 +627,14 @@ public sealed class MirrorSession : IAsyncDisposable
+@@ -630,11 +646,14 @@ public sealed class MirrorSession : IAsyncDisposable
              catch (OperationCanceledException) { return; }
              try
              {
@@ -215,6 +306,44 @@ index 41bcade..24b957e 100644
          BinaryPrimitives.WriteUInt64LittleEndian(nonce[4..], _nonceCounter++);
  
          byte[] output = new byte[plaintext.Length + 16];
+diff --git a/src/WinPlay.Core/Rtsp/RtspConnection.cs b/src/WinPlay.Core/Rtsp/RtspConnection.cs
+index ef2ba7e..d0d8695 100644
+--- a/src/WinPlay.Core/Rtsp/RtspConnection.cs
++++ b/src/WinPlay.Core/Rtsp/RtspConnection.cs
+@@ -11,6 +11,7 @@ public sealed class RtspRequest
+ {
+     public required string Method { get; init; }
+     public required string Uri { get; init; }
++    public string Protocol { get; init; } = "RTSP/1.0";
+     public Dictionary<string, string> Headers { get; } = [];
+     public byte[]? Body { get; init; }
+     public string? ContentType { get; init; }
+@@ -101,13 +102,18 @@ public sealed class RtspConnection : IDisposable
+     private byte[] BuildWire(RtspRequest request)
+     {
+         var sb = new StringBuilder();
+-        sb.Append(request.Method).Append(' ').Append(request.Uri).Append(" RTSP/1.0\r\n");
+-        sb.Append("CSeq: ").Append(++_cseq).Append("\r\n");
+-        sb.Append("User-Agent: AirPlay/550.10\r\n");
+-        sb.Append("DACP-ID: ").Append(_dacpId).Append("\r\n");
+-        sb.Append("Active-Remote: ").Append(_activeRemote).Append("\r\n");
+-        sb.Append("Client-Instance: ").Append(_clientInstance).Append("\r\n");
+-        sb.Append("X-Apple-Client-Name: ").Append(ClientName).Append("\r\n");
++        sb.Append(request.Method).Append(' ').Append(request.Uri).Append(' ')
++            .Append(request.Protocol).Append("\r\n");
++        if (request.Protocol == "RTSP/1.0")
++        {
++            sb.Append("CSeq: ").Append(++_cseq).Append("\r\n");
++            if (!request.Headers.ContainsKey("User-Agent"))
++                sb.Append("User-Agent: AirPlay/550.10\r\n");
++            sb.Append("DACP-ID: ").Append(_dacpId).Append("\r\n");
++            sb.Append("Active-Remote: ").Append(_activeRemote).Append("\r\n");
++            sb.Append("Client-Instance: ").Append(_clientInstance).Append("\r\n");
++            sb.Append("X-Apple-Client-Name: ").Append(ClientName).Append("\r\n");
++        }
+         foreach (var (k, v) in request.Headers)
+             sb.Append(k).Append(": ").Append(v).Append("\r\n");
+         if (request.Body is { Length: > 0 })
 diff --git a/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs b/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs
 index 5ede0c5..77888f3 100644
 --- a/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs

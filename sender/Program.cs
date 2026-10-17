@@ -14,7 +14,8 @@ using WinPlay.Core.Mirror;
 
 namespace MirrorMe.Sender;
 
-internal sealed record Target(string Id, string Name, string Model, string Address, int Port, bool CanMirror, string Reason);
+internal sealed record Target(string Id, string Name, string Model, string Address, int Port, bool CanMirror,
+    bool SupportsTransientPairing, string Reason);
 internal sealed record Command(int Protocol, string CommandName, Target? Target, string? Pin);
 
 internal static class Program
@@ -135,6 +136,7 @@ internal static class Program
                 bool compatible = d.device.IsMirroringCandidate && d.device.AirPlayPort is > 0 and <= 65535;
                 return new Target(d.device.DeviceId, d.device.Name, d.device.Model ?? "AirPlay",
                     d.address!.ToString(), d.device.AirPlayPort ?? d.device.RaopPort ?? 0, compatible,
+                    d.device.Features.HasFlag(AirPlayFeatures.SupportsTransientPairing),
                     compatible ? "" : "Audio-only or no screen-mirroring service advertised.");
             }).ToArray();
         Emit("ready", targets);
@@ -151,25 +153,7 @@ internal static class Program
             || !IPAddress.TryParse(target.Address, out var address) || !IsUsableAddress(address))
             throw new InvalidDataException("Select a discovered screen-mirroring target.");
 
-        var credentials = LoadCredentials(target.Id);
-        if (credentials is null)
-        {
-            using var beginTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            beginTimeout.CancelAfter(TimeSpan.FromSeconds(20));
-            using var pairing = await ReceiverPairing.BeginAsync(address, target.Port, beginTimeout.Token);
-            Emit("pairing");
-            string pin = await pins.ReadAsync(ct).AsTask().WaitAsync(TimeSpan.FromMinutes(2), ct);
-            using var finishTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            finishTimeout.CancelAfter(TimeSpan.FromSeconds(20));
-            credentials = await pairing.FinishAsync(pin, finishTimeout.Token);
-            SaveCredentials(target.Id, credentials);
-        }
-
-        Emit("connecting");
-        using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        connectTimeout.CancelAfter(TimeSpan.FromSeconds(25));
-        await using var session = await MirrorSession.ConnectAsync(address, target.Port, credentials,
-            ct: connectTimeout.Token, withAudio: false);
+        await using var session = await ConnectAsync(target, address, pins, ct);
         var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var source = new ScreenMirrorSource(fps: 30);
         source.Failed += ex => failed.TrySetException(ex);
@@ -196,6 +180,61 @@ internal static class Program
             if (progress.Elapsed > TimeSpan.FromSeconds(12))
                 throw new IOException("No video reached the AirPlay data channel for 12 seconds. Check the display and network, then reconnect.");
         }
+    }
+
+    private static async Task<MirrorSession> ConnectAsync(Target target, IPAddress address,
+        ChannelReader<string> pins, CancellationToken ct)
+    {
+        var credentials = LoadCredentials(target.Id);
+        if (credentials is null && !target.SupportsTransientPairing)
+            credentials = await PairAsync(target, address, pins, ct);
+
+        Emit("connecting");
+        try
+        {
+            return await OpenSessionAsync(address, target.Port, credentials, ct);
+        }
+        catch (PairingRequiredException transientError) when (credentials is null)
+        {
+            try
+            {
+                credentials = await PairAsync(target, address, pins, ct);
+            }
+            catch (Exception pinError)
+            {
+                throw new InvalidOperationException(
+                    $"Transient pairing failed: {transientError.InnerException?.Message ?? transientError.Message}; " +
+                    $"PIN pairing failed: {pinError.Message}. On a Mac, open System Settings > General > " +
+                    "AirDrop & Handoff > AirPlay Receiver and set Allow AirPlay for to Anyone on the Same Network.",
+                    pinError);
+            }
+            Emit("connecting");
+            return await OpenSessionAsync(address, target.Port, credentials, ct);
+        }
+    }
+
+    private static async Task<MirrorSession> OpenSessionAsync(IPAddress address, int port,
+        HapPairingCredentials? credentials, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(25));
+        return await MirrorSession.ConnectAsync(address, port, credentials,
+            ct: timeout.Token, withAudio: false);
+    }
+
+    private static async Task<HapPairingCredentials> PairAsync(Target target, IPAddress address,
+        ChannelReader<string> pins, CancellationToken ct)
+    {
+        using var beginTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        beginTimeout.CancelAfter(TimeSpan.FromSeconds(20));
+        using var pairing = await ReceiverPairing.BeginAsync(address, target.Port, beginTimeout.Token);
+        Emit("pairing");
+        string pin = await pins.ReadAsync(ct).AsTask().WaitAsync(TimeSpan.FromMinutes(2), ct);
+        using var finishTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        finishTimeout.CancelAfter(TimeSpan.FromSeconds(20));
+        var credentials = await pairing.FinishAsync(pin, finishTimeout.Token);
+        SaveCredentials(target.Id, credentials);
+        return credentials;
     }
 
     private static string CredentialPath(string id) => Path.Combine(

@@ -6,6 +6,7 @@ export namespace main {
 	    address: string;
 	    port: number;
 	    canMirror: boolean;
+	    supportsTransientPairing: boolean;
 	    reason: string;
 	}
 
