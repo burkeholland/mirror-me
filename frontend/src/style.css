@@ -286,8 +286,13 @@ kbd { min-width: 24px; padding: 2px 6px; border: 1px solid var(--border); border
 .empty-screen h1 { font-size: 22px; }
 .empty-screen p { max-width: 420px; font-size: 13px; color: var(--text-muted); overflow-wrap: anywhere; }
 .empty-screen > .icon { width: 28px; height: 28px; color: var(--accent-text); }
-.spin { animation: spin 1.4s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.spin {
+  animation: spinner-rotate 1s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform;
+}
+@keyframes spinner-rotate { to { transform: rotate(360deg); } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 940px) {
@@ -355,6 +360,7 @@ kbd { min-width: 24px; padding: 2px 6px; border: 1px solid var(--border); border
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .spin { animation: spinner-rotate 1s linear infinite !important; }
   .btn:active:not(:disabled) { transform: none; }
 }
 

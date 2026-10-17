@@ -10,20 +10,20 @@ same stack as [burkeholland/resize-me](https://github.com/burkeholland/resize-me
 with a fluent, WinUI-3-style interface, a system tray icon, dark/light theming,
 and a settings experience that feels at home next to the rest of Windows.
 
-**Preview status:** unsigned Windows x64 software, not an app-store release.
-Local discovery and real video decoding/display have been checked, but the
-[physical-iPhone checklist](#real-iphone-release-checklist) is still open.
-The website shows static screenshots with example data, not a device test.
-Desktop casting is a new **source-build preview**, not part of the linked
-0.2.4 download. Windows capture and physical Apple TV playback still require
-the [sender device checklist](sender/README.md#build); compilation and simulated
-UI tests are not a claim of target compatibility.
+**Preview status:** the linked 0.2.4 download remains an unsigned Windows x64
+preview. The current source build adds desktop casting and is being prepared
+for the next Microsoft Store update. Desktop discovery, pairing, Windows screen
+capture, and sustained video delivery have been verified against a physical
+Mac AirPlay receiver. The [physical-iPhone checklist](#real-iphone-release-checklist)
+for receiving still remains open.
 
 [Explore the app interface](https://burkeholland.github.io/mirror-me/) |
 [Download the Windows preview](https://github.com/burkeholland/mirror-me/releases/download/v0.2.4-preview.1/MirrorMe-0.2.4-windows-x64.zip) |
 [Matching source and checksums](https://github.com/burkeholland/mirror-me/releases/tag/v0.2.4-preview.1)
 
 [Privacy notice](PRIVACY.md)
+
+![MirrorMe discovering AirPlay targets for desktop casting](store-assets/screenshots/desktop-casting-discovery.png)
 
 The current **0.2.4 source build** has a built-in receiver. It uses Windows
 media and discovery APIs and statically linked protocol/audio libraries:
@@ -40,12 +40,13 @@ The old external-receiver preview remains retired.
 
 ## Features in the current source build
 
-- **Cast desktop (preview)** — discover local AirPlay targets, select a display,
+- **Cast desktop** — discover local AirPlay targets, select a display,
   and explicitly share your primary Windows screen. Apple TV PIN pairing is
   supported, with credentials encrypted for your Windows account. Sharing has
   its own status, cancellation, and tray Stop action, independent of receiving.
   This initial sender is video-only at 30 fps; audio-only targets are listed but
   cannot be selected. It uses a bundled, self-contained WinPlay-based helper.
+  The app explains the exact AirPlay Receiver settings when a Mac rejects access.
 - **Wireless AirPlay mirroring** — your iPhone finds MirrorMe over your local
   Wi-Fi network exactly like it finds an Apple TV; no pairing app or cable
   required.
@@ -223,7 +224,7 @@ window, start/stop mirroring, jump to Settings or About, or quit for good.
    to end capture. Closing the window continues sharing in the tray. Sharing
    never starts on launch or automatically reconnects after a failure.
 
-This preview sends primary-display SDR video at 30 fps without desktop audio.
+Desktop casting sends primary-display SDR video at 30 fps without desktop audio.
 It does not create an extended desktop or support selecting another monitor,
 rotated displays, protected video, IPv6-only discovery, fixed AirPlay passwords,
 or every legacy/vendor pairing protocol. If saved pairing is rejected, stop
@@ -233,8 +234,8 @@ target results older than one minute before starting a new session.
 The receiving controls and settings continue to apply only to iPhone receiving.
 The sender does not restart when those settings change. A streaming indicator
 means video has been written to the target's data channel, not confirmation that
-the TV rendered it. See the [sender checklist](sender/README.md) for remaining
-physical-device verification.
+the target rendered it. Physical Mac playback has been verified; broader Apple
+TV and third-party receiver compatibility can still vary.
 
 ### Settings reference
 

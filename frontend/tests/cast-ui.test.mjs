@@ -72,6 +72,14 @@ test('discovery animates both loading indicators', () => {
   assert.match(result, /class="cast-empty"[\s\S]*class="icon spin"/);
 });
 
+test('source summary avoids a redundant destination illustration', () => {
+  const source = html().match(/<section class="cast-source"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.match(source, /Your primary display/);
+  assert.match(source, /class="cast-source-icon"/);
+  assert.equal((source.match(/class="icon /g) || []).length, 1);
+  assert.equal((source.match(/class="cast-source-icon"/g) || []).length, 1);
+});
+
 test('audio-only devices remain visible but cannot be selected', () => {
   selectCastTarget(state.cast.targets[1].id, noop);
   assert.equal(state.castSelected, '');

@@ -153,7 +153,6 @@ function renderCast() {
       <div class="cast-source-icon">${icon('monitor')}</div>
       <div><h2 id="cast-source-title">Your primary display</h2>
         <p>Live screen &middot; 30 fps &middot; No desktop audio</p></div>
-      ${icon('arrow-right')}<div class="cast-source-icon">${icon('cast')}</div>
     </section>
     <p class="cast-privacy">${icon('shield')}Your entire primary display, including notifications, will be visible on the target. Sharing starts only after you select Share primary display. Use a trusted network.</p>
     ${active ? `<section class="cast-session" aria-labelledby="cast-session-title">
