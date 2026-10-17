@@ -11,12 +11,14 @@ using WinPlay.Core.Discovery;
 using WinPlay.Core.Hap;
 using WinPlay.Core.Mdns;
 using WinPlay.Core.Mirror;
+using WinPlay.Core.Rtsp;
 
 namespace MirrorMe.Sender;
 
 internal sealed record Target(string Id, string Name, string Model, string Address, int Port, bool CanMirror,
     bool SupportsTransientPairing, string Reason);
 internal sealed record Command(int Protocol, string CommandName, Target? Target, string? Pin);
+internal sealed class AirPlayAccessException(string message) : Exception(message);
 
 internal static class Program
 {
@@ -67,6 +69,11 @@ internal static class Program
         {
             Emit("stopped");
             return 0;
+        }
+        catch (AirPlayAccessException ex)
+        {
+            Emit("error", error: ex.Message);
+            return 1;
         }
         catch (Exception ex)
         {
@@ -202,16 +209,29 @@ internal static class Program
             }
             catch (Exception pinError)
             {
+                if (IsMac(target.Model) && IsForbidden(transientError) && IsForbidden(pinError))
+                {
+                    throw new AirPlayAccessException(
+                        $"{target.Name} is not accepting AirPlay connections from this PC. On the Mac, open " +
+                        "System Settings > General > AirDrop & Handoff > AirPlay Receiver. Set Allow AirPlay for " +
+                        "to Anyone on the Same Network, turn off Require Password, then turn AirPlay Receiver " +
+                        "off and back on.");
+                }
                 throw new InvalidOperationException(
                     $"Transient pairing failed: {transientError.InnerException?.Message ?? transientError.Message}; " +
-                    $"PIN pairing failed: {pinError.Message}. On a Mac, open System Settings > General > " +
-                    "AirDrop & Handoff > AirPlay Receiver and set Allow AirPlay for to Anyone on the Same Network.",
-                    pinError);
+                    $"PIN pairing failed: {pinError.Message}", pinError);
             }
             Emit("connecting");
             return await OpenSessionAsync(address, target.Port, credentials, ct);
         }
     }
+
+    private static bool IsMac(string model) =>
+        model.StartsWith("Mac", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsForbidden(Exception? error) =>
+        error is RtspException { StatusCode: 403 } ||
+        error?.InnerException is not null && IsForbidden(error.InnerException);
 
     private static async Task<MirrorSession> OpenSessionAsync(IPAddress address, int port,
         HapPairingCredentials? credentials, CancellationToken ct)

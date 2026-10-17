@@ -65,6 +65,13 @@ test('discovery and target selection do not capture; sharing is explicit', async
   assert.deepEqual(calls.at(-1), ['start', 'AABBCCDDEEFF']);
 });
 
+test('discovery animates both loading indicators', () => {
+  state.cast.status = 'discovering';
+  const result = html();
+  assert.match(button('cast-discover'), /class="icon spin"/);
+  assert.match(result, /class="cast-empty"[\s\S]*class="icon spin"/);
+});
+
 test('audio-only devices remain visible but cannot be selected', () => {
   selectCastTarget(state.cast.targets[1].id, noop);
   assert.equal(state.castSelected, '');
@@ -134,6 +141,15 @@ test('network names and sender errors are escaped', () => {
   assert.doesNotMatch(result, /<img|<script/);
   assert.match(result, /&lt;img/);
   assert.match(result, /&lt;script/);
+});
+
+test('Mac AirPlay access errors show actionable receiver settings', () => {
+  state.cast.lastError = 'Burke’s MacBook Pro is not accepting AirPlay connections from this PC. On the Mac, open System Settings > General > AirDrop & Handoff > AirPlay Receiver. Set Allow AirPlay for to Anyone on the Same Network, turn off Require Password, then turn AirPlay Receiver off and back on.';
+  const result = html();
+  assert.match(result, /Anyone on the Same Network/);
+  assert.match(result, /turn off Require Password/);
+  assert.match(result, /turn AirPlay Receiver off and back on/);
+  assert.doesNotMatch(result, /POST \/pair-pin-start|403 Forbidden/);
 });
 
 test('discovery failure does not masquerade as success and can be retried', async () => {

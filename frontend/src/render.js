@@ -14,7 +14,7 @@ function button(action, label, options = {}) {
   const kind = options.primary ? 'primary' : options.quiet ? 'ghost' : 'secondary';
   return `<button type="button" class="btn btn-${kind}${options.small ? ' btn-sm' : ''}"
     id="${options.id || `action-${action}`}" data-action="${action}" ${options.disabled ? 'disabled' : ''}
-    ${options.attrs || ''}>${options.icon ? icon(options.icon) : ''}<span>${label}</span></button>`;
+    ${options.attrs || ''}>${options.icon ? icon(options.icon, options.spin ? 'spin' : '') : ''}<span>${label}</span></button>`;
 }
 
 function errorNotice() {
@@ -145,7 +145,9 @@ function renderCast() {
   const error = state.castError || cast.lastError;
   return `<div class="page cast-page">
     ${heading('Cast desktop', 'This PC to Apple TV or another AirPlay display.',
-      button('cast-discover', scanning ? 'Searching...' : 'Refresh', { icon: scanning ? 'loader' : 'refresh', disabled: blocked || !cast.available }))}
+      button('cast-discover', scanning ? 'Searching...' : 'Refresh', {
+        icon: scanning ? 'loader' : 'refresh', spin: scanning, disabled: blocked || !cast.available,
+      }))}
     ${error ? `<div class="notice notice-error" role="alert">${icon('alert')}<p>${escHtml(error)}</p></div>` : ''}
     <section class="cast-source" aria-labelledby="cast-source-title">
       <div class="cast-source-icon">${icon('monitor')}</div>
