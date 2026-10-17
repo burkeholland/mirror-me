@@ -2,8 +2,9 @@ import './vendor/postrboard.css';
 import './style.css';
 import {
   state, load, receiveEngineEvent, receiveSettingsUpdate, receiveLogWarning, navigate, tickConnection, syncWindowState,
+  receiveCastEvent,
 } from './state.js';
-import { renderApp, refreshToasts, refreshReceiverStatus, refreshWindowControls, refreshElapsed } from './render.js';
+import { renderApp, refreshToasts, refreshReceiverStatus, refreshWindowControls, refreshElapsed, refreshCastBanner } from './render.js';
 import { bindEvents, bindShortcuts } from './events.js';
 import { applyTheme } from './theme.js';
 import { EventsOn } from '../wailsjs/runtime/runtime';
@@ -15,6 +16,7 @@ export function render(options = {}) {
   if (options.transient) refreshToasts(app);
   else if (options.statusOnly) refreshReceiverStatus(app);
   else if (options.windowOnly) refreshWindowControls(app);
+  else if (options.castOnly) refreshCastBanner(app);
   else {
     applyTheme(selectedTheme(), Boolean(state.settings));
     renderApp(app);
@@ -28,6 +30,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 
 // Subscribe before the initial requests: live status always wins over a slow snapshot.
 EventsOn('engine-status', event => receiveEngineEvent(event, render));
+EventsOn('cast-status', snapshot => receiveCastEvent(snapshot, render));
 EventsOn('settings-updated', settings => receiveSettingsUpdate(settings, render));
 EventsOn('log-warning', message => receiveLogWarning(message, render));
 EventsOn('navigate', route => navigate(route, render));

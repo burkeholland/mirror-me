@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/dineshdhotrad/WinPlay.git",
+  "commit": "76c130aa7a61ae19f7d40f763ed2181136b83cc2",
+  "license": "GPL-3.0-or-later",
+  "patch": "winplay.patch"
+}

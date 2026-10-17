@@ -22,6 +22,7 @@ type App struct {
 	engine *Engine
 	tray   *SystemTray
 	logger *VerboseLogger
+	sender *DesktopSender
 
 	// startHidden is true when launched via the Run-key autostart entry
 	// (MirrorMe.exe --startup), so the window never flashes on login.
@@ -56,6 +57,7 @@ func NewApp(startHidden bool) *App {
 // startup is a Wails OnStartup hook.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.sender = newDesktopSender(a.handleCastEvent)
 	a.logger = newVerboseLogger(a.GetLogsFolder(), a.setLogWarning)
 	if err := a.logger.SetEnabled(a.currentConfig().VerboseLogging); err != nil {
 		a.setLogWarning(fmt.Sprintf("Verbose logging could not start: %v", err))
@@ -74,6 +76,11 @@ func (a *App) startup(ctx context.Context) {
 	a.tray.Show = a.ShowWindow
 	a.tray.ToggleMirroring = a.toggleMirroringFromTray
 	a.tray.ShowMirroredScreen = func() { a.ShowMirroredScreen() }
+	a.tray.StopDesktopCast = func() {
+		if err := a.StopDesktopCast(); err != nil {
+			a.tray.Notify("Desktop casting", err.Error())
+		}
+	}
 	a.tray.ShowSettings = a.ShowSettingsPage
 	a.tray.ShowAbout = a.ShowAboutPage
 	a.tray.Quit = a.Quit
@@ -123,6 +130,11 @@ func shouldStartReceiverOnLaunch(config Config) bool {
 
 // shutdown is a Wails OnShutdown hook.
 func (a *App) shutdown(ctx context.Context) {
+	if a.sender != nil {
+		if err := a.sender.Stop(); err != nil {
+			fmt.Fprintln(os.Stderr, "Stop desktop casting:", err)
+		}
+	}
 	if a.engine != nil {
 		_ = a.engine.Stop()
 	}
@@ -382,6 +394,11 @@ func (a *App) ShowAboutPage() {
 
 // Quit stops the engine and tray, then exits the application.
 func (a *App) Quit() {
+	if a.sender != nil {
+		if err := a.sender.Stop(); err != nil {
+			fmt.Fprintln(os.Stderr, "Stop desktop casting:", err)
+		}
+	}
 	if a.engine != nil {
 		_ = a.engine.Stop()
 	}
@@ -411,10 +428,17 @@ func (a *App) trayMenuState() TrayMenuState {
 	if snap.Status == StatusMirroring || snap.Status == StatusPaused {
 		label = "Stop mirroring"
 	}
+	cast := a.GetCastStatus()
+	casting := cast.Status == "connecting" || cast.Status == "pairing" || cast.Status == "streaming"
+	tooltip := trayTooltipFor(snap)
+	if casting {
+		tooltip = "MirrorMe - desktop sharing active"
+	}
 	return TrayMenuState{
-		Tooltip:                   trayTooltipFor(snap),
+		Tooltip:                   tooltip,
 		MirroringLabel:            label,
 		ShowMirroredScreenEnabled: snap.Status == StatusMirroring,
+		StopDesktopCastEnabled:    casting,
 	}
 }
 
@@ -466,7 +490,7 @@ func (a *App) handleEngineEvent(ev EngineEvent) {
 		wailsruntime.EventsEmit(a.ctx, "engine-status", ev)
 	}
 	if a.tray != nil {
-		a.tray.UpdateTooltip(trayTooltipFor(ev.Snapshot))
+		a.tray.UpdateTooltip(a.trayMenuState().Tooltip)
 	}
 	if ev.Snapshot.Status == StatusError {
 		a.ShowWindow()

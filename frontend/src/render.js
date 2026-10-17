@@ -14,7 +14,7 @@ function button(action, label, options = {}) {
   const kind = options.primary ? 'primary' : options.quiet ? 'ghost' : 'secondary';
   return `<button type="button" class="btn btn-${kind}${options.small ? ' btn-sm' : ''}"
     id="${options.id || `action-${action}`}" data-action="${action}" ${options.disabled ? 'disabled' : ''}
-    ${options.attrs || ''}>${options.icon ? icon(options.icon) : ''}<span>${label}</span></button>`;
+    ${options.attrs || ''}>${options.icon ? icon(options.icon, options.spin ? 'spin' : '') : ''}<span>${label}</span></button>`;
 }
 
 function errorNotice() {
@@ -50,6 +50,7 @@ export function renderApp(app) {
 
   app.innerHTML = `<div class="app-window">
     ${renderTitlebar()}
+    <div id="cast-banner">${castBanner()}</div>
     <div class="app-body">${state.settings ? renderNavigation() : ''}
       <main class="shell" id="main-content" data-page-key="${pageKey}">
         ${state.settings ? renderPage() : renderLoading()}
@@ -94,7 +95,7 @@ function renderNavigation() {
     ${state.route === route ? 'aria-current="page"' : ''} title="${name}${shortcut ? ` (${shortcut})` : ''}">
     ${icon(glyph)}<span>${name}</span>${route === 'settings' ? `<span class="draft-dot" data-draft-dot ${hasDraftChanges() ? '' : 'hidden'} aria-label="Unsaved changes"></span>` : ''}</button>`;
   return `<aside class="sidebar"><nav aria-label="Main navigation">
-    ${item('home', 'Mirror', 'cast')}${item('settings', 'Settings', 'settings', 'Ctrl+,')}
+    ${item('home', 'Mirror', 'cast')}${item('cast', 'Cast desktop', 'monitor-play')}${item('settings', 'Settings', 'settings', 'Ctrl+,')}
     <div class="nav-spacer"></div>${item('about', 'Help & about', 'help')}
   </nav><div class="receiver-indicator" role="status">
     <span class="status-dot" data-receiver-tone="${statusMeta(state.status.status).tone}" aria-hidden="true"></span>
@@ -110,10 +111,78 @@ function renderLoading() {
 }
 
 function renderPage() {
+  if (state.route === 'cast') return renderCast();
   if (state.route === 'settings') return renderSettings();
   if (state.route === 'about') return renderAbout();
   if (state.settings.firstRun) return renderOnboarding();
   return renderHome();
+}
+
+function castBanner() {
+  if (!['connecting', 'pairing', 'streaming', 'stopping'].includes(state.cast.status)
+    && !(state.cast.status === 'error' && state.cast.target)) return '';
+  const sharing = state.cast.status === 'streaming';
+  return `<div class="cast-banner" role="status">${icon('monitor-play')}
+    <span>${sharing ? 'Sharing your primary display' : state.cast.status === 'pairing' ? 'AirPlay pairing code needed' : state.cast.status === 'stopping' ? 'Stopping desktop sharing' : state.cast.status === 'error' ? 'Desktop sharing needs attention' : 'Connecting desktop sharing'}
+      ${state.cast.target ? ` &middot; ${escHtml(state.cast.target.name)}` : ''}
+      ${state.castError ? `<span class="field-caption">${escHtml(state.castError)}</span>` : ''}</span>
+    ${button('nav-cast', 'View', { id: 'cast-banner-view', quiet: true, small: true })}
+    ${button('cast-stop', 'Stop sharing', { id: 'cast-banner-stop', small: true, disabled: state.castAction === 'stop' || state.cast.status === 'stopping' })}</div>`;
+}
+
+export function refreshCastBanner(app) {
+  const banner = app.querySelector('#cast-banner');
+  if (banner) banner.innerHTML = castBanner();
+}
+
+function renderCast() {
+  const cast = state.cast;
+  const active = ['connecting', 'pairing', 'streaming', 'stopping'].includes(cast.status);
+  const scanning = cast.status === 'discovering' || state.castAction === 'discover';
+  const blocked = active || scanning || Boolean(state.castAction);
+  const selected = cast.targets.find(target => target.id === state.castSelected && target.canMirror);
+  const titles = { connecting: 'Connecting to your display', pairing: 'Enter the code on your TV', streaming: 'Your desktop is being shared', stopping: 'Stopping desktop sharing' };
+  const error = state.castError || cast.lastError;
+  return `<div class="page cast-page">
+    ${heading('Cast desktop', 'This PC to Apple TV or another AirPlay display.',
+      button('cast-discover', scanning ? 'Searching...' : 'Refresh', {
+        icon: scanning ? 'loader' : 'refresh', spin: scanning, disabled: blocked || !cast.available,
+      }))}
+    ${error ? `<div class="notice notice-error" role="alert">${icon('alert')}<p>${escHtml(error)}</p></div>` : ''}
+    <section class="cast-source" aria-labelledby="cast-source-title">
+      <div class="cast-source-icon">${icon('monitor')}</div>
+      <div><h2 id="cast-source-title">Your primary display</h2>
+        <p>Live screen &middot; 30 fps &middot; No desktop audio</p></div>
+    </section>
+    <p class="cast-privacy">${icon('shield')}Your entire primary display, including notifications, will be visible on the target. Sharing starts only after you select Share primary display. Use a trusted network.</p>
+    ${active ? `<section class="cast-session" aria-labelledby="cast-session-title">
+      <h2 id="cast-session-title" role="status">${titles[cast.status]}</h2>
+      <p>${escHtml(cast.target?.name || 'AirPlay display')}</p>
+      ${cast.status === 'pairing' ? `<form id="cast-pair-form">
+        <label for="cast-pin">Four-digit code shown on the AirPlay target</label>
+        <div class="button-row"><input class="input" id="cast-pin" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+          autocomplete="off" spellcheck="false" value="${escAttr(state.castPin)}" required ${state.castAction ? 'disabled' : ''}>
+          <button class="btn btn-primary" type="submit" id="cast-pair-submit" ${state.castAction ? 'disabled' : ''}>Pair and share</button></div>
+        <p class="field-caption">Pairing is saved securely for your Windows account. The code expires after two minutes.</p>
+      </form>` : `<p class="field-caption">${cast.status === 'streaming' ? 'Video is being sent to the target. Closing this window keeps sharing in the tray.' : 'Keep the target awake and allow the AirPlay connection if prompted.'}</p>`}
+      ${button('cast-stop', cast.status === 'streaming' ? 'Stop sharing' : 'Cancel', { disabled: state.castAction === 'stop' || cast.status === 'stopping', icon: 'square' })}
+    </section>` : `<section class="cast-targets" aria-labelledby="cast-targets-title">
+      <h2 id="cast-targets-title">AirPlay targets</h2>
+      ${scanning ? `<div class="cast-empty" role="status">${icon('loader', 'spin')}<p>Looking for AirPlay devices on your local network...</p>${button('cast-stop', 'Cancel', { disabled: state.castAction === 'stop' })}</div>`
+        : cast.targets.length ? `<div class="cast-target-list">${cast.targets.map((target, index) => `<button type="button"
+          class="cast-target${target.id === state.castSelected ? ' is-selected' : ''}" id="cast-target-${index}" data-action="cast-select"
+          data-target-id="${escAttr(target.id)}" aria-pressed="${target.id === state.castSelected}" ${!target.canMirror || blocked ? 'disabled' : ''}>
+          ${icon(target.canMirror ? 'cast' : 'volume')}<span><strong>${escHtml(target.name)}</strong>
+          <span class="field-caption">${escHtml(target.model)} &middot; ${escHtml(target.canMirror ? target.address : target.reason)}</span></span>
+          ${target.id === state.castSelected ? icon('check') : ''}</button>`).join('')}</div>`
+        : `<div class="cast-empty" role="status">${icon('wifi')}<p>${cast.available ? 'No AirPlay targets found. Wake your Apple TV, enable AirPlay, and check that both devices are on the same network.' : 'Desktop casting is unavailable in this build.'}</p></div>`}
+      <div class="connection-actions">
+        ${button('cast-start', 'Share primary display', { primary: true, icon: 'monitor-play', disabled: !selected || blocked || !cast.available })}
+        ${selected ? button('cast-forget', 'Forget pairing', { quiet: true, disabled: blocked }) : ''}
+      </div>
+    </section>`}
+    <p class="settings-note">Preview: Windows 11 22H2 or later, with a Direct3D 11 display adapter. Audio-only devices cannot mirror a screen. Target compatibility varies; protected video and rotated displays are not supported. If connecting fails, stop sharing, select the target, and use Forget pairing before trying again.</p>
+  </div>`;
 }
 
 function deviceScene() {

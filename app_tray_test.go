@@ -39,8 +39,27 @@ func TestTrayCanStopPausedMirroring(t *testing.T) {
 	if app.ShowMirroredScreen() {
 		t.Fatal("paused mirroring offered a video window")
 	}
+
 	app.toggleMirroringFromTray()
 	if engine.IsRunning() || app.GetStatus().Status != StatusStopped {
 		t.Fatal("the tray did not stop a paused session")
+	}
+}
+
+func TestTrayDesktopStopIsIndependentOfReceiving(t *testing.T) {
+	engine, _ := newTestEngine()
+	engine.status = StatusMirroring
+	sender := testDesktopSender()
+	app := &App{engine: engine, sender: sender}
+	for _, status := range []string{"connecting", "pairing", "streaming", "stopped", "error"} {
+		sender.snapshot.Status = status
+		menu := app.trayMenuState()
+		active := status == "connecting" || status == "pairing" || status == "streaming"
+		if menu.StopDesktopCastEnabled != active || menu.MirroringLabel != "Stop mirroring" || !menu.ShowMirroredScreenEnabled {
+			t.Fatalf("casting changed receiver controls: %+v", menu)
+		}
+		if active && menu.Tooltip != "MirrorMe - desktop sharing active" {
+			t.Fatal("tray did not indicate desktop sharing")
+		}
 	}
 }

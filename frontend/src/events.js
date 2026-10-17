@@ -5,6 +5,7 @@ import {
   openSettingsFolder, openLogsFolder, copyLogsPath, copySettingsFolder, copyDeviceName,
   openExternalURL, minimiseWindow, toggleMaximiseWindow, hideWindow, quitApp,
   openDialog, closeDialog, finishNavigation, dismissToast,
+  discoverCastTargets, selectCastTarget, startDesktopCast, stopDesktopCast, submitCastPIN, forgetCastTarget,
 } from './state.js';
 import { refreshSaveBar } from './render.js';
 import { applyTheme } from './theme.js';
@@ -27,6 +28,12 @@ export function bindEvents(app, render) {
     }
     switch (control.dataset.action) {
       case 'nav-home': navigate('home', render); break;
+      case 'nav-cast': navigate('cast', render); break;
+      case 'cast-discover': await discoverCastTargets(render); break;
+      case 'cast-select': selectCastTarget(control.dataset.targetId, render); break;
+      case 'cast-start': await startDesktopCast(render); break;
+      case 'cast-stop': await stopDesktopCast(render); break;
+      case 'cast-forget': await forgetCastTarget(render); break;
       case 'nav-settings': navigate('settings', render); break;
       case 'nav-about': navigate('about', render); break;
       case 'settings-section': selectSettingsSection(control.dataset.section, render); break;
@@ -56,6 +63,11 @@ export function bindEvents(app, render) {
   });
 
   app.addEventListener('submit', event => {
+    if (event.target.id === 'cast-pair-form') {
+      event.preventDefault();
+      submitCastPIN(render);
+      return;
+    }
     if (event.target.id === 'setup-form') {
       event.preventDefault();
       beginSetup(render);
@@ -79,6 +91,10 @@ export function bindEvents(app, render) {
     });
   };
   app.addEventListener('input', event => {
+    if (event.target.id === 'cast-pin') {
+      state.castPin = event.target.value;
+      return;
+    }
     if (event.target.tagName === 'INPUT' && event.target.type !== 'checkbox') updateField(event);
   });
   app.addEventListener('change', event => {

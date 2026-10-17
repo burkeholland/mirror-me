@@ -10,6 +10,8 @@
 /engine/
 /receiver/vendor/
 /receiver/libuxplay.bundle
+/sender/bin/
+/sender/obj/
 node_modules/
 /frontend/dist/
 /frontend/package.json.md5

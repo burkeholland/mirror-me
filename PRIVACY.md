@@ -2,6 +2,7 @@
 
 Effective September 15, 2026. This notice describes the native-receiver
 Windows preview, versions 0.2.3 and later.
+Updated October 17, 2026 to cover the source-build desktop casting preview.
 
 ## Screen and audio
 
@@ -15,6 +16,18 @@ visible on your phone. Anyone who can see or hear your PC can see or hear
 that content. Stop Screen Mirroring on the iPhone or stop receiving in
 MirrorMe to end the session.
 
+When you choose **Cast desktop > Share primary display**, MirrorMe captures
+your Windows primary display in memory and sends encrypted screen video to
+the selected AirPlay target on your local network. This includes notifications
+and any personal information visible on that display. This sender preview does
+not capture desktop audio or record to disk. Discovery and target selection
+alone do not start capture.
+
+Anyone watching the target display can see the shared desktop. **Stop sharing**,
+the tray's **Stop sharing desktop**, or Quit ends capture. Closing the control
+window keeps sharing in the tray. Desktop sharing does not start automatically
+or reconnect automatically after a failure.
+
 ## Discovery and connections
 
 MirrorMe advertises its receiver name and connection information on your
@@ -25,6 +38,8 @@ on that network may see the advertised receiver.
 Use a trusted private network and enable the optional pairing PIN when
 appropriate. MirrorMe does not require an Apple account or a publisher
 account.
+Opening Cast desktop also browses local AirPlay service advertisements to list
+targets. Their names and network addresses are shown locally, not uploaded.
 
 ## Files on your PC
 
@@ -36,6 +51,12 @@ The receiver's persistent discovery identity and cryptographic key
 material are stored under `%APPDATA%\MirrorMe\identity`. Do not share these
 files.
 
+Desktop sender pairing identities are stored in `%APPDATA%\MirrorMe\sender`
+in files encrypted with Windows DPAPI for the current user. PINs are sent to the
+bundled helper through its private input pipe, not process arguments or logs.
+**Forget pairing** removes the selected target's saved credentials. These files
+are separate from receiving settings and identity; do not share them.
+
 Verbose logging is off by default. If you enable it, MirrorMe writes
 structured diagnostic records under `%APPDATA%\MirrorMe\logs`. Records
 include timestamps, app version, receiver state, failure indicators, and
@@ -46,7 +67,7 @@ not delete existing logs.
 
 MirrorMe does not automatically send these files to the publisher.
 Uninstalling the portable application may leave its settings, identity,
-logs, and WebView2 data on the PC. After quitting MirrorMe, you can remove
+sender pairing credentials, logs, and WebView2 data on the PC. After quitting MirrorMe, you can remove
 its local data if you no longer need it. Removing the identity generates a
 new receiver identity on a later launch.
 
