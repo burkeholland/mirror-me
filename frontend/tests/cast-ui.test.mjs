@@ -201,3 +201,34 @@ test('a stop failure stays visible with a retry action on other pages', async ()
   assert.match(html(), /Desktop sharing needs attention/);
   assert.doesNotMatch(button('cast-stop'), /\bdisabled\b/);
 });
+
+test('disconnect refresh preserves the selected TV without a warning or automatic capture', async () => {
+  selectCastTarget('AABBCCDDEEFF', noop);
+  receiveCastEvent(castSnapshotFixture('streaming', 1), noop);
+  window.go.main.App.StopDesktopCast = async () => {
+    calls.push(['stop']);
+    receiveCastEvent(castSnapshotFixture('stopped', 2), noop);
+    receiveCastEvent({ ...castSnapshotFixture('discovering', 3), targets: [] }, noop);
+  };
+  await stopDesktopCast(noop);
+  assert.equal(state.cast.status, 'discovering');
+  assert.equal(state.castSelected, 'AABBCCDDEEFF');
+  assert.match(button('cast-start'), /\bdisabled\b/);
+  assert.doesNotMatch(html(), /notice-error/);
+  receiveCastEvent(castSnapshotFixture('ready', 4), noop);
+  assert.equal(state.castSelected, 'AABBCCDDEEFF');
+  assert.doesNotMatch(button('cast-start'), /\bdisabled\b/);
+  assert.deepEqual(calls, [['stop']], 'backend owns refresh, never starts capture');
+});
+
+test('refreshed results clear a missing selection and retain discovery errors', () => {
+  selectCastTarget('AABBCCDDEEFF', noop);
+  state.castError = 'Old warning';
+  receiveCastEvent({ ...castSnapshotFixture('discovering', 1), targets: [] }, noop);
+  assert.equal(state.castError, '');
+  receiveCastEvent({ ...castSnapshotFixture('ready', 2), targets: [] }, noop);
+  assert.equal(state.castSelected, '');
+  assert.match(button('cast-start'), /\bdisabled\b/);
+  receiveCastEvent({ ...castSnapshotFixture('error', 3), targets: [], lastError: 'Multicast unavailable' }, noop);
+  assert.match(html(), /Multicast unavailable/);
+});

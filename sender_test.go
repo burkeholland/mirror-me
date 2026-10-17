@@ -6,10 +6,37 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+// The portable file-list runner and the full Windows test binary both execute
+// this helper before their test entry points. It never performs network capture.
+func init() {
+	if mode := os.Getenv("MIRRORME_CAST_DISCOVERY_FIXTURE"); mode != "" {
+		var command castCommand
+		if err := json.NewDecoder(os.Stdin).Decode(&command); err != nil || command.CommandName != "discover" {
+			os.Exit(2)
+		}
+		if mode == "error" {
+			_ = json.NewEncoder(os.Stdout).Encode(castEvent{Protocol: 1, Status: "error", Error: "Discovery unavailable"})
+			os.Exit(1)
+		}
+		if mode == "silent" {
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			os.Exit(0)
+		}
+		if mode != "ready" {
+			os.Exit(2)
+		}
+		target := testCastTarget()
+		target.Address = "192.168.1.21"
+		_ = json.NewEncoder(os.Stdout).Encode(castEvent{Protocol: 1, Status: "ready", Targets: []CastTarget{target}})
+		os.Exit(0)
+	}
+}
 
 func testCastTarget() CastTarget {
 	return CastTarget{ID: "AABBCCDDEEFF", Name: "Living Room", Model: "AppleTV11,1",
@@ -177,6 +204,143 @@ func TestCastStopKillsUnresponsiveProcessAndIgnoresLateState(t *testing.T) {
 	s.accept(run, `{"protocol":1,"status":"streaming"}`)
 	if s.Snapshot().Status != "stopped" {
 		t.Fatal("a late event restarted capture")
+	}
+}
+
+func waitForCastStatus(t *testing.T, s *DesktopSender, status string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if s.Snapshot().Status == status {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("sender status = %+v, want %s", s.Snapshot(), status)
+}
+
+func TestCastDisconnectRefreshesAfterCaptureExits(t *testing.T) {
+	cmd := exec.Command(os.Args[0], "-test.run=^TestCastBlockingHelper$")
+	cmd.Env = append(os.Environ(), "MIRRORME_CAST_TEST_HELPER=1")
+	input, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill() })
+	t.Setenv("MIRRORME_CAST_DISCOVERY_FIXTURE", "ready")
+	s := testDesktopSender()
+	s.executable = os.Args[0]
+	t.Cleanup(func() { _ = s.Stop() })
+	target := testCastTarget()
+	s.snapshot.Status, s.snapshot.Target = "streaming", &target
+	s.discovered = time.Now().Add(-2 * time.Minute)
+	oldRevision := s.Snapshot().Revision
+	run := &castProcess{cmd: cmd, input: input, done: make(chan struct{}), mode: "start"}
+	s.run = run
+	s.onEvent = func(snapshot CastSnapshot) {
+		if snapshot.Status == "discovering" {
+			select {
+			case <-run.done:
+			default:
+				t.Error("refreshed before capture exited")
+			}
+		}
+	}
+	go s.monitor(run, &receiverOutput{onLine: func(string) {}}, func() {})
+	disconnectedAt := time.Now()
+	if err := s.Disconnect(); err != nil {
+		t.Fatal(err)
+	}
+	waitForCastStatus(t, s, "ready")
+	snapshot := s.Snapshot()
+	if snapshot.LastError != "" || snapshot.Target != nil || len(snapshot.Targets) != 1 || snapshot.Targets[0].Address != "192.168.1.21" ||
+		s.discovered.Before(disconnectedAt) {
+		t.Fatalf("disconnect did not return fresh targets: %+v", snapshot)
+	}
+	s.accept(run, `{"protocol":1,"status":"streaming"}`)
+	if err := s.Start(target.ID, oldRevision); err == nil {
+		t.Fatal("disconnect refresh re-enabled an old sharing command")
+	}
+	if s.Snapshot().Status != "ready" {
+		t.Fatal("refresh restarted sharing or accepted a late event")
+	}
+}
+
+func TestCastDisconnectAfterPairingOrErrorRefreshes(t *testing.T) {
+	for _, status := range []string{"connecting", "pairing", "error"} {
+		t.Run(status, func(t *testing.T) {
+			t.Setenv("MIRRORME_CAST_DISCOVERY_FIXTURE", "ready")
+			s := testDesktopSender()
+			s.executable = os.Args[0]
+			t.Cleanup(func() { _ = s.Stop() })
+			target := testCastTarget()
+			s.snapshot.Status, s.snapshot.Target, s.snapshot.LastError = status, &target, "Previous warning"
+			if err := s.Disconnect(); err != nil {
+				t.Fatal(err)
+			}
+			waitForCastStatus(t, s, "ready")
+			if s.Snapshot().LastError != "" {
+				t.Fatal("disconnect left an old warning visible")
+			}
+		})
+	}
+}
+
+func TestCastDiscoveryCancelAndShutdownDoNotRefresh(t *testing.T) {
+	t.Setenv("MIRRORME_CAST_DISCOVERY_FIXTURE", "silent")
+	for _, automatic := range []bool{false, true} {
+		s := testDesktopSender()
+		s.executable = os.Args[0]
+		t.Cleanup(func() { _ = s.Stop() })
+		if automatic {
+			target := testCastTarget()
+			s.snapshot.Target = &target
+			if err := s.Disconnect(); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := s.Discover(); err != nil {
+			t.Fatal(err)
+		}
+		if s.Snapshot().Status != "discovering" {
+			t.Fatal("discovery did not start")
+		}
+		if err := s.Disconnect(); err != nil {
+			t.Fatal(err)
+		}
+		if s.Snapshot().Status != "stopped" {
+			t.Fatal("cancelling discovery started another scan")
+		}
+	}
+	s := testDesktopSender()
+	s.executable = os.Args[0]
+	t.Cleanup(func() { _ = s.Stop() })
+	target := testCastTarget()
+	s.snapshot.Target = &target
+	s.snapshot.Status = "streaming"
+	if err := s.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if s.Snapshot().Status != "stopped" {
+		t.Fatal("shutdown started discovery")
+	}
+}
+
+func TestCastDisconnectSurfacesRefreshFailure(t *testing.T) {
+	t.Setenv("MIRRORME_CAST_DISCOVERY_FIXTURE", "error")
+	s := testDesktopSender()
+	s.executable = os.Args[0]
+	t.Cleanup(func() { _ = s.Stop() })
+	target := testCastTarget()
+	s.snapshot.Target = &target
+	if err := s.Disconnect(); err != nil {
+		t.Fatal(err)
+	}
+	waitForCastStatus(t, s, "error")
+	if !strings.Contains(s.Snapshot().LastError, "Discovery unavailable") {
+		t.Fatalf("refresh failure was hidden: %+v", s.Snapshot())
 	}
 }
 

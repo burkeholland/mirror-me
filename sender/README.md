@@ -9,7 +9,8 @@ Bonjour service, FFmpeg executable, or runtime download is required by users.
 on a Direct3D 11 adapter, and a screen-capable AirPlay receiver on the same IPv4
 LAN. Apple TV is the initial target; compatibility with other AirPlay generations
 and vendors is not guaranteed. The preview shares primary-display SDR video at
-30 fps, fitted to the target's advertised resolution. It does not send desktop
+30 fps, fitted to the target's advertised resolution, including the Windows
+mouse pointer. It does not send desktop
 audio, offer an extended desktop, select other monitors, capture protected video,
 or automatically reconnect/start sharing. Discovery also lists audio-only targets,
 but they cannot be selected for screen sharing.
@@ -25,6 +26,10 @@ legacy pairing modes are not implemented; enable code-based access on the TV.
 Closing the control window continues sharing in the tray, like receiving.
 Parent-pipe EOF and the Windows kill-on-close job also terminate the helper.
 There is no automatic retry of a capture after an error.
+Stopping or cancelling a sharing attempt from the app or tray refreshes the
+target list after the capture process exits. The UI retains the selected target
+if it is still discovered. This never reconnects or resumes capture; cancelling
+discovery and quitting do not start another scan.
 
 ## Build
 
@@ -40,6 +45,10 @@ NuGet archives (including runtime/reference packs), and build instructions under
 `sender.build.json`. The checked-in patch:
 
 - selects the actual primary monitor and refuses unsupported rotation;
+- composites separate DXGI hardware pointers before scaling/encoding, including
+  color transparency, monochrome AND/XOR masks, masked-color cursors, pointer-only
+  moves, and clipping at monitor edges without leaving trails or drawing a
+  second software cursor;
 - propagates capture and network failures, including a bounded feedback timeout;
 - counts video only after completed TCP writes;
 - never discards encrypted packets (their nonce sequence must remain intact);
@@ -63,7 +72,10 @@ Before release, verify discovery (including two targets with the same name),
 wrong/correct/expired PIN, reconnect with saved credentials, Forget pairing,
 primary display on a secondary adapter, real TV video, receiver rejection,
 network loss, screen lock, cancellation at every stage, tray Stop, Quit, parent
-crash, and simultaneous iPhone receiving on Windows. Do not call the feature
+crash, and simultaneous iPhone receiving on Windows. Also check arrow, I-beam,
+hand, enlarged/accessibility and inverted cursors on the TV, movement over an
+otherwise static desktop, transitions onto other monitors, and automatic target
+refresh after disconnecting. Do not call the feature
 device-verified until this checklist is completed.
 
 ## Protocol and failure handling
@@ -74,6 +86,14 @@ six-second scan, bounded to 64 resolved targets, excluding this PC. The host
 accepts only a server-side discovered target ID and requires refreshing results
 older than one minute. A separate helper invocation handles pairing, negotiation,
 capture/encoding, encrypted AirPlay mirroring transport, and teardown.
+
+DXGI pointer position is the shape's top-left in desktop pixels, not its hotspot.
+Only the clipped cursor rectangle is mapped to the CPU for blending; the desktop
+remains on the GPU. Each acquired frame starts from the original DXGI image, so
+moving or hiding a pointer restores the old background. Composition happens
+before BGRA-to-NV12 conversion and scaling, so the cursor and desktop stay aligned.
+`DesktopPointerTests` in the patched upstream test project exercises the shared
+pixel-composition code without requiring a Windows GPU.
 
 The UI reports streaming only after a video packet is written, not after a
 successful handshake. This does not claim that the TV has displayed the frame.

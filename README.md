@@ -223,13 +223,18 @@ window, start/stop mirroring, jump to Settings or About, or quit for good.
 4. Choose **Stop sharing**, use **Stop sharing desktop** in the tray, or Quit
    to end capture. Closing the window continues sharing in the tray. Sharing
    never starts on launch or automatically reconnects after a failure.
+   After **Stop sharing**, targets refresh automatically; your selected TV stays
+   selected if it is still available. Cancelling a search or quitting does not
+   start another scan.
 
-Desktop casting sends primary-display SDR video at 30 fps without desktop audio.
+Desktop casting sends primary-display SDR video, including the mouse pointer, at
+30 fps without desktop audio.
 It does not create an extended desktop or support selecting another monitor,
 rotated displays, protected video, IPv6-only discovery, fixed AirPlay passwords,
 or every legacy/vendor pairing protocol. If saved pairing is rejected, stop
-sharing, select the target, and use **Forget pairing**, then try again. Refresh
-target results older than one minute before starting a new session.
+sharing, select the target, and use **Forget pairing**, then try again. If the
+target list has been idle for more than one minute, use **Refresh** before sharing;
+disconnecting already refreshes it for you.
 
 The receiving controls and settings continue to apply only to iPhone receiving.
 The sender does not restart when those settings change. A streaming indicator

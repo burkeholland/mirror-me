@@ -46,7 +46,15 @@ window.go = { main: { App: {
   },
   StartDesktopCast: async id => { calls.push(['cast-start', id]); setCast('pairing'); },
   SubmitCastPIN: async () => { calls.push(['cast-pin']); setCast('streaming'); },
-  StopDesktopCast: async () => { calls.push(['cast-stop']); setCast('stopped'); },
+  StopDesktopCast: async () => {
+    calls.push(['cast-stop']);
+    const refresh = Boolean(cast.target);
+    setCast('stopped');
+    if (refresh) {
+      setCast('discovering');
+      setTimeout(() => { if (cast.status === 'discovering') setCast('ready'); }, 300);
+    }
+  },
   ForgetCastTarget: async id => { calls.push(['cast-forget', id]); },
   GetVersion: async () => 'UI preview',
   GetSettingsFolder: async () => 'Preview only - no files are changed',

@@ -110,6 +110,10 @@ func (s *DesktopSender) emit() {
 func (s *DesktopSender) Discover() error {
 	s.operations.Lock()
 	defer s.operations.Unlock()
+	return s.discoverLocked()
+}
+
+func (s *DesktopSender) discoverLocked() error {
 	if err := s.checkIdle(); err != nil {
 		return err
 	}
@@ -392,6 +396,27 @@ func (s *DesktopSender) fail(run *castProcess, err error) error {
 func (s *DesktopSender) Stop() error {
 	s.operations.Lock()
 	defer s.operations.Unlock()
+	return s.stopLocked()
+}
+
+// Disconnect is a user action (including the tray), unlike shutdown. Only a
+// finished sharing attempt refreshes targets; cancelling discovery stays stopped.
+func (s *DesktopSender) Disconnect() error {
+	s.operations.Lock()
+	defer s.operations.Unlock()
+	s.mu.Lock()
+	refresh := s.snapshot.Target != nil
+	s.mu.Unlock()
+	if err := s.stopLocked(); err != nil {
+		return err
+	}
+	if refresh {
+		return s.discoverLocked()
+	}
+	return nil
+}
+
+func (s *DesktopSender) stopLocked() error {
 	s.mu.Lock()
 	run := s.run
 	s.snapshot.Status = "stopping"
