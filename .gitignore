@@ -2,6 +2,7 @@
 /build/receiver/
 /build/native/
 /build/native-*/
+/build/msix/
 /build/ui-review/
 /build/site-review/
 /build/releases/
