@@ -1,0 +1,5 @@
+MirrorMe corresponding source and release materials:
+https://github.com/burkeholland/mirror-me
+
+Published source archives:
+https://github.com/burkeholland/mirror-me/releases
