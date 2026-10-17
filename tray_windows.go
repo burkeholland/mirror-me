@@ -28,6 +28,7 @@ type SystemTray struct {
 	Show               func()
 	ToggleMirroring    func()
 	ShowMirroredScreen func()
+	StopDesktopCast    func()
 	ShowSettings       func()
 	ShowAbout          func()
 	Quit               func()
@@ -43,6 +44,7 @@ type TrayMenuState struct {
 	Tooltip                   string
 	MirroringLabel            string
 	ShowMirroredScreenEnabled bool
+	StopDesktopCastEnabled    bool
 }
 
 const (
@@ -80,6 +82,7 @@ const (
 	cmdSettings     = 4
 	cmdAbout        = 5
 	cmdQuit         = 6
+	cmdStopDesktop  = 7
 )
 
 var (
@@ -404,6 +407,11 @@ func (t *SystemTray) showMenu() {
 		screenFlags |= mfDisabled | mfGrayed
 	}
 	appendTrayMenu(menu, screenFlags, cmdShowScreen, "Show screen")
+	castFlags := uint32(mfString)
+	if !state.StopDesktopCastEnabled {
+		castFlags |= mfDisabled | mfGrayed
+	}
+	appendTrayMenu(menu, castFlags, cmdStopDesktop, "Stop sharing desktop")
 	appendTrayMenu(menu, mfSeparator, 0, "")
 	appendTrayMenu(menu, mfString, cmdSettings, "Settings...")
 	appendTrayMenu(menu, mfString, cmdAbout, "Help && about")
@@ -444,6 +452,8 @@ func (t *SystemTray) handleCommand(command uint32) {
 		t.invoke(t.ToggleMirroring)
 	case cmdShowScreen:
 		t.invoke(t.ShowMirroredScreen)
+	case cmdStopDesktop:
+		t.invoke(t.StopDesktopCast)
 	case cmdSettings:
 		t.invoke(t.ShowSettings)
 	case cmdAbout:

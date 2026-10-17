@@ -2,6 +2,7 @@ import {
   GetSettings, SaveSettings, RegeneratePinCode, GetStatus, StartMirroring,
   StopMirroring, ShowMirroredScreen, GetVersion,
   GetSettingsFolder, OpenSettingsFolder, GetLogsFolder, OpenLogsFolder, OpenExternalURL, Quit,
+  GetCastStatus, DiscoverCastTargets, StartDesktopCast, SubmitCastPIN, StopDesktopCast, ForgetCastTarget,
 } from '../wailsjs/go/main/App';
 import {
   WindowToggleMaximise, WindowIsMaximised, WindowMinimise, WindowHide, ClipboardSetText,
@@ -36,12 +37,18 @@ export const state = {
   busy: false,
   busyAction: '',
   maximised: false,
+  cast: { revision: 0, status: 'stopped', available: false, targets: [] },
+  castSelected: '',
+  castPin: '',
+  castError: '',
+  castAction: '',
 };
 
 let nextToastId = 1;
 let engineEventRevision = 0;
 let settingsEventRevision = 0;
 let commandRevision = 0;
+let castCommandRevision = 0;
 
 export function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
@@ -110,8 +117,9 @@ export async function load(render) {
   clearError();
   render();
   try {
-    const [settings, version, status, settingsFolder, logsFolder, maximised] = await Promise.all([
+    const [settings, version, status, settingsFolder, logsFolder, maximised, cast] = await Promise.all([
       GetSettings(), GetVersion(), GetStatus(), GetSettingsFolder(), GetLogsFolder(), WindowIsMaximised(),
+      GetCastStatus(),
     ]);
     if (settingsEventRevision === settingsRevisionAtLoad) acceptSettings(settings);
     if (engineEventRevision === engineRevisionAtLoad) acceptSnapshot(status);
@@ -119,6 +127,7 @@ export async function load(render) {
     state.settingsFolder = settingsFolder;
     state.logsFolder = logsFolder;
     state.maximised = maximised;
+    acceptCastSnapshot(cast);
     state.setupName = state.draft.deviceName;
     state.error = state.settings.loadError || '';
   } catch (error) {
@@ -127,6 +136,73 @@ export async function load(render) {
     state.loading = false;
     render();
   }
+  if (state.route === 'cast') enterCast(render);
+}
+
+function acceptCastSnapshot(snapshot) {
+  if (!snapshot || snapshot.revision < state.cast.revision) return;
+  if (snapshot.status !== 'pairing') state.castPin = '';
+  state.cast = snapshot;
+  if (!snapshot.targets.some(target => target.id === state.castSelected && target.canMirror)) state.castSelected = '';
+}
+
+export function receiveCastEvent(snapshot, render) {
+  const previous = state.cast.status;
+  acceptCastSnapshot(snapshot);
+  if (state.route === 'cast' && previous !== 'pairing' && state.cast.status === 'pairing') state.focusTarget = 'cast-pin';
+  render({ castOnly: state.route !== 'cast' });
+}
+
+function enterCast(render) {
+  if (state.cast.available && state.cast.status === 'stopped' && !state.cast.targets.length && !state.castAction)
+    discoverCastTargets(render);
+}
+
+async function castCommand(action, command, render) {
+  if (state.castAction && (action !== 'stop' || state.castAction === 'stop')) return;
+  const revision = ++castCommandRevision;
+  state.castAction = action;
+  state.castError = '';
+  render();
+  try {
+    await command();
+    const snapshot = await GetCastStatus();
+    if (revision === castCommandRevision) acceptCastSnapshot(snapshot);
+  } catch (error) {
+    if (revision === castCommandRevision) state.castError = friendlyErrorMessage(error);
+  } finally {
+    if (revision === castCommandRevision) {
+      state.castAction = '';
+      render();
+    }
+  }
+}
+
+export const discoverCastTargets = render => castCommand('discover', DiscoverCastTargets, render);
+export const stopDesktopCast = render => castCommand('stop', StopDesktopCast, render);
+export const startDesktopCast = render => castCommand('start', () => StartDesktopCast(state.castSelected, state.cast.revision), render);
+export const forgetCastTarget = render => castCommand('forget', async () => {
+  await ForgetCastTarget(state.castSelected);
+  pushToast('Pairing forgotten. The target will ask for a code next time.', 'success', render);
+}, render);
+
+export function selectCastTarget(id, render) {
+  if (!['stopped', 'ready', 'error'].includes(state.cast.status) || state.castAction) return;
+  if (!state.cast.targets.some(target => target.id === id && target.canMirror)) return;
+  state.castSelected = id;
+  state.castError = '';
+  render();
+}
+
+export async function submitCastPIN(render) {
+  if (!/^[0-9]{4}$/.test(state.castPin)) {
+    state.castError = 'Enter the four-digit code shown on the AirPlay target.';
+    render();
+    return;
+  }
+  const pin = state.castPin;
+  state.castPin = '';
+  await castCommand('pin', () => SubmitCastPIN(pin, state.cast.revision), render);
 }
 
 export function receiveEngineEvent(event, render) {
@@ -186,6 +262,7 @@ export function navigate(route, render) {
   state.dialog = null;
   state.focusTarget = 'page-title';
   render();
+  if (route === 'cast') enterCast(render);
 }
 
 export function selectSettingsSection(section, render) {
@@ -265,6 +342,7 @@ export async function finishNavigation(save, render) {
   state.route = target;
   state.focusTarget = 'page-title';
   render();
+  if (target === 'cast') enterCast(render);
 }
 
 export async function regeneratePin(render) {

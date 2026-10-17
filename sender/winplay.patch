@@ -1,0 +1,288 @@
+diff --git a/src/WinPlay.Capture/DesktopDuplicator.cs b/src/WinPlay.Capture/DesktopDuplicator.cs
+index 22111b1..261f9b7 100644
+--- a/src/WinPlay.Capture/DesktopDuplicator.cs
++++ b/src/WinPlay.Capture/DesktopDuplicator.cs
+@@ -27,7 +27,9 @@ internal sealed class DesktopDuplicator : IDisposable
+     {
+         FeatureLevel[] levels = [FeatureLevel.Level_11_1, FeatureLevel.Level_11_0, FeatureLevel.Level_10_1, FeatureLevel.Level_10_0];
+         // BgraSupport enables the video processor; VideoSupport enables the color-convert path.
+-        D3D11.D3D11CreateDevice(null, DriverType.Hardware,
++        using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
++        using var primaryAdapter = FindPrimaryAdapter(factory, out uint outputIndex);
++        D3D11.D3D11CreateDevice(primaryAdapter, DriverType.Unknown,
+             DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport, levels,
+             out ID3D11Device? device).CheckError();
+         Device = device!;
+@@ -35,7 +37,7 @@ internal sealed class DesktopDuplicator : IDisposable
+ 
+         using var dxgiDevice = Device.QueryInterface<IDXGIDevice>();
+         using var adapter = dxgiDevice.GetAdapter();
+-        adapter.EnumOutputs(0, out IDXGIOutput output).CheckError();
++        adapter.EnumOutputs(outputIndex, out IDXGIOutput output).CheckError();
+         using (output)
+         using (var output1 = output.QueryInterface<IDXGIOutput1>())
+         {
+@@ -47,6 +49,34 @@ internal sealed class DesktopDuplicator : IDisposable
+         Format = Format.B8G8R8A8_UNorm;
+     }
+ 
++    private static IDXGIAdapter1 FindPrimaryAdapter(IDXGIFactory1 factory, out uint outputIndex)
++    {
++        for (uint i = 0; factory.EnumAdapters1(i, out IDXGIAdapter1 adapter).Success; i++)
++        {
++            bool selected = false;
++            try
++            {
++                for (uint j = 0; adapter.EnumOutputs(j, out IDXGIOutput output).Success; j++)
++                {
++                    using (output)
++                    {
++                        var desc = output.Description;
++                        if (desc.AttachedToDesktop && desc.DesktopCoordinates.Left == 0 && desc.DesktopCoordinates.Top == 0)
++                        {
++                            if (desc.Rotation is not ModeRotation.Identity and not ModeRotation.Unspecified)
++                                throw new NotSupportedException("Rotated primary displays are not supported yet.");
++                            outputIndex = j;
++                            selected = true;
++                            return adapter;
++                        }
++                    }
++                }
++            }
++            finally { if (!selected) adapter.Dispose(); }
++        }
++        throw new InvalidOperationException("No primary desktop display is available for capture.");
++    }
++
+     /// <summary>Creates a texture matching the desktop, suitable as a video-processor input.</summary>
+     public ID3D11Texture2D CreateBgraTexture() => Device.CreateTexture2D(new Texture2DDescription
+     {
+diff --git a/src/WinPlay.Capture/ScreenMirrorSource.cs b/src/WinPlay.Capture/ScreenMirrorSource.cs
+index a264439..a752ed2 100644
+--- a/src/WinPlay.Capture/ScreenMirrorSource.cs
++++ b/src/WinPlay.Capture/ScreenMirrorSource.cs
+@@ -27,6 +27,7 @@ public sealed class ScreenMirrorSource : IH264VideoSource
+ 
+     public event Action<ReadOnlyMemory<byte>, bool>? FrameEncoded;
+     public event Action<string>? Diagnostic;
++    public event Action<Exception>? Failed;
+ 
+     /// <param name="bitrateMbps">Encoder bitrate; 0 = auto (scaled to the negotiated resolution).</param>
+     public ScreenMirrorSource(int fps = 60, int bitrateMbps = 0)
+@@ -111,7 +112,7 @@ public sealed class ScreenMirrorSource : IH264VideoSource
+         }
+         catch (Exception ex)
+         {
+-            if (!ct.IsCancellationRequested) Diagnostic?.Invoke($"capture/encode error: {ex.Message}");
++            if (!ct.IsCancellationRequested) Failed?.Invoke(ex);
+         }
+         finally
+         {
+diff --git a/src/WinPlay.Core/Mirror/MirrorSession.cs b/src/WinPlay.Core/Mirror/MirrorSession.cs
+index bf6685d..e194886 100644
+--- a/src/WinPlay.Core/Mirror/MirrorSession.cs
++++ b/src/WinPlay.Core/Mirror/MirrorSession.cs
+@@ -60,8 +60,8 @@ public sealed class MirrorSession : IAsyncDisposable
+     private ulong _audioNonceCounter;
+ 
+     // Video packets are built (and encrypted, in frame order) on the encoder thread, then
+-    // handed to a dedicated sender so TCP writes never stall the encoder. Bounded + drop-
+-    // oldest: for live mirroring a fresh frame beats a backlog.
++    // handed to a dedicated sender so TCP writes never stall the encoder. Saturation
++    // fails the session instead of losing an encrypted packet's implicit nonce.
+     private readonly System.Collections.Concurrent.BlockingCollection<byte[]> _sendQueue
+         = new(new System.Collections.Concurrent.ConcurrentQueue<byte[]>(), boundedCapacity: 16);
+ 
+@@ -73,6 +73,8 @@ public sealed class MirrorSession : IAsyncDisposable
+     private int _receiverDisplayH;
+ 
+     public event Action<string>? StageChanged;
++    private readonly TaskCompletionSource _failure = new(TaskCreationOptions.RunContinuationsAsynchronously);
++    public Task Failure => _failure.Task;
+ 
+     public long FramesSent => Interlocked.Read(ref _framesSent);
+     public string RtspSessionUri => $"rtsp://{_rtsp.RemoteAddress}/{_sessionId}";
+@@ -163,7 +165,7 @@ public sealed class MirrorSession : IAsyncDisposable
+             ["osVersion"] = "10.0",
+             ["osBuildVersion"] = "13F69",
+             ["model"] = "WinPlay1,1",
+-            ["name"] = "WinPlay",
++            ["name"] = "MirrorMe",
+             ["isScreenMirroringSession"] = true,
+             ["et"] = 32L,
+             ["ekey"] = _fairplay.Ekey,
+@@ -441,28 +443,21 @@ public sealed class MirrorSession : IAsyncDisposable
+             byte[] header = MirrorVideoStream.BuildVideoHeader(payload.Length + 16, isKeyframe, _clock.FrameTimestamp);
+             byte[] encrypted = _videoCipher!.Seal(header, payload);
+             SendPacket(header, encrypted);
+-
+-            long n = Interlocked.Increment(ref _framesSent);
+-            if (n == 1) Stage("first video frame sent");
+-            else if (n % 120 == 0) Stage($"{n} frames sent");
+         }
+         catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
+         {
+-            if (!_cts.IsCancellationRequested) Stage($"data channel closed: {ex.Message}");
++            if (!_cts.IsCancellationRequested) _failure.TrySetException(ex);
+         }
+     }
+ 
+-    /// <summary>Enqueues a header+payload packet for the sender loop (drops the oldest if the link is saturated).</summary>
++    /// <summary>Never discard encrypted packets: the receiver uses an implicit nonce counter.</summary>
+     private void SendPacket(byte[] header, byte[] payload)
+     {
+         byte[] packet = new byte[header.Length + payload.Length];
+         header.CopyTo(packet, 0);
+         payload.CopyTo(packet, header.Length);
+-        while (!_sendQueue.TryAdd(packet) && !_cts.IsCancellationRequested)
+-        {
+-            if (_sendQueue.TryTake(out _)) continue; // make room by dropping the oldest
+-            break;
+-        }
++        if (!_sendQueue.TryAdd(packet) && !_cts.IsCancellationRequested)
++            throw new IOException("The AirPlay connection cannot keep up with desktop video.");
+     }
+ 
+     /// <summary>Drains the send queue to the TCP data channel, off the encoder thread.</summary>
+@@ -474,12 +469,13 @@ public sealed class MirrorSession : IAsyncDisposable
+             {
+                 if (_dataStream is null) continue;
+                 await _dataStream.WriteAsync(packet, ct).ConfigureAwait(false);
++                if (packet[4] == 0x00) Interlocked.Increment(ref _framesSent);
+             }
+         }
+         catch (OperationCanceledException) { }
+         catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or InvalidOperationException)
+         {
+-            if (!ct.IsCancellationRequested) Stage($"data channel closed: {ex.Message}");
++            if (!ct.IsCancellationRequested) _failure.TrySetException(ex);
+         }
+     }
+ 
+@@ -505,7 +501,7 @@ public sealed class MirrorSession : IAsyncDisposable
+                 while (!_cts.IsCancellationRequested)
+                 {
+                     int n = await stream.ReadAsync(buf, _cts.Token).ConfigureAwait(false);
+-                    if (n == 0) return;
++                    if (n == 0) throw new IOException("The receiver closed its event channel.");
+                     raw.Write(buf, 0, n);
+                     try
+                     {
+@@ -538,7 +534,7 @@ public sealed class MirrorSession : IAsyncDisposable
+             catch (OperationCanceledException) { }
+             catch (Exception ex) when (ex is SocketException or IOException or ObjectDisposedException)
+             {
+-                if (!_cts.IsCancellationRequested) Stage($"event channel closed: {ex.Message}");
++                if (!_cts.IsCancellationRequested) _failure.TrySetException(ex);
+             }
+         }));
+     }
+@@ -617,6 +613,7 @@ public sealed class MirrorSession : IAsyncDisposable
+             }
+             catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or OperationCanceledException)
+             {
++                if (!ct.IsCancellationRequested) _failure.TrySetException(ex);
+                 return;
+             }
+         }
+@@ -630,11 +627,14 @@ public sealed class MirrorSession : IAsyncDisposable
+             catch (OperationCanceledException) { return; }
+             try
+             {
+-                await _rtsp.RequestAsync(new RtspRequest { Method = "POST", Uri = "/feedback" }, ct).ConfigureAwait(false);
++                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
++                timeout.CancelAfter(TimeSpan.FromSeconds(8));
++                var response = await _rtsp.RequestAsync(new RtspRequest { Method = "POST", Uri = "/feedback" }, timeout.Token).ConfigureAwait(false);
++                response.EnsureSuccess("POST /feedback");
+             }
+-            catch (Exception ex) when (ex is RtspException or IOException or SocketException or ObjectDisposedException)
++            catch (Exception ex) when (ex is RtspException or IOException or SocketException or ObjectDisposedException or OperationCanceledException)
+             {
+-                if (!ct.IsCancellationRequested) Stage($"feedback ended: {ex.Message}");
++                if (!ct.IsCancellationRequested) _failure.TrySetException(ex);
+                 return;
+             }
+         }
+diff --git a/src/WinPlay.Core/Mirror/MirrorVideoStream.cs b/src/WinPlay.Core/Mirror/MirrorVideoStream.cs
+index 41bcade..24b957e 100644
+--- a/src/WinPlay.Core/Mirror/MirrorVideoStream.cs
++++ b/src/WinPlay.Core/Mirror/MirrorVideoStream.cs
+@@ -95,6 +95,7 @@ public sealed class MirrorVideoCipher(byte[] key) : IDisposable
+     public byte[] Seal(ReadOnlySpan<byte> header, ReadOnlySpan<byte> plaintext)
+     {
+         Span<byte> nonce = stackalloc byte[12];
++        nonce.Clear();
+         BinaryPrimitives.WriteUInt64LittleEndian(nonce[4..], _nonceCounter++);
+ 
+         byte[] output = new byte[plaintext.Length + 16];
+diff --git a/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs b/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs
+index 5ede0c5..77888f3 100644
+--- a/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs
++++ b/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs
+@@ -1,6 +1,10 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ using System.Buffers.Binary;
+ using System.Security.Cryptography;
++using System.Collections.Concurrent;
++using System.Net;
++using System.Net.Sockets;
++using System.Reflection;
+ using WinPlay.Core.Mirror;
+ using Xunit;
+ 
+@@ -8,6 +12,55 @@ namespace WinPlay.Core.Tests;
+ 
+ public class MirrorVideoStreamTests
+ {
++    private static MirrorSession NewSession() => (MirrorSession)Activator.CreateInstance(
++        typeof(MirrorSession), BindingFlags.Instance | BindingFlags.NonPublic, null, [false], null)!;
++
++    private static void Enqueue(MirrorSession session, byte value) =>
++        typeof(MirrorSession).GetMethod("SendPacket", BindingFlags.Instance | BindingFlags.NonPublic)!
++            .Invoke(session, [MirrorVideoStream.BuildVideoHeader(1, true, 0), new byte[] { value }]);
++
++    [Fact]
++    public void SaturatedQueue_FailsWithoutDroppingEncryptedPackets()
++    {
++        var session = NewSession();
++        using var queue = (BlockingCollection<byte[]>)typeof(MirrorSession)
++            .GetField("_sendQueue", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(session)!;
++        for (byte i = 0; i < 16; i++) Enqueue(session, i);
++        Assert.Equal(0, session.FramesSent);
++        var error = Assert.Throws<TargetInvocationException>(() => Enqueue(session, 99));
++        Assert.IsType<IOException>(error.InnerException);
++        Assert.Equal(16, queue.Count);
++        for (byte i = 0; i < 16; i++) Assert.Equal(i, queue.Take()[128]);
++    }
++
++    [Fact]
++    public async Task FramesSent_CountsCompletedWritesNotQueuedVideo()
++    {
++        var session = NewSession();
++        using var queue = (BlockingCollection<byte[]>)typeof(MirrorSession)
++            .GetField("_sendQueue", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(session)!;
++        using var listener = new TcpListener(IPAddress.Loopback, 0);
++        listener.Start();
++        using var client = new TcpClient();
++        await client.ConnectAsync((IPEndPoint)listener.LocalEndpoint);
++        using var receiver = await listener.AcceptTcpClientAsync();
++        typeof(MirrorSession).GetField("_dataStream", BindingFlags.Instance | BindingFlags.NonPublic)!
++            .SetValue(session, client.GetStream());
++        Enqueue(session, 42);
++        Assert.Equal(0, session.FramesSent);
++        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
++        var sending = Task.Run(() => (Task)typeof(MirrorSession)
++            .GetMethod("SendLoopAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
++            .Invoke(session, [timeout.Token])!);
++        byte[] packet = new byte[129];
++        await receiver.GetStream().ReadExactlyAsync(packet, timeout.Token);
++        while (session.FramesSent == 0) await Task.Delay(10, timeout.Token);
++        Assert.Equal(1, session.FramesSent);
++        Assert.Equal(42, packet[128]);
++        timeout.Cancel();
++        await sending;
++    }
++
+     [Fact]
+     public void VideoHeader_LayoutMatchesProtocol()
+     {

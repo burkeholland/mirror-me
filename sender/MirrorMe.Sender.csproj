@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>MirrorMe.Sender</AssemblyName>
+    <Platforms>x64</Platforms>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <WinPlaySource>$(MSBuildThisFileDirectory)..\build\native-sender\vendor</WinPlaySource>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(WinPlaySource)\src\WinPlay.Core\WinPlay.Core.csproj" />
+    <ProjectReference Include="$(WinPlaySource)\src\WinPlay.Capture\WinPlay.Capture.csproj" />
+  </ItemGroup>
+</Project>

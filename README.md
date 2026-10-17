@@ -1,7 +1,9 @@
 # MirrorMe
 
 An open-source Windows preview for receiving your iPhone's screen over
-AirPlay. No cable, Apple account, or companion iPhone app is required.
+AirPlay, with a separate **Cast desktop** workspace for sending your Windows
+primary display to an Apple TV or another screen-capable AirPlay target.
+No cable, Apple account, or companion iPhone app is required.
 
 MirrorMe is a native Windows 11 app (Go + [Wails v2](https://wails.io), the
 same stack as [burkeholland/resize-me](https://github.com/burkeholland/resize-me))
@@ -12,6 +14,10 @@ and a settings experience that feels at home next to the rest of Windows.
 Local discovery and real video decoding/display have been checked, but the
 [physical-iPhone checklist](#real-iphone-release-checklist) is still open.
 The website shows static screenshots with example data, not a device test.
+Desktop casting is a new **source-build preview**, not part of the linked
+0.2.4 download. Windows capture and physical Apple TV playback still require
+the [sender device checklist](sender/README.md#build); compilation and simulated
+UI tests are not a claim of target compatibility.
 
 [Explore the app interface](https://burkeholland.github.io/mirror-me/) |
 [Download the Windows preview](https://github.com/burkeholland/mirror-me/releases/download/v0.2.4-preview.1/MirrorMe-0.2.4-windows-x64.zip) |
@@ -34,6 +40,12 @@ The old external-receiver preview remains retired.
 
 ## Features in the current source build
 
+- **Cast desktop (preview)** — discover local AirPlay targets, select a display,
+  and explicitly share your primary Windows screen. Apple TV PIN pairing is
+  supported, with credentials encrypted for your Windows account. Sharing has
+  its own status, cancellation, and tray Stop action, independent of receiving.
+  This initial sender is video-only at 30 fps; audio-only targets are listed but
+  cannot be selected. It uses a bundled, self-contained WinPlay-based helper.
 - **Wireless AirPlay mirroring** — your iPhone finds MirrorMe over your local
   Wi-Fi network exactly like it finds an Apple TV; no pairing app or cable
   required.
@@ -96,6 +108,9 @@ The old external-receiver preview remains retired.
 - The application needs no internet connection at runtime.
 - Windows N/KN editions may need Microsoft's Media Feature Pack. Optional
   HEVC support depends on an installed Windows decoder.
+- Desktop casting additionally needs Windows 11 22H2 or later, an active
+  unrotated primary display on a Direct3D 11 adapter, and a compatible AirPlay
+  target on the same IPv4 LAN. Enable AirPlay and code-based access on the TV.
 
 To build from source you'll also need:
 
@@ -106,6 +121,8 @@ To build from source you'll also need:
   `C:\Strawberry\c\bin`), CMake, Ninja, Python, Git for Windows with Bash,
   GNU Make, and tar. An MSVCRT-only compiler cannot consume the pinned SDK.
 - Internet for the pinned source/build dependencies on the first build.
+- The .NET 8 SDK or later for building the desktop sender (not required on
+  users' PCs).
 
 ## Getting started
 
@@ -126,8 +143,10 @@ npm ci --prefix frontend
 wails dev
 ```
 
-The build produces `build\bin\MirrorMe.exe`; that executable does not require
-an `engine` folder. Windows and WebView2 remain platform requirements.
+The build produces `build\bin\MirrorMe.exe` and `build\bin\sender`. Keep the
+entire `sender` folder beside the executable to use desktop casting. Receiving
+still works from the executable alone and does not require an `engine` folder.
+Windows and WebView2 remain platform requirements.
 Close an existing app from its tray before replacing its executable, or use
 `-OutputName MirrorMe-native.exe` to build separately.
 
@@ -141,6 +160,9 @@ external static archive contents. See `native\INTEGRATION.txt` and
 There is no external receiver fallback, runtime downloader, or service
 installer. Do not publish a native binary without its matching
 corresponding-source and license package.
+The sender is also built from pinned sources; `scripts\build-sender.ps1`
+retains the upstream source and local changes separately under
+`build\native-sender\source`. See [sender build and licensing](sender/README.md).
 
 ### WinGet packaging
 
@@ -187,6 +209,32 @@ that option. If receiving is stopped, select **Start receiving** on Mirror.
 Closing the MirrorMe window doesn't quit it — it keeps running in the system
 tray so mirroring isn't interrupted. Right-click the tray icon to show the
 window, start/stop mirroring, jump to Settings or About, or quit for good.
+
+### Cast your Windows desktop
+
+1. Open **Cast desktop**. MirrorMe searches for AirPlay devices; **Refresh**
+   repeats discovery. Wake the TV and keep both devices on the same network.
+2. Select a screen-capable target, then choose **Share primary display**.
+   Discovery and selection alone never capture your screen. The entire primary
+   display, including notifications, will be visible to anyone watching the TV.
+3. If asked, enter the four-digit code displayed on the TV and choose
+   **Pair and share**. Pairing is saved securely for your Windows account.
+4. Choose **Stop sharing**, use **Stop sharing desktop** in the tray, or Quit
+   to end capture. Closing the window continues sharing in the tray. Sharing
+   never starts on launch or automatically reconnects after a failure.
+
+This preview sends primary-display SDR video at 30 fps without desktop audio.
+It does not create an extended desktop or support selecting another monitor,
+rotated displays, protected video, IPv6-only discovery, fixed AirPlay passwords,
+or every legacy/vendor pairing protocol. If saved pairing is rejected, stop
+sharing, select the target, and use **Forget pairing**, then try again. Refresh
+target results older than one minute before starting a new session.
+
+The receiving controls and settings continue to apply only to iPhone receiving.
+The sender does not restart when those settings change. A streaming indicator
+means video has been written to the target's data channel, not confirmation that
+the TV rendered it. See the [sender checklist](sender/README.md) for remaining
+physical-device verification.
 
 ### Settings reference
 

@@ -1,4 +1,22 @@
 export namespace main {
+	export interface CastTarget {
+	    id: string;
+	    name: string;
+	    model: string;
+	    address: string;
+	    port: number;
+	    canMirror: boolean;
+	    reason: string;
+	}
+
+	export interface CastSnapshot {
+	    revision: number;
+	    status: string;
+	    available: boolean;
+	    targets: CastTarget[];
+	    target?: CastTarget;
+	    lastError?: string;
+	}
 	
 	export class Config {
 	    deviceName: string;
@@ -95,4 +113,3 @@ export namespace main {
 	}
 
 }
-

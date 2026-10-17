@@ -54,6 +54,7 @@ try {
         throw "A matching, production native archive is required; protocol-only test stubs cannot ship."
     }
 
+    & (Join-Path $PSScriptRoot "build-sender.ps1")
     Invoke-Checked "npm" @("--prefix", "frontend", "run", "build")
     # Force relinking because Go does not track external static archive changes.
     # Do not clean build/bin: it may also contain the user's previous build.
@@ -77,12 +78,14 @@ try {
         executable = $OutputName
         applicationSha256 = (Get-FileHash -LiteralPath $env:MIRRORME_NATIVE_BINARY -Algorithm SHA256).Hash.ToLowerInvariant()
         nativeArchiveSha256 = $manifest.mergedArchiveSha256
+        senderExecutableSha256 = (Get-FileHash -LiteralPath (Join-Path $root "build\bin\sender\MirrorMe.Sender.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
+        senderBundleRequiredForCasting = $true
         protocolSourceCommit = $manifest.protocolCommit
         singleFileWorkerVerified = $true
         physicalIPhoneVerified = $false
         distributionApproved = $false
     } | ConvertTo-Json | Set-Content -LiteralPath "$env:MIRRORME_NATIVE_BINARY.build.json" -Encoding UTF8
-    Write-Host "Self-contained application: $env:MIRRORME_NATIVE_BINARY"
+    Write-Host "Application: $env:MIRRORME_NATIVE_BINARY (include build\bin\sender for desktop casting)"
     Write-Host "No receiver folder is required. Physical iPhone verification remains a separate release check."
 } finally {
     Pop-Location

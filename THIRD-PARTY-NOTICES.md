@@ -55,6 +55,29 @@ compiler-runtime notices and remaining release work. The native source
 collector preserves the full upstream license texts and file-level notices;
 the summary table above does not replace them.
 
+## Desktop sender source build
+
+The optional runtime `sender` directory contains the self-contained
+`MirrorMe.Sender.exe` helper and its dependencies. It is built by
+`scripts/build-sender.ps1`, not downloaded at runtime, and is independent of
+the native iPhone receiver.
+
+| Component | License information | Exact-input record |
+|---|---|---|
+| WinPlay Core and Capture | GPL-3.0-or-later; copyright Dinesh Dhotrad; retained upstream FairPlay credits include LGPL-3.0-or-later doubletake | [dependency.json](sender/dependency.json), commit `76c130aa7a61ae19f7d40f763ed2181136b83cc2`; [upstream](https://github.com/dineshdhotrad/WinPlay) |
+| BouncyCastle.Cryptography | MIT | [NuGet dependency lock](sender/packages.lock.json); <https://github.com/bcgit/bc-csharp> |
+| NAudio Core and WASAPI | MIT | NuGet dependency lock; <https://github.com/naudio/NAudio> |
+| Vortice, Vortice.Mathematics, SharpGen.Runtime | MIT | NuGet dependency lock; <https://github.com/amerkoleci/Vortice.Windows>, <https://github.com/amerkoleci/Vortice.Mathematics>, <https://github.com/SharpGenTools/SharpGenTools> |
+| .NET runtime, Windows SDK projections, System.Security.Cryptography.ProtectedData | MIT and retained third-party notices | NuGet/build dependency records; <https://github.com/dotnet/runtime>, <https://github.com/microsoft/CsWinRT> |
+
+The build retains the pristine WinPlay source archive, the complete local
+patch, wrapper source, dependency lock and build instructions. Preserve those
+inputs, the original WinPlay LICENSE and THIRD_PARTY_NOTICES.md, and the full
+dependency/runtime notices when distributing the helper. The root MIT license
+does not relicense WinPlay or its derivatives. A development build receipt
+remains `distributionApproved=false`; these summary notices alone do not
+establish a complete corresponding-source release. See [sender documentation](sender/README.md).
+
 ## Go and frontend dependencies
 
 | Component | License | Source |

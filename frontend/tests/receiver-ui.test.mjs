@@ -3,7 +3,7 @@ import { after, beforeEach, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
-import { settingsFixture, snapshotFixture } from './fixtures.mjs';
+import { settingsFixture, snapshotFixture, castSnapshotFixture } from './fixtures.mjs';
 
 const vite = await createServer({
   root: fileURLToPath(new URL('..', import.meta.url)),
@@ -39,6 +39,7 @@ beforeEach(() => {
     saving: false, maximised: false, loading: false, settingsSection: 'connection',
     setupStep: 1, setupName: settingsFixture.deviceName, details: {},
     scrollPositions: {}, dialog: null, returnFocus: '', focusTarget: '',
+    cast: castSnapshotFixture(), castSelected: '', castPin: '', castError: '', castAction: '',
   });
   globalThis.document = undefined;
   globalThis.window = {
@@ -46,6 +47,7 @@ beforeEach(() => {
     go: { main: { App: {
       GetSettings: async () => ({ ...settingsFixture }),
       GetStatus: async () => ({ status: 'starting' }),
+      GetCastStatus: async () => castSnapshotFixture(),
       GetVersion: async () => 'test',
       GetSettingsFolder: async () => 'settings',
       GetLogsFolder: async () => 'logs',

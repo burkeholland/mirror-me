@@ -1,6 +1,6 @@
 // Development fixture only. This file is not an entry point in production.
 // No receiver, system settings, clipboard, or real phone is accessed.
-import { settingsFixture, snapshotFixture } from './fixtures.mjs';
+import { settingsFixture, snapshotFixture, castSnapshotFixture } from './fixtures.mjs';
 
 const params = new URLSearchParams(location.search);
 let settings = {
@@ -20,6 +20,11 @@ const listeners = new Map();
 const calls = [];
 let command = 0;
 let maximised = false;
+let cast = castSnapshotFixture(params.get('cast') || 'ready');
+function setCast(status) {
+  cast = castSnapshotFixture(status, cast.revision + 1);
+  emit('cast-status', structuredClone(cast));
+}
 
 function emit(name, event) {
   for (const callback of listeners.get(name) || []) callback(event);
@@ -33,6 +38,16 @@ function setStatus(status) {
 window.go = { main: { App: {
   GetSettings: async () => structuredClone(settings),
   GetStatus: async () => structuredClone(snapshot),
+  GetCastStatus: async () => structuredClone(cast),
+  DiscoverCastTargets: async () => {
+    calls.push(['cast-discover']);
+    setCast('discovering');
+    setTimeout(() => { if (cast.status === 'discovering') setCast('ready'); }, 300);
+  },
+  StartDesktopCast: async id => { calls.push(['cast-start', id]); setCast('pairing'); },
+  SubmitCastPIN: async () => { calls.push(['cast-pin']); setCast('streaming'); },
+  StopDesktopCast: async () => { calls.push(['cast-stop']); setCast('stopped'); },
+  ForgetCastTarget: async id => { calls.push(['cast-forget', id]); },
   GetVersion: async () => 'UI preview',
   GetSettingsFolder: async () => 'Preview only - no files are changed',
   GetLogsFolder: async () => 'Preview only - no log files are created',
@@ -84,11 +99,11 @@ window.runtime = {
 };
 
 const { state } = await import('../src/state.js');
-state.route = ['home', 'settings', 'about'].includes(params.get('route')) ? params.get('route') : 'home';
+state.route = ['home', 'cast', 'settings', 'about'].includes(params.get('route')) ? params.get('route') : 'home';
 state.settingsSection = ['connection', 'picture', 'app'].includes(params.get('section')) ? params.get('section') : 'connection';
 state.setupStep = params.get('step') === '2' ? 2 : 1;
 const { render } = await import('../src/main.js');
-window.__mirrorMePreview = { state, setStatus, render, calls, emit };
+window.__mirrorMePreview = { state, setStatus, setCast, render, calls, emit };
 if (params.get('slow') === '1') {
   const pending = setInterval(() => {
     if (state.loading) return;
