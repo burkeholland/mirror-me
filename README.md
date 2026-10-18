@@ -195,7 +195,8 @@ its executable and deliberately does not mark the build approved for release.
    show on your iPhone and select **Continue**.
    The current source build starts its built-in receiver directly.
 2. Allow MirrorMe through Windows Firewall on your trusted private network
-   if Windows prompts. Do not disable the firewall.
+   if Windows prompts. Do not disable the firewall. The Microsoft Store
+   version adds its own firewall rules, so it does not prompt.
 3. When the PC is ready, open **Control Center** on your iPhone and tap
    **Screen Mirroring**. Choose this PC's name. On an iPhone with a Home
    button, swipe up from the bottom to open Control Center.
@@ -334,6 +335,14 @@ child-process startup, timeout, cancellation, failure, and cleanup:
 go vet ./...
 go test -race ./...
 ```
+
+Builds and tests start receivers from many paths (each worktree has its own
+`build` folder), and Windows Firewall prompts for each new path. Run
+`scripts\allow-dev-firewall.ps1` from an elevated PowerShell window to allow
+every MirrorMe executable in your worktrees, plus the fixed folder the
+standalone receiver test copies to
+(`%LOCALAPPDATA%\MirrorMe\dev\standalone-check`). Rerun it after building a
+new worktree. `-Remove` deletes the rules.
 
 For Windows CI without the native SDK, `go test -tags native_contracts ./...`
 and `go vet -tags native_contracts ./...` exercise the same supervisor and

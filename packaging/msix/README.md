@@ -38,3 +38,8 @@ The package targets Windows 11 x64 and includes the self-contained desktop
 casting helper and its license notices. Its startup task is declared in the
 manifest and uses the Windows packaged startup API, so it remains valid across
 Store-managed upgrades.
+
+The manifest also declares inbound TCP and UDP firewall rules for `MirrorMe.exe`
+and `sender\MirrorMe.Sender.exe`. Windows applies them when the package is
+installed, so Store users are not asked to allow network access, and the rules
+follow the app across updates. `build-msix.ps1` fails if they are missing.
