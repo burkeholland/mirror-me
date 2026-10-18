@@ -28,9 +28,12 @@ test('the landing page is concise and excludes the removed section and runtime n
   assert.ok(words <= 180, `Keep the page concise (${words} words)`);
 });
 
-test('the page links the self-contained preview and its sources without retired downloads', () => {
+test('the page links both downloads and the self-contained preview sources', () => {
   assert.match(html, /17\.9 MB executable\.<\/strong> Built-in receiver\./);
   assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/releases\/download\/v0\.2\.4-preview\.1\/MirrorMe-0\.2\.4-windows-x64\.zip"/);
+  assert.match(html, /class="btn btn-secondary download store-download" href="https:\/\/apps\.microsoft\.com\/detail\/9p13s05nfnvz" target="_blank" rel="noopener noreferrer"/);
+  assert.match(html, /Get it from Microsoft Store/);
+  assert.match(html, /class="sr-only"> \(opens in a new tab\)<\/span>/);
   assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/releases\/tag\/v0\.2\.4-preview\.1"/);
   assert.match(html, /Source, licenses &amp; checksums/);
   assert.doesNotMatch(html, /Windows download not yet available|v0\.1\.0|separate receiver setup/);
