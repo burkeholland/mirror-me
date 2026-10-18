@@ -27,12 +27,26 @@ if (-not (Test-Path -LiteralPath $vendor)) {
 }
 $commit = & git -C $vendor rev-parse HEAD
 if ($LASTEXITCODE -ne 0 -or $commit -ne $lock.commit) { throw "Sender sources do not match the pinned commit." }
+$patchStats = & git -C $vendor apply --numstat $patch
+if ($LASTEXITCODE -ne 0) { throw "Could not inspect the sender compatibility patch." }
+$patchedFiles = @($patchStats | ForEach-Object { ($_ -split "`t", 3)[2] })
+function Register-PatchFiles {
+    # Intent-to-add includes new patched files in diff verification without
+    # staging their contents or accepting any other untracked source files.
+    foreach ($file in $patchedFiles) {
+        if (Test-Path -LiteralPath (Join-Path $vendor $file)) {
+            Invoke-Checked "git" @("-C", $vendor, "add", "--intent-to-add", "--", $file)
+        }
+    }
+}
+Register-PatchFiles
 $diff = (& git -C $vendor diff --no-ext-diff --binary) -join "`n"
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect sender sources." }
 $expected = (Get-Content -LiteralPath $patch -Raw).Replace("`r`n", "`n").TrimEnd()
 if ($diff.TrimEnd() -eq "") {
     Invoke-Checked "git" @("-C", $vendor, "apply", "--check", $patch)
     Invoke-Checked "git" @("-C", $vendor, "apply", $patch)
+    Register-PatchFiles
 } elseif ($diff.Replace("`r`n", "`n").TrimEnd() -ne $expected) {
     throw "Sender sources contain changes other than the checked-in compatibility patch."
 }

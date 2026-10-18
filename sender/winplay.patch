@@ -1,8 +1,25 @@
 diff --git a/src/WinPlay.Capture/DesktopDuplicator.cs b/src/WinPlay.Capture/DesktopDuplicator.cs
-index 22111b1..261f9b7 100644
+index 22111b1..d567c36 100644
 --- a/src/WinPlay.Capture/DesktopDuplicator.cs
 +++ b/src/WinPlay.Capture/DesktopDuplicator.cs
-@@ -27,7 +27,9 @@ internal sealed class DesktopDuplicator : IDisposable
+@@ -3,6 +3,7 @@ using SharpGen.Runtime;
+ using Vortice.Direct3D;
+ using Vortice.Direct3D11;
+ using Vortice.DXGI;
++using Vortice.Mathematics;
+ 
+ namespace WinPlay.Capture;
+ 
+@@ -16,6 +17,8 @@ namespace WinPlay.Capture;
+ internal sealed class DesktopDuplicator : IDisposable
+ {
+     private readonly IDXGIOutputDuplication _duplication;
++    private readonly DesktopPointer _pointer = new();
++    private ID3D11Texture2D? _pointerStaging;
+ 
+     public ID3D11Device Device { get; }
+     public ID3D11DeviceContext Context { get; }
+@@ -27,7 +30,9 @@ internal sealed class DesktopDuplicator : IDisposable
      {
          FeatureLevel[] levels = [FeatureLevel.Level_11_1, FeatureLevel.Level_11_0, FeatureLevel.Level_10_1, FeatureLevel.Level_10_0];
          // BgraSupport enables the video processor; VideoSupport enables the color-convert path.
@@ -13,7 +30,7 @@ index 22111b1..261f9b7 100644
              DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport, levels,
              out ID3D11Device? device).CheckError();
          Device = device!;
-@@ -35,7 +37,7 @@ internal sealed class DesktopDuplicator : IDisposable
+@@ -35,7 +40,7 @@ internal sealed class DesktopDuplicator : IDisposable
  
          using var dxgiDevice = Device.QueryInterface<IDXGIDevice>();
          using var adapter = dxgiDevice.GetAdapter();
@@ -22,7 +39,7 @@ index 22111b1..261f9b7 100644
          using (output)
          using (var output1 = output.QueryInterface<IDXGIOutput1>())
          {
-@@ -47,6 +49,34 @@ internal sealed class DesktopDuplicator : IDisposable
+@@ -47,6 +52,34 @@ internal sealed class DesktopDuplicator : IDisposable
          Format = Format.B8G8R8A8_UNorm;
      }
  
@@ -57,6 +74,204 @@ index 22111b1..261f9b7 100644
      /// <summary>Creates a texture matching the desktop, suitable as a video-processor input.</summary>
      public ID3D11Texture2D CreateBgraTexture() => Device.CreateTexture2D(new Texture2DDescription
      {
+@@ -69,7 +102,7 @@ internal sealed class DesktopDuplicator : IDisposable
+     /// </summary>
+     public bool TryCaptureInto(ID3D11Texture2D dest, int timeoutMs)
+     {
+-        Result acquire = _duplication.AcquireNextFrame((uint)timeoutMs, out OutduplFrameInfo _, out IDXGIResource? resource);
++        Result acquire = _duplication.AcquireNextFrame((uint)timeoutMs, out OutduplFrameInfo frame, out IDXGIResource? resource);
+         if (acquire == Vortice.DXGI.ResultCode.WaitTimeout)
+         {
+             resource?.Dispose();
+@@ -78,19 +111,78 @@ internal sealed class DesktopDuplicator : IDisposable
+         acquire.CheckError();
+         try
+         {
++            UpdatePointer(frame);
+             using var texture = resource!.QueryInterface<ID3D11Texture2D>();
++            // Always start from DXGI's untouched image, including pointer-only
++            // frames. Never draw over the previous frame's cursor.
+             Context.CopyResource(dest, texture);
+-            return true;
+         }
+         finally
+         {
+             resource!.Dispose();
+             _duplication.ReleaseFrame();
+         }
++        DrawPointer(dest);
++        return true;
++    }
++
++    private unsafe void UpdatePointer(OutduplFrameInfo frame)
++    {
++        _pointer.UpdatePosition(frame.LastMouseUpdateTime, frame.PointerPosition.Position.X,
++            frame.PointerPosition.Position.Y, frame.PointerPosition.Visible);
++        if (frame.PointerShapeBufferSize == 0) return;
++        if (frame.PointerShapeBufferSize > 16 * 1024 * 1024)
++            throw new InvalidDataException("Windows returned an oversized desktop pointer shape.");
++        byte[] shape = new byte[frame.PointerShapeBufferSize];
++        fixed (byte* buffer = shape)
++        {
++            _duplication.GetFramePointerShape((uint)shape.Length, (IntPtr)buffer, out uint required,
++                out OutduplPointerShapeInfo info).CheckError();
++            if (required > shape.Length) throw new InvalidDataException("The desktop pointer shape was truncated.");
++            _pointer.SetShape((PointerShapeType)info.Type, checked((int)info.Width), checked((int)info.Height),
++                checked((int)info.Pitch), shape.AsSpan(0, (int)required));
++        }
++    }
++
++    private unsafe void DrawPointer(ID3D11Texture2D desktop)
++    {
++        var region = _pointer.GetRegion(Width, Height);
++        if (region.Width == 0 || region.Height == 0) return;
++        if (_pointerStaging is null || _pointerStaging.Description.Width != _pointer.Width
++            || _pointerStaging.Description.Height != _pointer.Height)
++        {
++            _pointerStaging?.Dispose();
++            _pointerStaging = null;
++            _pointerStaging = Device.CreateTexture2D(new Texture2DDescription
++            {
++                Width = (uint)_pointer.Width,
++                Height = (uint)_pointer.Height,
++                MipLevels = 1,
++                ArraySize = 1,
++                Format = Format.B8G8R8A8_UNorm,
++                SampleDescription = new SampleDescription(1, 0),
++                Usage = ResourceUsage.Staging,
++                BindFlags = BindFlags.None,
++                CPUAccessFlags = CpuAccessFlags.Read | CpuAccessFlags.Write,
++                MiscFlags = ResourceOptionFlags.None,
++            });
++        }
++        var source = new Box(region.X, region.Y, 0, region.X + region.Width, region.Y + region.Height, 1);
++        Context.CopySubresourceRegion(_pointerStaging, 0, 0, 0, 0, desktop, 0, source);
++        var map = Context.Map(_pointerStaging, 0, MapMode.ReadWrite, Vortice.Direct3D11.MapFlags.None);
++        try
++        {
++            _pointer.Composite(new Span<byte>((void*)map.DataPointer, checked((int)map.RowPitch * region.Height)),
++                checked((int)map.RowPitch), region);
++        }
++        finally { Context.Unmap(_pointerStaging, 0); }
++        var cursor = new Box(0, 0, 0, region.Width, region.Height, 1);
++        Context.CopySubresourceRegion(desktop, 0, (uint)region.X, (uint)region.Y, 0, _pointerStaging, 0, cursor);
+     }
+ 
+     public void Dispose()
+     {
++        _pointerStaging?.Dispose();
+         _duplication.Dispose();
+         Context.Dispose();
+         Device.Dispose();
+diff --git a/src/WinPlay.Capture/DesktopPointer.cs b/src/WinPlay.Capture/DesktopPointer.cs
+new file mode 100644
+index 0000000..5b56046
+--- /dev/null
++++ b/src/WinPlay.Capture/DesktopPointer.cs
+@@ -0,0 +1,103 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++namespace WinPlay.Capture;
++
++internal enum PointerShapeType : uint
++{
++    Monochrome = 1,
++    Color = 2,
++    MaskedColor = 4,
++}
++
++internal readonly record struct PointerRegion(int X, int Y, int Width, int Height, int ShapeX, int ShapeY);
++
++// DXGI supplies the hardware pointer separately, in desktop pixels, with its
++// top-left position already adjusted for the hotspot.
++internal sealed class DesktopPointer
++{
++    private PointerShapeType _type;
++    private byte[] _shape = [];
++    private int _pitch;
++    private int _x;
++    private int _y;
++    private bool _visible;
++
++    public int Width { get; private set; }
++    public int Height { get; private set; }
++
++    public void UpdatePosition(long timestamp, int x, int y, bool visible)
++    {
++        if (timestamp == 0) return;
++        (_x, _y, _visible) = (x, y, visible);
++    }
++
++    public void SetShape(PointerShapeType type, int width, int height, int pitch, ReadOnlySpan<byte> shape)
++    {
++        if (type is not (PointerShapeType.Monochrome or PointerShapeType.Color or PointerShapeType.MaskedColor))
++            throw new InvalidDataException("Windows returned an unsupported desktop pointer type.");
++        long minimumPitch = type == PointerShapeType.Monochrome ? ((long)width + 7) / 8 : (long)width * 4;
++        if (width <= 0 || height <= 0 || pitch < minimumPitch || (long)pitch * height > shape.Length
++            || (type == PointerShapeType.Monochrome && (height & 1) != 0))
++            throw new InvalidDataException("Windows returned an invalid desktop pointer shape.");
++
++        _type = type;
++        Width = width;
++        // A monochrome DIB contains the AND mask followed by an equally tall XOR mask.
++        Height = type == PointerShapeType.Monochrome ? height / 2 : height;
++        _pitch = pitch;
++        _shape = shape[..checked(pitch * height)].ToArray();
++    }
++
++    public PointerRegion GetRegion(int desktopWidth, int desktopHeight)
++    {
++        if (!_visible) return default;
++        if (_shape.Length == 0) throw new InvalidDataException("Windows did not provide the visible desktop pointer's shape.");
++        int left = Math.Clamp(_x, 0, desktopWidth);
++        int top = Math.Clamp(_y, 0, desktopHeight);
++        int right = (int)Math.Clamp((long)_x + Width, 0, desktopWidth);
++        int bottom = (int)Math.Clamp((long)_y + Height, 0, desktopHeight);
++        if (right <= left || bottom <= top) return default;
++        return new(left, top, right - left, bottom - top, left - _x, top - _y);
++    }
++
++    // The destination is only the clipped cursor rectangle, not a full desktop
++    // readback. Its row stride can include driver padding.
++    public void Composite(Span<byte> bgra, int rowPitch, PointerRegion region)
++    {
++        if (region.Width <= 0 || region.Height <= 0) return;
++        if (region.ShapeX < 0 || region.ShapeY < 0 || (long)region.ShapeX + region.Width > Width
++            || (long)region.ShapeY + region.Height > Height || rowPitch < (long)region.Width * 4
++            || bgra.Length < (long)(region.Height - 1) * rowPitch + (long)region.Width * 4)
++            throw new ArgumentException("Invalid desktop pointer composition region.");
++
++        for (int y = 0; y < region.Height; y++)
++        for (int x = 0; x < region.Width; x++)
++        {
++            int sx = region.ShapeX + x, sy = region.ShapeY + y;
++            int destination = y * rowPitch + x * 4;
++            if (_type == PointerShapeType.Monochrome)
++            {
++                int index = sy * _pitch + sx / 8;
++                int bit = 0x80 >> (sx & 7);
++                int andMask = (_shape[index] & bit) != 0 ? 255 : 0;
++                int xorMask = (_shape[index + Height * _pitch] & bit) != 0 ? 255 : 0;
++                for (int channel = 0; channel < 3; channel++)
++                    bgra[destination + channel] = (byte)((bgra[destination + channel] & andMask) ^ xorMask);
++            }
++            else
++            {
++                int source = sy * _pitch + sx * 4;
++                int alpha = _shape[source + 3];
++                if (_type == PointerShapeType.MaskedColor && alpha is not (0 or 255))
++                    throw new InvalidDataException("Windows returned an invalid masked-color pointer alpha.");
++                for (int channel = 0; channel < 3; channel++)
++                {
++                    int foreground = _shape[source + channel], background = bgra[destination + channel];
++                    bgra[destination + channel] = _type == PointerShapeType.Color
++                        ? (byte)((foreground * alpha + background * (255 - alpha) + 127) / 255)
++                        : (byte)(alpha == 255 ? background ^ foreground : foreground);
++                }
++            }
++            bgra[destination + 3] = 255;
++        }
++    }
++}
 diff --git a/src/WinPlay.Capture/ScreenMirrorSource.cs b/src/WinPlay.Capture/ScreenMirrorSource.cs
 index a264439..a752ed2 100644
 --- a/src/WinPlay.Capture/ScreenMirrorSource.cs
@@ -344,6 +559,171 @@ index ef2ba7e..d0d8695 100644
          foreach (var (k, v) in request.Headers)
              sb.Append(k).Append(": ").Append(v).Append("\r\n");
          if (request.Body is { Length: > 0 })
+diff --git a/tests/WinPlay.Core.Tests/DesktopPointerTests.cs b/tests/WinPlay.Core.Tests/DesktopPointerTests.cs
+new file mode 100644
+index 0000000..ecdab61
+--- /dev/null
++++ b/tests/WinPlay.Core.Tests/DesktopPointerTests.cs
+@@ -0,0 +1,159 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++using WinPlay.Capture;
++using Xunit;
++
++namespace WinPlay.Core.Tests;
++
++public class DesktopPointerTests
++{
++    private static DesktopPointer ColorPointer(int width = 1, int height = 1)
++    {
++        var pointer = new DesktopPointer();
++        byte[] shape = new byte[width * height * 4];
++        for (int i = 0; i < width * height; i++)
++        {
++            shape[i * 4] = (byte)(i + 1);
++            shape[i * 4 + 3] = 255;
++        }
++        pointer.SetShape(PointerShapeType.Color, width, height, width * 4, shape);
++        pointer.UpdatePosition(1, 0, 0, true);
++        return pointer;
++    }
++
++    [Fact]
++    public void ColorPointer_PreservesTransparencyAndBlendsEdges()
++    {
++        var pointer = new DesktopPointer();
++        pointer.SetShape(PointerShapeType.Color, 3, 1, 16,
++            [200, 100, 50, 0, 200, 100, 50, 255, 200, 100, 50, 128, 99, 99, 99, 99]);
++        pointer.UpdatePosition(1, 0, 0, true);
++        byte[] desktop = [20, 40, 60, 255, 20, 40, 60, 255, 20, 40, 60, 255, 77, 77, 77, 77];
++        pointer.Composite(desktop, 16, pointer.GetRegion(3, 1));
++        Assert.Equal(new byte[] { 20, 40, 60, 255, 200, 100, 50, 255, 110, 70, 55, 255, 77, 77, 77, 77 }, desktop);
++    }
++
++    [Fact]
++    public void MonochromePointer_AppliesAllAndXorCasesWithSeparateMaskRows()
++    {
++        var pointer = new DesktopPointer();
++        pointer.SetShape(PointerShapeType.Monochrome, 10, 4, 2, [0x30, 0x40, 0xff, 0xc0, 0x50, 0x80, 0, 0]);
++        pointer.UpdatePosition(1, 0, 0, true);
++        Assert.Equal(2, pointer.Height);
++        byte[] desktop = Enumerable.Repeat((byte)0x55, 88).ToArray();
++        pointer.Composite(desktop, 44, pointer.GetRegion(10, 2));
++        Assert.Equal(0, desktop[0]);       // AND=0, XOR=0: black
++        Assert.Equal(255, desktop[4]);     // AND=0, XOR=1: white
++        Assert.Equal(0x55, desktop[8]);    // AND=1, XOR=0: unchanged
++        Assert.Equal(0xaa, desktop[12]);   // AND=1, XOR=1: inverted background
++        Assert.Equal(255, desktop[32]);    // pixel 8 uses the next mask byte
++        Assert.Equal(0x55, desktop[36]);
++        Assert.Equal(0x55, desktop[44]);   // second mask row is not the XOR plane
++        Assert.Equal(0x55, desktop[80]);
++        Assert.All(desktop[40..44], b => Assert.Equal(0x55, b));
++        Assert.All(desktop[84..88], b => Assert.Equal(0x55, b));
++    }
++
++    [Fact]
++    public void MaskedColorPointer_ReplacesOrXorsInsteadOfAlphaBlending()
++    {
++        var pointer = new DesktopPointer();
++        pointer.SetShape(PointerShapeType.MaskedColor, 2, 1, 8, [0x10, 0x20, 0x30, 0, 1, 0x80, 0xff, 255]);
++        pointer.UpdatePosition(1, 0, 0, true);
++        byte[] desktop = [0xaa, 0xbb, 0xcc, 255, 0xaa, 0xbb, 0xcc, 255];
++        pointer.Composite(desktop, 8, pointer.GetRegion(2, 1));
++        Assert.Equal(new byte[] { 0x10, 0x20, 0x30, 255, 0xab, 0x3b, 0x33, 255 }, desktop);
++    }
++
++    [Theory]
++    [InlineData(-2, -1, 0, 0, 2, 2, 2, 1)]
++    [InlineData(7, 7, 7, 7, 1, 1, 0, 0)]
++    [InlineData(-2, 7, 0, 7, 2, 1, 2, 0)]
++    [InlineData(7, -1, 7, 0, 1, 2, 0, 1)]
++    public void PointerClipsAllDesktopEdges(int x, int y, int left, int top, int width, int height, int sx, int sy)
++    {
++        var pointer = ColorPointer(4, 3);
++        pointer.UpdatePosition(2, x, y, true);
++        var region = pointer.GetRegion(8, 8);
++        Assert.Equal(new PointerRegion(left, top, width, height, sx, sy), region);
++        byte[] clipped = new byte[width * height * 4];
++        pointer.Composite(clipped, width * 4, region);
++        for (int row = 0; row < height; row++)
++        for (int column = 0; column < width; column++)
++            Assert.Equal((byte)((sy + row) * 4 + sx + column + 1), clipped[(row * width + column) * 4]);
++    }
++
++    [Theory]
++    [InlineData(-4, 0)]
++    [InlineData(8, 0)]
++    [InlineData(0, -3)]
++    [InlineData(0, 8)]
++    [InlineData(int.MinValue, int.MinValue)]
++    [InlineData(int.MaxValue, int.MaxValue)]
++    public void PointerOutsideCapturedMonitorDoesNotDraw(int x, int y)
++    {
++        var pointer = ColorPointer(4, 3);
++        pointer.UpdatePosition(2, x, y, true);
++        Assert.Equal(default, pointer.GetRegion(8, 8));
++    }
++
++    [Fact]
++    public void NoMouseUpdateKeepsShapePositionAndVisibility()
++    {
++        var pointer = ColorPointer(4, 3);
++        pointer.UpdatePosition(2, 2, 3, true);
++        pointer.UpdatePosition(0, 0, 0, false);
++        Assert.Equal(new PointerRegion(2, 3, 4, 3, 0, 0), pointer.GetRegion(20, 20));
++        pointer.UpdatePosition(3, 2, 3, false);
++        Assert.Equal(default, pointer.GetRegion(20, 20)); // hidden or already embedded by Windows
++        pointer.UpdatePosition(4, 4, 5, true);
++        Assert.Equal(new PointerRegion(4, 5, 4, 3, 0, 0), pointer.GetRegion(20, 20));
++    }
++
++    [Fact]
++    public void EnlargedPointerDrawsItsEntireShape()
++    {
++        var pointer = ColorPointer(128, 128);
++        var region = pointer.GetRegion(1920, 1080);
++        Assert.Equal(128, region.Width);
++        Assert.Equal(128, region.Height);
++        byte[] desktop = new byte[128 * 128 * 4];
++        pointer.Composite(desktop, 128 * 4, region);
++        Assert.Equal(255, desktop[^1]);
++        Assert.Equal(255, desktop[^8]);
++    }
++
++    [Fact]
++    public void PointerMovementAndHideRecomposeOnTheUnmodifiedDesktop()
++    {
++        var pointer = ColorPointer();
++        byte[] original = [20, 40, 60, 255, 20, 40, 60, 255];
++        byte[] Render()
++        {
++            byte[] output = (byte[])original.Clone();
++            var region = pointer.GetRegion(2, 1);
++            if (region.Width > 0)
++                pointer.Composite(output.AsSpan(region.X * 4), 8, region);
++            return output;
++        }
++        Assert.Equal(1, Render()[0]);
++        pointer.UpdatePosition(2, 1, 0, true); // pointer-only update, no new desktop pixels
++        var moved = Render();
++        Assert.Equal(original[..4], moved[..4]);
++        Assert.Equal(1, moved[4]);
++        pointer.UpdatePosition(3, 1, 0, false);
++        Assert.Equal(original, Render());
++    }
++
++    [Theory]
++    [InlineData(0, 1, 1, 4, 4)]
++    [InlineData(2, 0, 1, 4, 4)]
++    [InlineData(2, 2, 1, 4, 8)]
++    [InlineData(2, 1, 2, 4, 4)]
++    [InlineData(1, 8, 3, 1, 3)]
++    [InlineData(1, 9, 2, 1, 2)]
++    public void InvalidShapesFailExplicitly(uint type, int width, int height, int pitch, int length)
++    {
++        var pointer = new DesktopPointer();
++        Assert.Throws<InvalidDataException>(() => pointer.SetShape((PointerShapeType)type, width, height, pitch, new byte[length]));
++    }
++}
 diff --git a/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs b/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs
 index 5ede0c5..77888f3 100644
 --- a/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs
@@ -467,3 +847,20 @@ index 0000000..3ec3953
 +        Assert.DoesNotContain("DACP-ID:", wire);
 +    }
 +}
+diff --git a/tests/WinPlay.Core.Tests/WinPlay.Core.Tests.csproj b/tests/WinPlay.Core.Tests/WinPlay.Core.Tests.csproj
+index 58d356e..394249b 100644
+--- a/tests/WinPlay.Core.Tests/WinPlay.Core.Tests.csproj
++++ b/tests/WinPlay.Core.Tests/WinPlay.Core.Tests.csproj
+@@ -16,6 +16,7 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\src\WinPlay.Core\WinPlay.Core.csproj" />
++    <Compile Include="..\..\src\WinPlay.Capture\DesktopPointer.cs" Link="DesktopPointer.cs" />
+   </ItemGroup>
+ 
+   <ItemGroup>
+@@ -23,4 +24,3 @@
+       <_Parameter1>windows</_Parameter1>
+     </AssemblyAttribute>  </ItemGroup>
+ </Project>
+-

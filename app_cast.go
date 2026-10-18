@@ -38,7 +38,7 @@ func (a *App) StopDesktopCast() error {
 	if a.sender == nil {
 		return errors.New("desktop casting is not initialized")
 	}
-	return a.sender.Stop()
+	return a.sender.Disconnect()
 }
 
 func (a *App) ForgetCastTarget(targetID string) error {

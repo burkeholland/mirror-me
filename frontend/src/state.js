@@ -142,8 +142,10 @@ export async function load(render) {
 function acceptCastSnapshot(snapshot) {
   if (!snapshot || snapshot.revision < state.cast.revision) return;
   if (snapshot.status !== 'pairing') state.castPin = '';
+  if (snapshot.status === 'discovering') state.castError = '';
   state.cast = snapshot;
-  if (!snapshot.targets.some(target => target.id === state.castSelected && target.canMirror)) state.castSelected = '';
+  if (snapshot.status !== 'discovering'
+    && !snapshot.targets.some(target => target.id === state.castSelected && target.canMirror)) state.castSelected = '';
 }
 
 export function receiveCastEvent(snapshot, render) {
