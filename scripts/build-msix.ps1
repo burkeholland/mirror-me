@@ -221,6 +221,16 @@ try {
     if (-not $identity -or -not $startup -or $startup.TaskId -ne "MirrorMeStartupTask") {
         throw "Generated manifest is missing the package identity or MirrorMe startup task."
     }
+    $manager.AddNamespace("d2", "http://schemas.microsoft.com/appx/manifest/desktop/windows10/2")
+    foreach ($firewallExecutable in @("MirrorMe.exe", "sender\MirrorMe.Sender.exe")) {
+        $rules = $manifestDocument.SelectNodes(
+            "/f:Package/f:Extensions/d2:Extension/d2:FirewallRules[@Executable='$firewallExecutable']/d2:Rule[@Direction='in']",
+            $manager)
+        $protocols = @($rules | ForEach-Object { $_.IPProtocol }) | Sort-Object -Unique
+        if (($protocols -join ",") -ne "TCP,UDP") {
+            throw "Generated manifest is missing inbound TCP and UDP firewall rules for $firewallExecutable."
+        }
+    }
 
     Invoke-Checked $makeAppx @("pack", "/d", $layout, "/p", $OutputPath, "/o")
 

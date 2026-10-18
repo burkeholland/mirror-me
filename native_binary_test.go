@@ -99,6 +99,23 @@ func TestRuntimeImportAuditRejectsReceiverAndCompilerDLLs(t *testing.T) {
 	}
 }
 
+// standaloneCheckDirectory returns an empty directory at a fixed path so the
+// copied receiver keeps one Windows Firewall identity across builds (see
+// scripts\allow-dev-firewall.ps1). A per-test temp path would trigger a new
+// firewall prompt on every build. If the fixed directory is busy, for example
+// because another worktree is running this test, it falls back to a temp dir.
+func standaloneCheckDirectory(t *testing.T) string {
+	t.Helper()
+	if base := os.Getenv("LOCALAPPDATA"); base != "" {
+		directory := filepath.Join(base, "MirrorMe", "dev", "standalone-check")
+		if os.RemoveAll(directory) == nil && os.MkdirAll(directory, 0o755) == nil {
+			return directory
+		}
+		t.Logf("fixed standalone directory is busy; using a temp directory: %s", directory)
+	}
+	return t.TempDir()
+}
+
 // Opt-in: copies only the app executable into an empty directory, removes
 // compiler/runtime directories from PATH, and exercises its real worker.
 func TestNativeApplicationRunsFromOneFile(t *testing.T) {
@@ -115,7 +132,7 @@ func TestNativeApplicationRunsFromOneFile(t *testing.T) {
 			t.Fatalf("application still imports an external runtime: %s", library)
 		}
 	}
-	directory := t.TempDir()
+	directory := standaloneCheckDirectory(t)
 	executable := filepath.Join(directory, "MirrorMe.exe")
 	source, err := os.Open(binary)
 	if err != nil {
