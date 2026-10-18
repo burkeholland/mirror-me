@@ -1,5 +1,5 @@
 diff --git a/src/WinPlay.Capture/DesktopDuplicator.cs b/src/WinPlay.Capture/DesktopDuplicator.cs
-index 22111b1..d567c36 100644
+index 22111b1..0635dd9 100644
 --- a/src/WinPlay.Capture/DesktopDuplicator.cs
 +++ b/src/WinPlay.Capture/DesktopDuplicator.cs
 @@ -3,6 +3,7 @@ using SharpGen.Runtime;
@@ -83,7 +83,7 @@ index 22111b1..d567c36 100644
          if (acquire == Vortice.DXGI.ResultCode.WaitTimeout)
          {
              resource?.Dispose();
-@@ -78,19 +111,78 @@ internal sealed class DesktopDuplicator : IDisposable
+@@ -78,19 +111,87 @@ internal sealed class DesktopDuplicator : IDisposable
          acquire.CheckError();
          try
          {
@@ -108,16 +108,25 @@ index 22111b1..d567c36 100644
 +        _pointer.UpdatePosition(frame.LastMouseUpdateTime, frame.PointerPosition.Position.X,
 +            frame.PointerPosition.Position.Y, frame.PointerPosition.Visible);
 +        if (frame.PointerShapeBufferSize == 0) return;
++        // Unusable shapes hide the pointer rather than ending the share.
 +        if (frame.PointerShapeBufferSize > 16 * 1024 * 1024)
-+            throw new InvalidDataException("Windows returned an oversized desktop pointer shape.");
++        {
++            _pointer.ClearShape();
++            return;
++        }
 +        byte[] shape = new byte[frame.PointerShapeBufferSize];
 +        fixed (byte* buffer = shape)
 +        {
 +            _duplication.GetFramePointerShape((uint)shape.Length, (IntPtr)buffer, out uint required,
 +                out OutduplPointerShapeInfo info).CheckError();
-+            if (required > shape.Length) throw new InvalidDataException("The desktop pointer shape was truncated.");
-+            _pointer.SetShape((PointerShapeType)info.Type, checked((int)info.Width), checked((int)info.Height),
-+                checked((int)info.Pitch), shape.AsSpan(0, (int)required));
++            if (required > shape.Length || info.Width > int.MaxValue || info.Height > int.MaxValue
++                || info.Pitch > int.MaxValue)
++            {
++                _pointer.ClearShape();
++                return;
++            }
++            _pointer.SetShape((PointerShapeType)info.Type, (int)info.Width, (int)info.Height,
++                (int)info.Pitch, shape.AsSpan(0, (int)required));
 +        }
 +    }
 +
@@ -165,10 +174,10 @@ index 22111b1..d567c36 100644
          Device.Dispose();
 diff --git a/src/WinPlay.Capture/DesktopPointer.cs b/src/WinPlay.Capture/DesktopPointer.cs
 new file mode 100644
-index 0000000..5b56046
+index 0000000..0aff02f
 --- /dev/null
 +++ b/src/WinPlay.Capture/DesktopPointer.cs
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,114 @@
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +namespace WinPlay.Capture;
 +
@@ -201,14 +210,18 @@ index 0000000..5b56046
 +        (_x, _y, _visible) = (x, y, visible);
 +    }
 +
-+    public void SetShape(PointerShapeType type, int width, int height, int pitch, ReadOnlySpan<byte> shape)
++    // A shape that cannot be drawn hides the pointer until Windows supplies a
++    // valid one. A cursor glitch must never end the desktop share.
++    public bool SetShape(PointerShapeType type, int width, int height, int pitch, ReadOnlySpan<byte> shape)
 +    {
-+        if (type is not (PointerShapeType.Monochrome or PointerShapeType.Color or PointerShapeType.MaskedColor))
-+            throw new InvalidDataException("Windows returned an unsupported desktop pointer type.");
 +        long minimumPitch = type == PointerShapeType.Monochrome ? ((long)width + 7) / 8 : (long)width * 4;
-+        if (width <= 0 || height <= 0 || pitch < minimumPitch || (long)pitch * height > shape.Length
++        if (type is not (PointerShapeType.Monochrome or PointerShapeType.Color or PointerShapeType.MaskedColor)
++            || width <= 0 || height <= 0 || pitch < minimumPitch || (long)pitch * height > shape.Length
 +            || (type == PointerShapeType.Monochrome && (height & 1) != 0))
-+            throw new InvalidDataException("Windows returned an invalid desktop pointer shape.");
++        {
++            ClearShape();
++            return false;
++        }
 +
 +        _type = type;
 +        Width = width;
@@ -216,12 +229,20 @@ index 0000000..5b56046
 +        Height = type == PointerShapeType.Monochrome ? height / 2 : height;
 +        _pitch = pitch;
 +        _shape = shape[..checked(pitch * height)].ToArray();
++        return true;
++    }
++
++    public void ClearShape()
++    {
++        _shape = [];
++        Width = 0;
++        Height = 0;
++        _pitch = 0;
 +    }
 +
 +    public PointerRegion GetRegion(int desktopWidth, int desktopHeight)
 +    {
-+        if (!_visible) return default;
-+        if (_shape.Length == 0) throw new InvalidDataException("Windows did not provide the visible desktop pointer's shape.");
++        if (!_visible || _shape.Length == 0) return default;
 +        int left = Math.Clamp(_x, 0, desktopWidth);
 +        int top = Math.Clamp(_y, 0, desktopHeight);
 +        int right = (int)Math.Clamp((long)_x + Width, 0, desktopWidth);
@@ -258,14 +279,13 @@ index 0000000..5b56046
 +            {
 +                int source = sy * _pitch + sx * 4;
 +                int alpha = _shape[source + 3];
-+                if (_type == PointerShapeType.MaskedColor && alpha is not (0 or 255))
-+                    throw new InvalidDataException("Windows returned an invalid masked-color pointer alpha.");
 +                for (int channel = 0; channel < 3; channel++)
 +                {
 +                    int foreground = _shape[source + channel], background = bgra[destination + channel];
++                    // Masked-color alpha should be 0 (replace) or 0xFF (XOR); treat any nonzero mask as XOR.
 +                    bgra[destination + channel] = _type == PointerShapeType.Color
 +                        ? (byte)((foreground * alpha + background * (255 - alpha) + 127) / 255)
-+                        : (byte)(alpha == 255 ? background ^ foreground : foreground);
++                        : (byte)(alpha != 0 ? background ^ foreground : foreground);
 +                }
 +            }
 +            bgra[destination + 3] = 255;
@@ -561,10 +581,10 @@ index ef2ba7e..d0d8695 100644
          if (request.Body is { Length: > 0 })
 diff --git a/tests/WinPlay.Core.Tests/DesktopPointerTests.cs b/tests/WinPlay.Core.Tests/DesktopPointerTests.cs
 new file mode 100644
-index 0000000..ecdab61
+index 0000000..cf68ade
 --- /dev/null
 +++ b/tests/WinPlay.Core.Tests/DesktopPointerTests.cs
-@@ -0,0 +1,159 @@
+@@ -0,0 +1,196 @@
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +using WinPlay.Capture;
 +using Xunit;
@@ -718,10 +738,47 @@ index 0000000..ecdab61
 +    [InlineData(2, 1, 2, 4, 4)]
 +    [InlineData(1, 8, 3, 1, 3)]
 +    [InlineData(1, 9, 2, 1, 2)]
-+    public void InvalidShapesFailExplicitly(uint type, int width, int height, int pitch, int length)
++    public void InvalidShapesHideThePointerInsteadOfFailing(uint type, int width, int height, int pitch, int length)
++    {
++        var pointer = ColorPointer();
++        Assert.False(pointer.SetShape((PointerShapeType)type, width, height, pitch, new byte[length]));
++        Assert.Equal(default, pointer.GetRegion(8, 8));
++        Assert.Equal(0, pointer.Width);
++        Assert.Equal(0, pointer.Height);
++    }
++
++    [Fact]
++    public void VisiblePointerWithoutShapeDrawsNothing()
 +    {
 +        var pointer = new DesktopPointer();
-+        Assert.Throws<InvalidDataException>(() => pointer.SetShape((PointerShapeType)type, width, height, pitch, new byte[length]));
++        pointer.UpdatePosition(1, 0, 0, true);
++        byte[] desktop = [20, 40, 60, 255];
++        var region = pointer.GetRegion(1, 1);
++        Assert.Equal(default, region);
++        pointer.Composite(desktop, 4, region);
++        Assert.Equal(new byte[] { 20, 40, 60, 255 }, desktop);
++    }
++
++    [Fact]
++    public void ValidShapeAfterInvalidShapeDrawsAgain()
++    {
++        var pointer = ColorPointer();
++        Assert.False(pointer.SetShape((PointerShapeType)3, 1, 1, 4, new byte[4]));
++        Assert.True(pointer.SetShape(PointerShapeType.Color, 1, 1, 4, [9, 8, 7, 255]));
++        byte[] desktop = [0, 0, 0, 255];
++        pointer.Composite(desktop, 4, pointer.GetRegion(1, 1));
++        Assert.Equal(new byte[] { 9, 8, 7, 255 }, desktop);
++    }
++
++    [Fact]
++    public void MaskedColorPointerTreatsNonBinaryMaskAsXor()
++    {
++        var pointer = new DesktopPointer();
++        Assert.True(pointer.SetShape(PointerShapeType.MaskedColor, 1, 1, 4, [0x0f, 0xf0, 0xff, 0x80]));
++        pointer.UpdatePosition(1, 0, 0, true);
++        byte[] desktop = [0xaa, 0xbb, 0xcc, 255];
++        pointer.Composite(desktop, 4, pointer.GetRegion(1, 1));
++        Assert.Equal(new byte[] { 0xa5, 0x4b, 0x33, 255 }, desktop);
 +    }
 +}
 diff --git a/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs b/tests/WinPlay.Core.Tests/MirrorVideoStreamTests.cs
