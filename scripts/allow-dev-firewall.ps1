@@ -7,9 +7,10 @@ Windows asks "Allow access to private and public networks?" the first time a
 program at a new path listens on the network. Development builds and tests run
 from many paths (every worktree has its own build folder), so the prompt keeps
 coming back. This script adds inbound Allow rules (all profiles) for every
-MirrorMe executable it finds, plus the fixed path the standalone receiver test
-copies to. Store installs do not need this: the MSIX manifest declares its own
-firewall rules.
+MirrorMe development and test executable it finds (the app, sender, native
+test probes, and WinPlay test hosts), plus the fixed path the standalone
+receiver test copies to. Toolchain and SDK executables are skipped. Store
+installs do not need this: the MSIX manifest declares its own firewall rules.
 
 All rules go in the "MirrorMe development" group. Rerun after building a new
 worktree. Run elevated.
@@ -60,7 +61,8 @@ foreach ($root in ($RepositoryRoots | Sort-Object -Unique)) {
         $path = Join-Path $root $folder
         if (-not (Test-Path -LiteralPath $path)) { continue }
         Get-ChildItem -LiteralPath $path -Recurse -Filter *.exe -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -notmatch '\\(CMakeFiles|obj)\\' } |
+            Where-Object { $_.FullName -notmatch '\\(CMakeFiles|obj|sdk|node_modules)\\' -and
+                $_.Name -match '^(mirrorme.*|mDNSResponder|protocol_.*|media_.*|winplay|testhost)\.exe$' } |
             ForEach-Object { [void]$programs.Add($_.FullName) }
     }
 }
