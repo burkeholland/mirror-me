@@ -48,7 +48,8 @@ NuGet archives (including runtime/reference packs), and build instructions under
 - composites separate DXGI hardware pointers before scaling/encoding, including
   color transparency, monochrome AND/XOR masks, masked-color cursors, pointer-only
   moves, and clipping at monitor edges without leaving trails or drawing a
-  second software cursor;
+  second software cursor; an invalid, oversized, or missing pointer shape hides
+  the cursor instead of ending the share;
 - propagates capture and network failures, including a bounded feedback timeout;
 - counts video only after completed TCP writes;
 - never discards encrypted packets (their nonce sequence must remain intact);
