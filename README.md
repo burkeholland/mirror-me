@@ -25,7 +25,7 @@ for receiving still remains open.
 
 ![MirrorMe discovering AirPlay targets for desktop casting](store-assets/screenshots/desktop-casting-discovery.png)
 
-The current **0.2.6 source build** has a built-in receiver. It uses Windows
+The current **0.2.7 source build** has a built-in receiver. It uses Windows
 media and discovery APIs and statically linked protocol/audio libraries:
 no UxPlay executable, GStreamer bundle, Bonjour installation, or receiver
 download is needed. It is not a clean-room AirPlay implementation.
