@@ -314,7 +314,7 @@ index a264439..a752ed2 100644
          finally
          {
 diff --git a/src/WinPlay.Core/Hap/ReceiverPairing.cs b/src/WinPlay.Core/Hap/ReceiverPairing.cs
-index a87a524..0efcb16 100644
+index a87a524..622c086 100644
 --- a/src/WinPlay.Core/Hap/ReceiverPairing.cs
 +++ b/src/WinPlay.Core/Hap/ReceiverPairing.cs
 @@ -5,8 +5,9 @@ using WinPlay.Core.Rtsp;
@@ -329,7 +329,15 @@ index a87a524..0efcb16 100644
  
  /// <summary>
  /// Standalone PIN-pairing flow against a receiver: opens its own RTSP connection,
-@@ -38,9 +39,15 @@ public static class ReceiverPairing
+@@ -31,16 +32,22 @@ public static class ReceiverPairing
+         }
+     }
+ 
+-    internal static HapVerifiedPairing.PostAsync MakePost(RtspConnection rtsp) =>
++    internal static HapVerifiedPairing.PostAsync MakePost(RtspConnection rtsp, bool transient = false) =>
+         async (endpoint, body, ct) =>
+         {
+             var resp = await rtsp.RequestAsync(new RtspRequest
              {
                  Method = "POST",
                  Uri = endpoint,
@@ -342,13 +350,13 @@ index a87a524..0efcb16 100644
 +                    ["Connection"] = "keep-alive",
 +                    ["Content-Type"] = "application/octet-stream",
 +                    ["User-Agent"] = "AirPlay/320.20",
-+                    ["X-Apple-HKP"] = "4",
++                    ["X-Apple-HKP"] = transient ? "4" : "3",
 +                },
              }, ct).ConfigureAwait(false);
              resp.EnsureSuccess($"POST {endpoint}");
              return resp.Body;
 diff --git a/src/WinPlay.Core/Mirror/MirrorSession.cs b/src/WinPlay.Core/Mirror/MirrorSession.cs
-index bf6685d..a3167e3 100644
+index bf6685d..acf76a0 100644
 --- a/src/WinPlay.Core/Mirror/MirrorSession.cs
 +++ b/src/WinPlay.Core/Mirror/MirrorSession.cs
 @@ -15,7 +15,7 @@ namespace WinPlay.Core.Mirror;
@@ -415,7 +423,7 @@ index bf6685d..a3167e3 100644
 +            Stage("transient pair-setup");
 +            try
 +            {
-+                var post = ReceiverPairing.MakePost(_rtsp);
++                var post = ReceiverPairing.MakePost(_rtsp, transient: true);
 +                await post("/pair-pin-start", [], ct).ConfigureAwait(false);
 +                _hap = await HapTransientPairing.PairAsync(
 +                    (tlv, token) => post("/pair-setup", tlv, token), ct).ConfigureAwait(false);
@@ -854,15 +862,17 @@ index 5ede0c5..77888f3 100644
      {
 diff --git a/tests/WinPlay.Core.Tests/ReceiverPairingTests.cs b/tests/WinPlay.Core.Tests/ReceiverPairingTests.cs
 new file mode 100644
-index 0000000..3ec3953
+index 0000000..7cca921
 --- /dev/null
 +++ b/tests/WinPlay.Core.Tests/ReceiverPairingTests.cs
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,188 @@
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +using System.Net;
 +using System.Net.Sockets;
 +using System.Text;
 +using WinPlay.Core.Hap;
++using WinPlay.Core.Mirror;
++using WinPlay.Core.Plist;
 +using WinPlay.Core.Rtsp;
 +using Xunit;
 +
@@ -899,9 +909,149 @@ index 0000000..3ec3953
 +        Assert.Contains("User-Agent: AirPlay/320.20\r\n", wire);
 +        Assert.Contains("Connection: keep-alive\r\n", wire);
 +        Assert.Contains("Content-Type: application/octet-stream\r\n", wire);
-+        Assert.Contains("X-Apple-HKP: 4\r\n", wire);
++        Assert.Contains("X-Apple-HKP: 3\r\n", wire);
 +        Assert.DoesNotContain("CSeq:", wire);
 +        Assert.DoesNotContain("DACP-ID:", wire);
++    }
++
++    [Fact]
++    public async Task BeginAsync_ReachesPinEntry_AndKeepsPersistentModeForProof()
++    {
++        using var listener = new TcpListener(IPAddress.Loopback, 0);
++        listener.Start();
++        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
++        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
++        var ct = timeout.Token;
++
++        var begin = ReceiverPairing.BeginAsync(IPAddress.Loopback, port, ct);
++        using TcpClient receiver = await listener.AcceptTcpClientAsync(ct);
++        NetworkStream stream = receiver.GetStream();
++        var start = await ReadRequestAsync(stream, ct);
++        AssertPairingHeaders(start.Headers, "/pair-pin-start", "3");
++        Assert.Empty(start.Body);
++        await ReplyAsync(stream, [], ct);
++
++        var setup = await ReadRequestAsync(stream, ct);
++        AssertPairingHeaders(setup.Headers, "/pair-setup", "3");
++        var m1 = Tlv8.Decode(setup.Body);
++        Assert.Equal(new byte[] { 1 }, Tlv8.Find(m1, TlvType.State));
++        Assert.Equal(new byte[] { 0 }, Tlv8.Find(m1, TlvType.Method));
++        Assert.Null(Tlv8.Find(m1, TlvType.Flags));
++        await ReplyAsync(stream, Tlv8.Encode(
++        [
++            (TlvType.State, [2]),
++            (TlvType.Salt, new byte[16]),
++            (TlvType.PublicKey, [2]),
++        ]), ct);
++
++        // Begin returns only once the helper can emit "pairing" and wait for a PIN.
++        using var pairing = await begin;
++        var finish = pairing.FinishAsync("1234", ct);
++        var proof = await ReadRequestAsync(stream, ct);
++        AssertPairingHeaders(proof.Headers, "/pair-setup", "3");
++        var m3 = Tlv8.Decode(proof.Body);
++        Assert.Equal(new byte[] { 3 }, Tlv8.Find(m3, TlvType.State));
++        Assert.NotNull(Tlv8.Find(m3, TlvType.Proof));
++        await ReplyAsync(stream, Tlv8.Encode(
++        [
++            (TlvType.State, [4]),
++            (TlvType.Error, [2]),
++        ]), ct);
++        await Assert.ThrowsAsync<HapPairingException>(() => finish);
++    }
++
++    [Theory]
++    [InlineData(false, "4", "/pair-setup")]
++    [InlineData(true, "3", "/pair-verify")]
++    public async Task ConnectAsync_SelectsModeForTransientOrSavedCredentials(
++        bool saved, string hkp, string endpoint)
++    {
++        using var listener = new TcpListener(IPAddress.Loopback, 0);
++        listener.Start();
++        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
++        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
++        var ct = timeout.Token;
++        var credentials = saved ? new HapPairingCredentials
++        {
++            ReceiverPublicKey = new byte[32],
++            ReceiverId = "receiver"u8.ToArray(),
++            OurPrivateKey = new byte[32],
++            OurId = "sender"u8.ToArray(),
++        } : null;
++
++        var connect = MirrorSession.ConnectAsync(IPAddress.Loopback, port, credentials,
++            ct: ct, withAudio: false);
++        using TcpClient receiver = await listener.AcceptTcpClientAsync(ct);
++        NetworkStream stream = receiver.GetStream();
++        var info = await ReadRequestAsync(stream, ct);
++        Assert.StartsWith("GET /info RTSP/1.0\r\n", info.Headers);
++        await ReplyAsync(stream, BinaryPlist.Write(new Dictionary<string, object?>()), ct);
++
++        if (!saved)
++        {
++            var start = await ReadRequestAsync(stream, ct);
++            AssertPairingHeaders(start.Headers, "/pair-pin-start", hkp);
++            await ReplyAsync(stream, [], ct);
++        }
++
++        var request = await ReadRequestAsync(stream, ct);
++        AssertPairingHeaders(request.Headers, endpoint, hkp);
++        var m1 = Tlv8.Decode(request.Body);
++        Assert.Equal(new byte[] { 1 }, Tlv8.Find(m1, TlvType.State));
++        if (saved)
++            Assert.Null(Tlv8.Find(m1, TlvType.Flags));
++        else
++            Assert.Equal(new byte[] { 0x10 }, Tlv8.Find(m1, TlvType.Flags));
++        await stream.WriteAsync(Encoding.ASCII.GetBytes(
++            "HTTP/1.1 470 Connection Authorization Required\r\nContent-Length: 0\r\n\r\n"), ct);
++
++        if (saved)
++            Assert.Equal(470, (await Assert.ThrowsAsync<RtspException>(() => connect)).StatusCode);
++        else
++        {
++            var error = await Assert.ThrowsAsync<PairingRequiredException>(() => connect);
++            Assert.Equal(470, Assert.IsType<RtspException>(error.InnerException).StatusCode);
++        }
++    }
++
++    private static void AssertPairingHeaders(string headers, string endpoint, string hkp)
++    {
++        Assert.StartsWith($"POST {endpoint} HTTP/1.1\r\n", headers);
++        Assert.Contains($"X-Apple-HKP: {hkp}\r\n", headers);
++        Assert.Contains("User-Agent: AirPlay/320.20\r\n", headers);
++        Assert.Contains("Connection: keep-alive\r\n", headers);
++        Assert.Contains("Content-Type: application/octet-stream\r\n", headers);
++        Assert.DoesNotContain("CSeq:", headers);
++        Assert.DoesNotContain("DACP-ID:", headers);
++    }
++
++    private static async Task<(string Headers, byte[] Body)> ReadRequestAsync(
++        NetworkStream stream, CancellationToken ct)
++    {
++        var header = new List<byte>();
++        byte[] next = new byte[1];
++        while (true)
++        {
++            await stream.ReadExactlyAsync(next, ct);
++            header.Add(next[0]);
++            if (header.Count >= 4 && header.TakeLast(4).SequenceEqual("\r\n\r\n"u8.ToArray()))
++                break;
++            Assert.True(header.Count < 8192, "Pairing request headers are too large.");
++        }
++        string headers = Encoding.ASCII.GetString(header.ToArray());
++        string? length = headers.Split("\r\n").FirstOrDefault(
++            line => line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase));
++        byte[] body = new byte[length is null ? 0 : int.Parse(length.Split(':')[1])];
++        await stream.ReadExactlyAsync(body, ct);
++        return (headers, body);
++    }
++
++    private static async Task ReplyAsync(NetworkStream stream, byte[] body, CancellationToken ct)
++    {
++        byte[] headers = Encoding.ASCII.GetBytes(
++            $"HTTP/1.1 200 OK\r\nContent-Length: {body.Length}\r\n\r\n");
++        await stream.WriteAsync(headers, ct);
++        await stream.WriteAsync(body, ct);
 +    }
 +}
 diff --git a/tests/WinPlay.Core.Tests/WinPlay.Core.Tests.csproj b/tests/WinPlay.Core.Tests/WinPlay.Core.Tests.csproj
