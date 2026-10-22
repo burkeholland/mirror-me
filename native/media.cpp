@@ -2,6 +2,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <windowsx.h>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mftransform.h>
@@ -30,6 +31,8 @@
 #include <vector>
 #include "include/media.h"
 #include "include/audio_decode.h"
+#include "media_view.h"
+#include "media_capture.h"
 #ifdef MM_MEDIA_TESTING
 #include "media_internal.h"
 #endif
@@ -48,6 +51,9 @@ constexpr UINT clearMessage = WM_APP + 32;
 constexpr UINT showMessage = WM_APP + 33;
 constexpr UINT stopMessage = WM_APP + 34;
 constexpr UINT hideMessage = WM_APP + 35;
+constexpr UINT_PTR recordTimer = 1;
+constexpr int toolbarBaseHeight = 40;
+enum Button { ButtonSmooth = mmview::modeCount, ButtonShot, ButtonRecord, ButtonCount };
 constexpr wchar_t windowClass[] = L"MirrorMe.NativeVideo.1";
 constexpr IID codecApiID = {0x901db4c7, 0x31ce, 0x41a2, {0x85, 0xdc, 0x8f, 0xa0, 0xbf, 0x41, 0xb8, 0xda}};
 
@@ -213,6 +219,12 @@ struct mm_media {
     std::atomic<uint64_t> streamingSession{0};
     unsigned lastWidth = 0, lastHeight = 0;
     PaintBuffer paintBuffer;
+    mmview::Mode viewMode = mmview::Mode::Fit;
+    bool smooth = true, trackingMouse = false;
+    int hotButton = -1, pressedButton = -1;
+    std::wstring status;
+    uint64_t statusUntil = 0;
+    mmcapture::Recorder recorder;
 
     void emit(int kind, const std::string &message) {
         // Never hold a media lock over application callbacks.
@@ -312,6 +324,8 @@ void resetMedia(mm_media *media, bool closed = false) {
     }
 }
 
+int toolbarHeight(HWND window);
+
 void resizeForFrame(mm_media *media, HWND window, const Frame &frame) {
     const bool first = !media->lastWidth;
     const bool orientation = (media->lastWidth > media->lastHeight) != (frame.width > frame.height);
@@ -326,10 +340,13 @@ void resizeForFrame(mm_media *media, HWND window, const Frame &frame) {
     RECT work{0, 0, 1280, 800};
     if (GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &monitor))
         work = monitor.rcWork;
+    const int bar = toolbarHeight(window);
     double scale = std::min(1.0, std::min((work.right - work.left) * 0.8 / frame.width,
-        (work.bottom - work.top) * 0.8 / frame.height));
+        ((work.bottom - work.top) * 0.8 - bar) / frame.height));
+    scale = std::max(scale, 0.1);
     RECT bounds{0, 0, LONG(frame.width * scale), LONG(frame.height * scale)};
     AdjustWindowRectEx(&bounds, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, FALSE, 0);
+    bounds.bottom += toolbarHeight(window);
     SetWindowPos(window, nullptr, 0, 0, bounds.right - bounds.left, bounds.bottom - bounds.top,
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
@@ -348,6 +365,197 @@ BOOL CALLBACK loadEmbeddedIcon(HMODULE module, LPCWSTR, LPWSTR name, LONG_PTR co
     if (!large || !small) return TRUE;
     icons = {large, small};
     return FALSE;
+}
+
+int toolbarHeight(HWND window) {
+    const UINT dpi = GetDpiForWindow(window);
+    return MulDiv(toolbarBaseHeight, dpi ? int(dpi) : 96, 96);
+}
+
+void buttonRects(HWND window, RECT (&rects)[ButtonCount]) {
+    const UINT dpi = GetDpiForWindow(window) ? GetDpiForWindow(window) : 96;
+    auto px = [&](int value) { return MulDiv(value, int(dpi), 96); };
+    RECT client{};
+    GetClientRect(window, &client);
+    const int top = px(6), bottom = toolbarHeight(window) - px(6);
+    int x = px(8);
+    for (int i = 0; i < ButtonCount; ++i) {
+        int width = px(i == int(mmview::Mode::Integer) ? 104 : i < mmview::modeCount ? 56 : 0);
+        if (i == ButtonSmooth) { x += px(10); width = px(70); }
+        if (i == ButtonShot) width = px(96);
+        if (i == ButtonRecord) width = px(96);
+        rects[i] = {x, top, x + width, bottom};
+        x += width + px(4);
+    }
+    // Screenshot and record sit at the right edge when there is room.
+    const int right = client.right - px(8);
+    const int block = rects[ButtonRecord].right - rects[ButtonShot].left;
+    if (right - block > rects[ButtonSmooth].right + px(160)) {
+        const int shift = right - rects[ButtonRecord].right;
+        OffsetRect(&rects[ButtonShot], shift, 0);
+        OffsetRect(&rects[ButtonRecord], shift, 0);
+    }
+}
+
+int hitButton(HWND window, int x, int y) {
+    RECT rects[ButtonCount];
+    buttonRects(window, rects);
+    const POINT point{x, y};
+    for (int i = 0; i < ButtonCount; ++i)
+        if (PtInRect(&rects[i], point)) return i;
+    return -1;
+}
+
+void setStatus(mm_media *media, HWND window, const std::wstring &text, uint64_t seconds = 4) {
+    media->status = text;
+    media->statusUntil = clockNs() + seconds * 1000000000ULL;
+    InvalidateRect(window, nullptr, FALSE);
+}
+
+std::string narrow(const std::wstring &text) {
+    if (text.empty()) return {};
+    const int size = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), int(text.size()), nullptr, 0, nullptr, nullptr);
+    std::string out(size > 0 ? size : 0, 0);
+    if (size > 0) WideCharToMultiByte(CP_UTF8, 0, text.c_str(), int(text.size()), &out[0], size, nullptr, nullptr);
+    return out;
+}
+
+std::wstring widen(const std::string &text) {
+    if (text.empty()) return {};
+    const int size = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), int(text.size()), nullptr, 0);
+    std::wstring out(size > 0 ? size : 0, 0);
+    if (size > 0) MultiByteToWideChar(CP_UTF8, 0, text.c_str(), int(text.size()), &out[0], size);
+    return out;
+}
+
+void notice(mm_media *media, const std::string &message) {
+    std::lock_guard<std::mutex> lock(media->mutex);
+    media->eventLocked(MM_EVENT_NOTICE, message);
+}
+
+void stopRecording(mm_media *media, HWND window, const std::wstring &reason = L"") {
+    if (!media->recorder.recording()) return;
+    KillTimer(window, recordTimer);
+    const std::wstring file = media->recorder.file();
+    std::string error;
+    const bool ok = media->recorder.stop(error);
+    if (ok) {
+        setStatus(media, window, reason.empty() ? L"Saved recording" : reason, 6);
+        notice(media, "Recording saved to " + narrow(file));
+    } else {
+        setStatus(media, window, L"Recording failed", 6);
+        media->error(error);
+    }
+    InvalidateRect(window, nullptr, FALSE);
+}
+
+void takeScreenshot(mm_media *media, HWND window) {
+    std::shared_ptr<Frame> frame;
+    {
+        std::lock_guard<std::mutex> lock(media->frameMutex);
+        frame = media->displayedFrame;
+    }
+    if (!frame || frame->epoch != media->videoEpoch.load()) {
+        setStatus(media, window, L"No video to capture");
+        return;
+    }
+    mmcapture::Image image;
+    image.width = frame->width;
+    image.height = frame->height;
+    image.pixels = frame->pixels;
+    std::wstring folder;
+    std::string error;
+    if (!mmcapture::outputFolder(FOLDERID_Pictures, folder)) {
+        setStatus(media, window, L"Pictures folder unavailable");
+        media->error("MirrorMe could not open the Pictures folder for screenshots.");
+        return;
+    }
+    const std::wstring path = folder + L"\\" + mmcapture::timestampName() + L".png";
+    if (!mmcapture::savePng(path, image, error)) {
+        setStatus(media, window, L"Screenshot failed");
+        media->error(error);
+        return;
+    }
+    mmcapture::copyToClipboard(window, image);
+    setStatus(media, window, L"Screenshot saved and copied");
+    notice(media, "Screenshot saved to " + narrow(path));
+}
+
+void toggleRecording(mm_media *media, HWND window) {
+    if (media->recorder.recording()) { stopRecording(media, window); return; }
+    std::shared_ptr<Frame> frame;
+    {
+        std::lock_guard<std::mutex> lock(media->frameMutex);
+        frame = media->displayedFrame;
+    }
+    if (!frame || frame->epoch != media->videoEpoch.load()) {
+        setStatus(media, window, L"No video to record");
+        return;
+    }
+    std::wstring folder;
+    std::string error;
+    if (!mmcapture::outputFolder(FOLDERID_Videos, folder) ||
+        !media->recorder.start(folder + L"\\" + mmcapture::timestampName() + L".mp4",
+            frame->width, frame->height, error)) {
+        setStatus(media, window, L"Cannot start recording");
+        media->error(error.empty() ? "MirrorMe could not open the Videos folder for recordings." : error);
+        return;
+    }
+    SetTimer(window, recordTimer, 500, nullptr);
+    InvalidateRect(window, nullptr, FALSE);
+}
+
+void paintToolbar(mm_media *media, HWND window, HDC target, const RECT &client) {
+    RECT bar{0, 0, client.right, std::min<LONG>(client.bottom, toolbarHeight(window))};
+    HBRUSH background = CreateSolidBrush(RGB(32, 32, 36));
+    FillRect(target, &bar, background);
+    DeleteObject(background);
+    RECT rects[ButtonCount];
+    buttonRects(window, rects);
+    const UINT dpi = GetDpiForWindow(window) ? GetDpiForWindow(window) : 96;
+    HFONT font = CreateFontW(-MulDiv(12, int(dpi), 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    HGDIOBJ previousFont = SelectObject(target, font);
+    SetBkMode(target, TRANSPARENT);
+    const bool recording = media->recorder.recording();
+    for (int i = 0; i < ButtonCount; ++i) {
+        const bool active = i < mmview::modeCount ? int(media->viewMode) == i : i == ButtonSmooth ? media->smooth :
+            i == ButtonRecord ? recording : false;
+        COLORREF fill = active ? RGB(0, 103, 192) : RGB(52, 52, 58);
+        if (i == ButtonRecord && recording) fill = RGB(196, 43, 28);
+        if (i == media->hotButton) fill = media->pressedButton == i ? RGB(30, 30, 34) :
+            RGB(GetRValue(fill) + 18, GetGValue(fill) + 18, GetBValue(fill) + 18);
+        HBRUSH brush = CreateSolidBrush(fill);
+        HGDIOBJ oldBrush = SelectObject(target, brush);
+        HGDIOBJ oldPen = SelectObject(target, GetStockObject(NULL_PEN));
+        RoundRect(target, rects[i].left, rects[i].top, rects[i].right, rects[i].bottom, 8, 8);
+        SelectObject(target, oldPen);
+        SelectObject(target, oldBrush);
+        DeleteObject(brush);
+        std::wstring label;
+        if (i < mmview::modeCount) label = mmview::modeLabel(mmview::Mode(i));
+        else if (i == ButtonSmooth) label = media->smooth ? L"Smooth" : L"Sharp";
+        else if (i == ButtonShot) label = L"Screenshot";
+        else {
+            wchar_t text[32];
+            const uint64_t seconds = media->recorder.elapsedSeconds();
+            if (recording) swprintf(text, 32, L"Stop %02llu:%02llu", (unsigned long long)(seconds / 60), (unsigned long long)(seconds % 60));
+            else wcscpy(text, L"Record");
+            label = text;
+        }
+        SetTextColor(target, RGB(255, 255, 255));
+        RECT text = rects[i];
+        DrawTextW(target, label.c_str(), int(label.size()), &text, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    }
+    if (!media->status.empty() && clockNs() < media->statusUntil) {
+        SetTextColor(target, RGB(200, 200, 205));
+        RECT text{rects[ButtonSmooth].right + MulDiv(12, int(dpi), 96), bar.top, rects[ButtonShot].left - MulDiv(8, int(dpi), 96), bar.bottom};
+        if (text.right > text.left)
+            DrawTextW(target, media->status.c_str(), int(media->status.size()), &text,
+                DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+    }
+    SelectObject(target, previousFont);
+    DeleteObject(font);
 }
 
 LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -369,6 +577,13 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         }
         if (frame) {
             resizeForFrame(media, window, *frame);
+            if (media->recorder.recording()) {
+                std::string problem;
+                if (!media->recorder.push(frame->pixels.data(), frame->width, frame->height, problem)) {
+                    stopRecording(media, window, L"Recording stopped");
+                    if (!problem.empty()) notice(media, problem);
+                }
+            }
             if (!IsWindowVisible(window)) ShowWindow(window, SW_SHOWNOACTIVATE);
             InvalidateRect(window, nullptr, FALSE);
             UpdateWindow(window);
@@ -387,17 +602,16 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         }
         bool presented = false, failed = !haveClient;
         const bool drawable = haveClient && client.right > 0 && client.bottom > 0;
+        const int bar = std::min<int>(toolbarHeight(window), client.bottom);
         if (drawable) {
             failed = !media->paintBuffer.prepare(dc, client.right, client.bottom);
             if (!failed)
                 failed = !FillRect(media->paintBuffer.dc(), &client, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
         }
         const bool currentFrame = frame && frame->epoch == media->videoEpoch.load();
-        if (drawable && !failed && currentFrame) {
-            const double scale = std::min(double(client.right) / frame->width,
-                double(client.bottom) / frame->height);
-            const int width = std::max(1, int(frame->width * scale));
-            const int height = std::max(1, int(frame->height * scale));
+        if (drawable && !failed && currentFrame && client.bottom > bar) {
+            const auto layout = mmview::compute(media->viewMode, int(frame->width), int(frame->height),
+                int(client.right), int(client.bottom) - bar);
             BITMAPINFO bitmap{};
             bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
             bitmap.bmiHeader.biWidth = frame->width;
@@ -406,12 +620,15 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             bitmap.bmiHeader.biBitCount = 32;
             bitmap.bmiHeader.biCompression = BI_RGB;
             HDC target = media->paintBuffer.dc();
-            const bool stretchMode = SetStretchBltMode(target, COLORONCOLOR) != 0;
-            const int result = StretchDIBits(target, (client.right - width) / 2, (client.bottom - height) / 2,
-                width, height, 0, 0, frame->width, frame->height, frame->pixels.data(),
-                &bitmap, DIB_RGB_COLORS, SRCCOPY);
+            const bool sharp = !media->smooth || (media->viewMode == mmview::Mode::Integer && layout.scale >= 1.0);
+            const bool stretchMode = SetStretchBltMode(target, sharp ? COLORONCOLOR : HALFTONE) != 0;
+            if (!sharp) SetBrushOrgEx(target, 0, 0, nullptr);
+            const int result = StretchDIBits(target, layout.dstX, bar + layout.dstY,
+                layout.dstW, layout.dstH, layout.srcX, layout.srcY, layout.srcW, layout.srcH,
+                frame->pixels.data(), &bitmap, DIB_RGB_COLORS, SRCCOPY);
             failed = !stretchMode || result == int(GDI_ERROR) || result == 0;
         }
+        if (drawable && !failed) paintToolbar(media, window, media->paintBuffer.dc(), client);
         if (drawable && !failed) {
             // Publish the completed picture and letterboxing together. Erasing
             // the visible DC first exposes a black flash between video frames.
@@ -436,6 +653,46 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         return 0;
     }
     case WM_ERASEBKGND: return 1;
+    case WM_MOUSEMOVE: {
+        const int hit = hitButton(window, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        if (!media->trackingMouse) {
+            TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, window, 0};
+            media->trackingMouse = TrackMouseEvent(&track) != 0;
+        }
+        if (hit != media->hotButton) { media->hotButton = hit; InvalidateRect(window, nullptr, FALSE); }
+        return 0;
+    }
+    case WM_MOUSELEAVE:
+        media->trackingMouse = false;
+        media->hotButton = media->pressedButton = -1;
+        InvalidateRect(window, nullptr, FALSE);
+        return 0;
+    case WM_LBUTTONDOWN: {
+        media->pressedButton = hitButton(window, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        if (media->pressedButton >= 0) SetCapture(window);
+        InvalidateRect(window, nullptr, FALSE);
+        return 0;
+    }
+    case WM_LBUTTONUP: {
+        const int pressed = media->pressedButton;
+        media->pressedButton = -1;
+        if (GetCapture() == window) ReleaseCapture();
+        if (pressed >= 0 && pressed == hitButton(window, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam))) {
+            if (pressed < mmview::modeCount) media->viewMode = mmview::Mode(pressed);
+            else if (pressed == ButtonSmooth) media->smooth = !media->smooth;
+            else if (pressed == ButtonShot) takeScreenshot(media, window);
+            else if (pressed == ButtonRecord) toggleRecording(media, window);
+        }
+        InvalidateRect(window, nullptr, FALSE);
+        return 0;
+    }
+    case WM_TIMER:
+        if (wParam == recordTimer) InvalidateRect(window, nullptr, FALSE);
+        return 0;
+    case WM_KEYDOWN:
+        if (GetKeyState(VK_CONTROL) < 0 && wParam == 'S') takeScreenshot(media, window);
+        else if (GetKeyState(VK_CONTROL) < 0 && wParam == 'R') toggleRecording(media, window);
+        return 0;
     case WM_SIZE:
         InvalidateRect(window, nullptr, FALSE);
         return 0;
@@ -447,6 +704,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             if (media->displayedFrame && media->displayedFrame->epoch < wParam) media->displayedFrame.reset();
             if (media->displayedFrame) return 0;
         }
+        stopRecording(media, window, L"Recording saved");
         if (message == hideMessage) ShowWindow(window, SW_HIDE);
         else media->lastWidth = media->lastHeight = 0;
         InvalidateRect(window, nullptr, FALSE);
@@ -469,6 +727,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         DestroyWindow(window);
         return 0;
     case WM_DESTROY:
+        stopRecording(media, window);
         media->paintBuffer.reset();
         media->window = nullptr;
         PostQuitMessage(0);

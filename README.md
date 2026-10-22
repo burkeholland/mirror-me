@@ -58,6 +58,13 @@ The old external-receiver preview remains retired.
   MirrorMe icon. Video is not embedded in the controls page.
   Frames and letterboxing are assembled off-screen and copied together,
   rather than briefly clearing the visible picture to black between frames.
+- **Mirror toolbar** — a bar at the top of the video window picks the view:
+  **Fit**, **Fill** (crop to cover), **100%**, **200%** or **Pixel-perfect**
+  (largest whole-number scale, so pixels stay crisp), plus a **Smooth/Sharp**
+  toggle for scaling. **Screenshot** (Ctrl+S) saves a native-resolution PNG to
+  `Pictures\MirrorMe` and copies it to the clipboard. **Record** (Ctrl+R) saves
+  a video-only H.264 MP4 to `Videos\MirrorMe`; recording stops if the phone
+  rotates or the session ends.
 - **A short, two-step welcome** — name this PC, then connect your iPhone.
   Receiving starts when you continue, not before first-run setup.
 - **Useful connection recovery** — phone detection, encoded-video arrival,
