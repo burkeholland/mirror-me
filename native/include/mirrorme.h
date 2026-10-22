@@ -25,6 +25,8 @@ typedef struct mm_receiver_config {
     const char *name;
     const char *device_id;
     const char *key_path;
+    const char *screenshots_folder;
+    const char *videos_folder;
     // The app resolves automatic settings to 1920x1080 at 60 FPS.
     unsigned int width;
     unsigned int height;

@@ -32,7 +32,7 @@ COLORREF windowPixel(HWND window, bool corner = false) {
     RECT client{};
     GetClientRect(window, &client);
     HDC dc = GetDC(window);
-    COLORREF color = GetPixel(dc, corner ? 2 : client.right / 2, corner ? 2 : client.bottom / 2);
+    COLORREF color = GetPixel(dc, corner ? 2 : client.right / 2, corner ? toolbarHeight(window) + 2 : client.bottom / 2);
     ReleaseDC(window, dc);
     return color;
 }

@@ -11,5 +11,7 @@ func configAffectsReceiver(a, b Config) bool {
 		a.PreferNewestConnection != b.PreferNewestConnection ||
 		a.IdleTimeoutSeconds != b.IdleTimeoutSeconds ||
 		a.RequirePin != b.RequirePin ||
-		(a.RequirePin && a.PinCode != b.PinCode)
+		(a.RequirePin && a.PinCode != b.PinCode) ||
+		a.ScreenshotsFolder != b.ScreenshotsFolder ||
+		a.VideosFolder != b.VideosFolder
 }

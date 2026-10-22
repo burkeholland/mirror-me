@@ -7,7 +7,7 @@
 // can be unit tested anywhere.
 namespace mmview {
 
-enum class Mode { Fit = 0, Fill, Actual, Double, Integer };
+enum class Mode { Fit = 0, Fill, Actual, Scale150, Double };
 constexpr int modeCount = 5;
 
 inline const wchar_t *modeLabel(Mode mode) {
@@ -15,8 +15,8 @@ inline const wchar_t *modeLabel(Mode mode) {
     case Mode::Fit: return L"Fit";
     case Mode::Fill: return L"Fill";
     case Mode::Actual: return L"100%";
+    case Mode::Scale150: return L"150%";
     case Mode::Double: return L"200%";
-    case Mode::Integer: return L"Pixel-perfect";
     }
     return L"Fit";
 }
@@ -39,8 +39,8 @@ inline Layout compute(Mode mode, int frameW, int frameH, int areaW, int areaH) {
     case Mode::Fit: scale = fit; break;
     case Mode::Fill: scale = cover; break;
     case Mode::Actual: scale = 1.0; break;
+    case Mode::Scale150: scale = 1.5; break;
     case Mode::Double: scale = 2.0; break;
-    case Mode::Integer: scale = fit >= 1.0 ? std::floor(fit) : fit; break;
     }
     out.scale = scale;
     const int scaledW = std::max(1, int(std::lround(frameW * scale)));

@@ -26,10 +26,8 @@ int main() {
     auto dbl = compute(Mode::Double, 300, 400, 700, 900);
     CHECK(dbl.dstW == 600 && dbl.dstH == 800 && dbl.srcW == 300);
 
-    auto integer = compute(Mode::Integer, 300, 400, 700, 900);
-    CHECK(integer.scale == 2.0 && integer.dstW == 600);
-    auto integerSmall = compute(Mode::Integer, 1170, 2532, 600, 800);
-    CHECK(integerSmall.scale < 1.0 && integerSmall.dstH == 800);
+    auto oneAndHalf = compute(Mode::Scale150, 300, 400, 700, 900);
+    CHECK(oneAndHalf.scale == 1.5 && oneAndHalf.dstW == 450 && oneAndHalf.dstH == 600);
 
     auto empty = compute(Mode::Fit, 0, 10, 10, 10);
     CHECK(empty.dstW == 0);

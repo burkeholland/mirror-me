@@ -38,7 +38,16 @@ inline std::wstring timestampName() {
 }
 
 // Returns <Pictures|Videos>\MirrorMe, creating it when needed.
-inline bool outputFolder(const KNOWNFOLDERID &known, std::wstring &folder) {
+inline bool outputFolder(const KNOWNFOLDERID &known, const char *configured, std::wstring &folder) {
+    if (configured && *configured) {
+        const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, configured, -1, nullptr, 0);
+        if (!length) return false;
+        folder.resize(length);
+        if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, configured, -1, folder.data(), length)) return false;
+        folder.pop_back();
+        const DWORD attributes = GetFileAttributesW(folder.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+    }
     PWSTR base = nullptr;
     if (FAILED(SHGetKnownFolderPath(known, KF_FLAG_CREATE, nullptr, &base)) || !base) return false;
     folder = std::wstring(base) + L"\\MirrorMe";
@@ -121,6 +130,8 @@ class Recorder {
     std::deque<Item> queue;
     bool finishing = false, failed = false, active = false;
     std::string failure;
+    ImagePtr last;
+    unsigned written = 0;
     unsigned width = 0, height = 0;
     uint64_t startTick = 0;
     std::wstring path;
@@ -168,6 +179,10 @@ class Recorder {
             if (item.time <= previous) item.time = previous + 1;
             previous = item.time;
             std::string problem = write(writer, stream, item);
+            if (problem.empty()) {
+                std::lock_guard<std::mutex> lock(mutex);
+                ++written;
+            }
             if (!problem.empty()) {
                 std::lock_guard<std::mutex> lock(mutex);
                 failed = true;
@@ -178,7 +193,13 @@ class Recorder {
             }
         }
         if (writer) {
-            HRESULT done = writer->Finalize();
+            bool empty;
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                empty = !failed && !written;
+                if (empty) { failed = true; failure = "No video frames were captured, so the recording was not saved."; }
+            }
+            HRESULT done = empty ? S_OK : writer->Finalize();
             if (FAILED(done)) {
                 std::lock_guard<std::mutex> lock(mutex);
                 if (!failed) { failed = true; failure = hr("Finishing the recording failed", done); }
@@ -248,7 +269,11 @@ class Recorder {
         BYTE *target = nullptr;
         if (SUCCEEDED(result)) result = buffer->Lock(&target, nullptr, nullptr);
         if (SUCCEEDED(result)) {
-            std::memcpy(target, item.image->pixels.data(), bytes);
+            // RGB32's negative stride requires bottom-up storage, unlike our display frames.
+            const size_t rowBytes = size_t(width) * 4;
+            for (unsigned y = 0; y < height; ++y)
+                std::memcpy(target + size_t(y) * rowBytes,
+                    item.image->pixels.data() + size_t(height - 1 - y) * rowBytes, rowBytes);
             buffer->Unlock();
             result = buffer->SetCurrentLength(bytes);
         }
@@ -281,6 +306,8 @@ public:
         finishing = failed = false;
         failure.clear();
         queue.clear();
+        last.reset();
+        written = 0;
         startTick = nowTicks();
         active = true;
         worker = std::thread([this] { run(); });
@@ -296,11 +323,12 @@ public:
             message = "Recording stopped because the phone video size changed.";
             return false;
         }
+        auto image = std::make_shared<Image>();
+        image->width = frameW;
+        image->height = frameH;
+        image->pixels.assign(pixels, pixels + size_t(frameW) * frameH * 4);
+        last = image;
         if (queue.size() < maxQueued) {
-            auto image = std::make_shared<Image>();
-            image->width = frameW;
-            image->height = frameH;
-            image->pixels.assign(pixels, pixels + size_t(frameW) * frameH * 4);
             queue.push_back({image, LONGLONG(nowTicks() - startTick)});
             wake.notify_one();
         }
@@ -312,13 +340,20 @@ public:
         if (!active) return true;
         {
             std::lock_guard<std::mutex> lock(mutex);
+            // Mirroring only sends changed frames; repeat the last one so a still
+            // screen still produces a recording that lasts until Stop.
+            if (last && !failed) queue.push_back({last, LONGLONG(nowTicks() - startTick)});
             finishing = true;
         }
         wake.notify_all();
         if (worker.joinable()) worker.join();
         active = false;
+        last.reset();
         std::lock_guard<std::mutex> lock(mutex);
-        if (failed) error = failure;
+        if (failed) {
+            error = failure;
+            DeleteFileW(path.c_str());
+        }
         return !failed;
     }
 

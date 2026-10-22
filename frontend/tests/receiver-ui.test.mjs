@@ -16,7 +16,8 @@ const {
   state, load, receiveEngineEvent, receiveSettingsUpdate, startMirroring, stopMirroring,
   beginSetup, dismissFirstRun, saveDraft, regeneratePin, navigate, finishNavigation,
   tickConnection, hasDraftChanges, setDraftField, revertDraft,
-  copyDeviceName, openExternalURL, openDialog, showMirroredScreen, receiveLogWarning, openLogsFolder, CONNECTION_WAIT_MS,
+  copyDeviceName, openExternalURL, openDialog, showMirroredScreen, receiveLogWarning, openLogsFolder,
+  chooseCaptureFolder, resetCaptureFolder, CONNECTION_WAIT_MS,
 } = await vite.ssrLoadModule('/src/state.js');
 const { renderApp, refreshReceiverStatus } = await vite.ssrLoadModule('/src/render.js');
 const { bindEvents, bindShortcuts } = await vite.ssrLoadModule('/src/events.js');
@@ -196,6 +197,22 @@ test('native picture settings describe the decoder that is actually used', () =>
   assert.match(html, /This preview uses software decoding/);
   assert.doesNotMatch(html, /data-field="hardwareDecode"/);
   assert.match(html, /data-field="h265"/);
+});
+
+test('capture folder settings show defaults and stage selected paths for saving', async () => {
+  state.route = 'settings';
+  state.settingsSection = 'app';
+  let html = renderHTML();
+  assert.match(html, /Default: Pictures\\MirrorMe/);
+  assert.match(html, /Default: Videos\\MirrorMe/);
+  window.go.main.App.ChooseScreenshotsFolder = async () => 'C:\\Captures\\Screenshots';
+  await chooseCaptureFolder('screenshotsFolder', noop);
+  assert.equal(state.draft.screenshotsFolder, 'C:\\Captures\\Screenshots');
+  assert.equal(hasDraftChanges(), true);
+  html = renderHTML();
+  assert.match(html, /C:\\Captures\\Screenshots/);
+  resetCaptureFolder('screenshotsFolder', noop);
+  assert.equal(state.draft.screenshotsFolder, '');
 });
 
 test('native receiver guidance has no runtime-download or service-install step', () => {
