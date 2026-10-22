@@ -203,6 +203,10 @@ label.setting-row:hover { background: color-mix(in srgb, var(--bg) 55%, transpar
 .setting-copy p, .setting-description { display: block; color: var(--text-muted); font-size: 12px; margin-top: var(--space-1); line-height: 1.55; }
 .setting-control { width: 210px; flex-shrink: 0; }
 .setting-control .input { width: 100%; font-size: 13px; }
+.capture-folder-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding: var(--space-4); min-height: 88px; }
+.capture-folder-row + .capture-folder-row { border-top: 1px solid var(--border); }
+.capture-folder-row .settings-path { margin: var(--space-2) 0 0; color: var(--text-meta); overflow-wrap: anywhere; }
+.capture-folder-actions { flex-shrink: 0; }
 .input { font-size: 14px; border-color: var(--border); border-bottom-color: var(--input-border); padding-inline: var(--space-3); }
 .input:focus { border-bottom-color: var(--accent-surface); }
 .input.select { padding-block: 0; padding-right: var(--space-6); background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px; background-size: 5px 5px, 5px 5px; }
@@ -338,6 +342,8 @@ kbd { min-width: 24px; padding: 2px 6px; border: 1px solid var(--border); border
   .setup-intro .device-scene { display: none; }
   .setup-name-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
   .setting-row { gap: var(--space-3); }
+  .capture-folder-row { align-items: stretch; flex-direction: column; gap: var(--space-3); }
+  .capture-folder-actions { flex-wrap: wrap; }
   .setting-control { width: 160px; }
   .page-header { margin-bottom: var(--space-5); }
   .save-bar p { display: none; }

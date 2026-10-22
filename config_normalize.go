@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
@@ -46,6 +47,8 @@ func NormalizeConfig(next Config, fallback Config) (Config, error) {
 
 	normalized.MaxFPS = clampInt(normalized.MaxFPS, minFPS, maxFPS)
 	normalized.IdleTimeoutSeconds = clampInt(normalized.IdleTimeoutSeconds, minIdleTimeoutSeconds, maxIdleTimeoutSeconds)
+	normalized.ScreenshotsFolder = normalizeCaptureFolder(next.ScreenshotsFolder, fallback.ScreenshotsFolder)
+	normalized.VideosFolder = normalizeCaptureFolder(next.VideosFolder, fallback.VideosFolder)
 
 	normalized.PinCode = normalizePinCode(normalized.PinCode)
 	if normalized.RequirePin && normalized.PinCode == "" {
@@ -65,6 +68,17 @@ func NormalizeConfig(next Config, fallback Config) (Config, error) {
 	normalized.LogWarning = ""
 
 	return normalized, nil
+}
+
+func normalizeCaptureFolder(folder, fallback string) string {
+	folder = strings.TrimSpace(folder)
+	if folder == "" {
+		return ""
+	}
+	if !filepath.IsAbs(folder) || strings.ContainsRune(folder, 0) {
+		return fallback
+	}
+	return filepath.Clean(folder)
 }
 
 func normalizeDeviceName(name string, fallback string) string {

@@ -240,7 +240,7 @@ try {
     if ($LASTEXITCODE -ne 0 -or -not $imports.Count) {
         throw "Native receiver probe import audit failed or returned no DLL imports."
     }
-    $systemDll = "^(api-ms-win-.*|ext-ms-win-.*|KERNEL32|USER32|GDI32|ADVAPI32|WS2_32|CRYPT32|bcrypt|DNSAPI|IPHLPAPI|OLE32|OLEAUT32|SHLWAPI|MF|MFPlat|MFReadWrite|D3D11|DXGI|PROPSYS|AVRT|KSUSER|WINMM|SHELL32|ntdll|msvcrt|ucrtbase)\.dll$"
+    $systemDll = "^(api-ms-win-.*|ext-ms-win-.*|KERNEL32|USER32|GDI32|ADVAPI32|WS2_32|CRYPT32|bcrypt|DNSAPI|IPHLPAPI|OLE32|OLEAUT32|SHLWAPI|MF|MFPlat|MFReadWrite|D3D11|DXGI|PROPSYS|AVRT|KSUSER|WINMM|SHELL32|COMCTL32|ntdll|msvcrt|ucrtbase)\.dll$"
     foreach ($dll in $imports) { if ($dll -notmatch $systemDll) { throw "Non-system DLL import in static receiver probe: $dll" } }
     # MinGW can emit an unused import stub for executable exports from a static
     # dependency. It is not an input library and must not enter the cgo bundle.
@@ -249,8 +249,10 @@ try {
         if (Test-Path -LiteralPath $testImportStub) { Remove-Item -LiteralPath $testImportStub -Force }
     }
     if (-not $SkipTests) { Invoke-Tool ctest @("--test-dir", $cmakeBuild, "--output-on-failure") }
-    $mergedWindowsLibraries = @("dnsapi", "mfplat", "mfuuid", "ole32", "oleaut32", "uuid",
-        "user32", "gdi32", "ksuser", "ws2_32", "iphlpapi", "crypt32", "bcrypt", "advapi32")
+    $mergedWindowsLibraries = @("dnsapi", "mfplat", "mf", "mfreadwrite", "mfuuid", "windowscodecs",
+        "shell32", "comctl32", "wmcodecdspuuid", "d3d11", "dxgi", "dxguid", "ole32", "oleaut32", "uuid",
+        "user32", "gdi32", "avrt", "propsys", "shlwapi", "ksuser", "winpthread", "ws2_32",
+        "iphlpapi", "crypt32", "bcrypt", "advapi32")
     $mergedImports = @()
     $archiveReceipts = @()
     if (-not $ProtocolOnly) {
@@ -357,7 +359,8 @@ try {
         audioSdk = $AudioSdkDirectory
         linkOrder = @("mirrorme", "airplay", "playfair", "llhttp", "avcodec", "avutil", "plist-2.0", "crypto")
         runtimeFlags = @("-static", "-static-libgcc", "-static-libstdc++")
-        windowsLibraries = @("dnsapi", "mfplat", "mf", "mfuuid", "wmcodecdspuuid", "d3d11", "dxgi", "dxguid",
+        windowsLibraries = @("dnsapi", "mfplat", "mf", "mfreadwrite", "mfuuid", "windowscodecs", "shell32",
+            "comctl32", "wmcodecdspuuid", "d3d11", "dxgi", "dxguid",
             "ole32", "oleaut32", "uuid", "user32", "gdi32", "avrt", "propsys", "shlwapi", "ksuser",
             "winpthread", "ws2_32", "iphlpapi", "crypt32", "bcrypt", "advapi32")
         probeImports = @($imports)

@@ -333,6 +333,38 @@ func (a *App) OpenLogsFolder() error {
 	return exec.Command("explorer", dir).Start()
 }
 
+func (a *App) ChooseScreenshotsFolder() (string, error) {
+	return a.chooseCaptureFolder("Choose screenshot folder", a.currentConfig().ScreenshotsFolder, "Pictures")
+}
+
+func (a *App) ChooseVideosFolder() (string, error) {
+	return a.chooseCaptureFolder("Choose video folder", a.currentConfig().VideosFolder, "Videos")
+}
+
+func (a *App) chooseCaptureFolder(title, current, defaultName string) (string, error) {
+	if a.ctx == nil {
+		return "", errors.New("the folder picker is not available yet")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("locate the user folder: %w", err)
+	}
+	start := current
+	if start == "" || !filepath.IsAbs(start) {
+		start = filepath.Join(home, defaultName)
+	}
+	if info, statErr := os.Stat(start); statErr != nil || !info.IsDir() {
+		start = home
+	}
+	folder, err := wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title: title, DefaultDirectory: start, CanCreateDirectories: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("choose capture folder: %w", err)
+	}
+	return folder, nil
+}
+
 func (a *App) setLogWarning(message string) {
 	a.mu.Lock()
 	a.logWarning = message

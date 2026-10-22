@@ -145,7 +145,7 @@ extern "C" EVP_PKEY *mm_protocol_load_identity(const char *path) {
 
 struct mm_receiver {
     mm_receiver_config config{};
-    std::string name, device_id, key_path;
+    std::string name, device_id, key_path, screenshots_folder, videos_folder;
     char address[6]{};
     mm_event_callback callback = nullptr;
     void *context = nullptr;
@@ -435,6 +435,8 @@ extern "C" mm_receiver *mm_receiver_create(const mm_receiver_config *config,
             }
         }
         receiver->name = config->name; receiver->device_id = config->device_id; receiver->key_path = config->key_path;
+        receiver->screenshots_folder = config->screenshots_folder ? config->screenshots_folder : "";
+        receiver->videos_folder = config->videos_folder ? config->videos_folder : "";
         receiver->config = *config;
         if (!receiver->config.width) {
             receiver->config.width = 1920;
@@ -444,6 +446,8 @@ extern "C" mm_receiver *mm_receiver_create(const mm_receiver_config *config,
         receiver->config.name = receiver->name.c_str();
         receiver->config.device_id = receiver->device_id.c_str();
         receiver->config.key_path = receiver->key_path.c_str();
+        receiver->config.screenshots_folder = receiver->screenshots_folder.c_str();
+        receiver->config.videos_folder = receiver->videos_folder.c_str();
         receiver->callback = callback; receiver->context = context;
         return receiver.release();
     } catch (...) {

@@ -4,7 +4,7 @@ package main
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/native/include
-#cgo LDFLAGS: -L${SRCDIR}/build/native -lmirrorme-native -static -static-libgcc -ldnsapi -lmfplat -lmfuuid -lole32 -loleaut32 -luuid -luser32 -lgdi32 -lksuser -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -ladvapi32
+#cgo LDFLAGS: -L${SRCDIR}/build/native -lmirrorme-native -static -static-libgcc -ldnsapi -lmfplat -lmf -lmfreadwrite -lmfuuid -lwindowscodecs -lshell32 -lcomctl32 -lwmcodecdspuuid -ld3d11 -ldxgi -ldxguid -lole32 -loleaut32 -luuid -luser32 -lgdi32 -lavrt -lpropsys -lshlwapi -lksuser -lwinpthread -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -ladvapi32
 #include <stdlib.h>
 #include <string.h>
 #include "mirrorme.h"
@@ -38,6 +38,7 @@ func createNativeReceiver(options workerOptions, emit func(int, string)) (native
 	}
 	config := C.mm_receiver_config{
 		name: C.CString(options.Name), device_id: C.CString(options.DeviceID), key_path: C.CString(options.KeyPath),
+		screenshots_folder: C.CString(options.ScreenshotsFolder), videos_folder: C.CString(options.VideosFolder),
 		width: C.uint(options.Width), height: C.uint(options.Height), max_fps: C.uint(options.MaxFPS),
 		idle_timeout_seconds: C.uint(options.IdleTimeoutSeconds), pin: C.uint(options.Pin),
 		require_pin: nativeBoolean(options.RequirePin), prefer_newest: nativeBoolean(options.PreferNewest),
@@ -47,6 +48,8 @@ func createNativeReceiver(options workerOptions, emit func(int, string)) (native
 	defer C.free(unsafe.Pointer(config.name))
 	defer C.free(unsafe.Pointer(config.device_id))
 	defer C.free(unsafe.Pointer(config.key_path))
+	defer C.free(unsafe.Pointer(config.screenshots_folder))
+	defer C.free(unsafe.Pointer(config.videos_folder))
 	handle := cgo.NewHandle(emit)
 	var errorBuffer [1024]C.char
 	receiver := C.mm_go_receiver_create(&config, C.uintptr_t(handle), &errorBuffer[0], C.size_t(len(errorBuffer)))
