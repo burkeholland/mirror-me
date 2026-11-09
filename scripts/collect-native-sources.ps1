@@ -320,9 +320,11 @@ try {
         @($repoPath, '<source-root>'), @($profilePath, '<user-profile>')
     ) | ForEach-Object {
         $path, $label = $_
-        @($path, $path.Replace('\', '/'), $path.Replace('\', '\\'), (& $msysPath $path)) |
+        @($path, $path.Replace('\', '/'), $path.Replace('\', '\\'), (& $msysPath $path),
+            $path.Replace('\', '/').Replace(':', '$:')) |
             ForEach-Object { [pscustomobject]@{ path = $_; label = $label } }
     }
+    $profileSpelling = '(?i)(?:[A-Za-z]\$?:)?[\\/]+Users[\\/]+' + [regex]::Escape($env:USERNAME) + '(?![A-Za-z0-9_-])'
     foreach ($file in Get-ChildItem -LiteralPath $staging -Recurse -File -Force) {
         if ($file.Extension -notin @('.json', '.txt', '.sh', '.ninja', '.mak', '.h', '.pc')) { continue }
         $text = [IO.File]::ReadAllText($file.FullName)
@@ -330,6 +332,7 @@ try {
         foreach ($replacement in $replacements) {
             $updated = $updated.Replace($replacement.path, $replacement.label, [StringComparison]::OrdinalIgnoreCase)
         }
+        $updated = [regex]::Replace($updated, $profileSpelling, '<user-profile>')
         if ($updated -cne $text) {
             [IO.File]::WriteAllText($file.FullName, $updated, [Text.UTF8Encoding]::new($false))
         }
