@@ -31,8 +31,11 @@ function Assert-CleanSource([string]$When) {
 }
 
 function Test-ReleasePublished([string]$Tag) {
-    & gh release view $Tag --repo $Repository --json tagName *> $null
-    return $LASTEXITCODE -eq 0
+    $output = @(& gh release view $Tag --repo $Repository --json tagName 2>&1)
+    if ($LASTEXITCODE -eq 0) { return $true }
+    if (($output -join "`n") -match '(?i)(not found|HTTP 404)') { return $false }
+    # A failed lookup must not look unpublished: a rebuild would replace the archive a public release records.
+    throw "Could not determine whether GitHub release $Tag exists: $($output -join ' ')"
 }
 
 Push-Location $root
