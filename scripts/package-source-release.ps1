@@ -254,7 +254,7 @@ function Assert-SourceTextSafe([string]$Text, [string]$Name) {
         # This pinned FFmpeg comment shows an ellipsis-only PEM example, not key bytes.
         $scanText = [regex]::Replace(
             $scanText,
-            '-----BEGIN PRIVATE KEY-----\\n\u2026\\n-----END PRIVATE KEY-----\\n',
+            '-{5}BEGIN PRIVATE KEY-{5}\\n\u2026\\n-{5}END PRIVATE KEY-{5}\\n',
             ''
         )
     }
@@ -278,9 +278,10 @@ function Assert-SourceTextSafe([string]$Text, [string]$Name) {
         )
     }
     $isKnownTestKey = Test-KnownOpenSslTestPrivateKeyFixture $Name
+    # Written with -{5} so this scanner does not match its own source in the frozen tree.
     $keyPatterns = @(
-        '-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----',
-        '-----BEGIN RSA TESTING KEY-----'
+        '-{5}BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-{5}',
+        '-{5}BEGIN RSA TESTING KEY-{5}'
     )
     if (-not $isKnownTestKey) {
         foreach ($pattern in $keyPatterns) {
