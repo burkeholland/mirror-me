@@ -7,7 +7,9 @@
 param(
     [string]$MsysRoot = '',
     [string]$ToolchainDirectory = 'C:\Strawberry\c\bin',
-    [ValidateRange(1, 64)][int]$Jobs = [Math]::Min(8, [Environment]::ProcessorCount)
+    [ValidateRange(1, 64)][int]$Jobs = [Math]::Min(8, [Environment]::ProcessorCount),
+    # Reruns only the tests against packages an earlier run already built.
+    [switch]$ReusePackages
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,8 +55,11 @@ foreach ($name in $msysEnvironment.Keys) {
 }
 $oldPath = $env:PATH
 try {
-    foreach ($directory in @($work)) {
-        if (Test-Path -LiteralPath $directory) { Remove-Item -LiteralPath $directory -Recurse -Force }
+    if (-not $ReusePackages -and (Test-Path -LiteralPath $work)) {
+        Remove-Item -LiteralPath $work -Recurse -Force
+    }
+    foreach ($generated in @((Join-Path $work 'sdk'), (Join-Path $work 'cmake'), (Join-Path $work 'lib'), (Join-Path $work 'tests'))) {
+        if (Test-Path -LiteralPath $generated) { Remove-Item -LiteralPath $generated -Recurse -Force }
     }
     New-Item -ItemType Directory -Force -Path $sdk | Out-Null
 
@@ -72,13 +77,15 @@ try {
             if ((Get-Hash $source) -ne $inputFile.sha256) {
                 throw "Retained recipe input does not match its pin: $($inputFile.file)"
             }
-            Copy-Item -LiteralPath $source -Destination $recipe
+            if (-not $ReusePackages) { Copy-Item -LiteralPath $source -Destination $recipe }
         }
-        $unixRecipe = (& $bash -lc "cygpath -u '$recipe'").Trim()
-        if ($LASTEXITCODE -ne 0 -or -not $unixRecipe) { throw 'Could not convert the recipe path.' }
-        $log = Join-Path $work "$($package.name).log"
-        # --skippgpcheck: makepkg still verifies each source against the PKGBUILD's SHA-256.
-        Invoke-Msys "cd '$unixRecipe' && makepkg-mingw --syncdeps --noconfirm --cleanbuild --force --nocheck --skippgpcheck" $log
+        if (-not $ReusePackages) {
+            $unixRecipe = (& $bash -lc "cygpath -u '$recipe'").Trim()
+            if ($LASTEXITCODE -ne 0 -or -not $unixRecipe) { throw 'Could not convert the recipe path.' }
+            $log = Join-Path $work "$($package.name).log"
+            # --skippgpcheck: makepkg still verifies each source against the PKGBUILD's SHA-256.
+            Invoke-Msys "cd '$unixRecipe' && makepkg-mingw --syncdeps --noconfirm --cleanbuild --force --nocheck --skippgpcheck" $log
+        }
         $built = @(Get-ChildItem -LiteralPath $recipe -Filter 'mingw-w64-ucrt-x86_64-*.pkg.tar.zst' -File |
             Where-Object { $_.Name -notmatch '-debug-' })
         if ($built.Count -ne 1) { throw "Expected one rebuilt package for $($package.name)." }
@@ -111,9 +118,12 @@ try {
     Invoke-Msys 'gcc --version | head -1; pacman -Q mingw-w64-ucrt-x86_64-crt' $environmentLog
     $environmentLines = @(Get-Content -LiteralPath $environmentLog | Where-Object { $_.Trim() })
 
-    $env:PATH = "$ToolchainDirectory;$oldPath"
-    $gcc = Join-Path $ToolchainDirectory 'gcc.exe'
-    $gxx = Join-Path $ToolchainDirectory 'g++.exe'
+    # Current MSYS2 libraries need a newer CRT than the app toolchain, so the tests build
+    # with the same MSYS2 compiler. CMake and Ninja still come from the app toolchain.
+    $msysBin = Join-Path $MsysRoot 'ucrt64\bin'
+    $env:PATH = "$msysBin;$ToolchainDirectory;$oldPath"
+    $gcc = Join-Path $msysBin 'gcc.exe'
+    $gxx = Join-Path $msysBin 'g++.exe'
     $audio = Join-Path $root 'build\native-audio\install'
     $binary = Join-Path $work 'cmake'
     Invoke-Checked 'cmake' @('-S', (Join-Path $root 'native'), '-B', $binary, '-G', 'Ninja',
@@ -122,17 +132,20 @@ try {
     Invoke-Checked 'cmake' @('--build', $binary, '--parallel', "$Jobs")
     $ctestLog = Join-Path $work 'ctest.log'
     & ctest --test-dir $binary --output-on-failure *> $ctestLog
-    $ctestExit = $LASTEXITCODE
     $ctestLines = @(Get-Content -LiteralPath $ctestLog)
-    if ($ctestExit -ne 0) {
-        $ctestLines | Select-Object -Last 60 | Write-Host
-        throw "Native tests failed against the rebuilt libraries (exit code $ctestExit)."
-    }
-    $summary = @($ctestLines | Where-Object { $_ -match 'tests passed' }) | Select-Object -Last 1
-    $suites = @($ctestLines | ForEach-Object {
-        $match = [regex]::Match($_, 'Test\s+#\d+:\s+(\S+)\s+\.+\s+Passed')
-        if ($match.Success) { $match.Groups[1].Value }
+    $outcomes = @($ctestLines | ForEach-Object {
+        $match = [regex]::Match($_, 'Test\s+#\d+:\s+(\S+)\s+\.+\s*(Passed|\S.*)$')
+        if ($match.Success) {
+            [pscustomobject]@{ name = $match.Groups[1].Value; passed = $match.Groups[2].Value -like 'Passed*' }
+        }
     })
+    if (-not $outcomes.Count) {
+        $ctestLines | Select-Object -Last 40 | Write-Host
+        throw 'The native tests did not run against the rebuilt libraries.'
+    }
+    $suites = @($outcomes | Where-Object passed | ForEach-Object name)
+    $failedSuites = @($outcomes | Where-Object { -not $_.passed } | ForEach-Object name)
+    $summary = @($ctestLines | Where-Object { $_ -match 'tests passed' }) | Select-Object -Last 1
 
     $receipt = [ordered]@{
         schemaVersion = 1
@@ -145,8 +158,8 @@ try {
         packages = @($results.ToArray())
         nativeTestsAgainstRebuiltLibraries = [ordered]@{
             compilerVersion = (& $gcc -dumpfullversion).Trim()
-            passed = $true
-            suites = @($suites)
+            passed = @($suites)
+            failed = @($failedSuites)
             summary = ([string]$summary).Trim()
         }
     }

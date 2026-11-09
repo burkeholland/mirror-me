@@ -84,10 +84,10 @@ not a claim that mere upstream version strings establish correspondence.
 native/dependency-rebuild-receipt.json records a separate verification rebuild:
 scripts/verify-native-dependency-rebuild.ps1 runs both retained recipes in a
 current MSYS2 UCRT64 environment, then runs the native tests against the
-rebuilt libraries. Its newer compiler means the outputs are not expected to
-match the pinned archives byte-for-byte; the receipt records both hashes. The
-application still links the pinned archives, so a dependency update cannot
-change protocol or crypto behavior through this check.
+rebuilt libraries and records each suite's result. Its newer compiler means the
+outputs are not expected to match the pinned archives byte-for-byte; the receipt
+records both hashes. The application still links the pinned archives, so this
+check cannot change protocol or crypto behavior.
 
 The collected recipes and source archives can be rebuilt in a compatible
 MSYS2 UCRT64 development environment. For historical reproduction, first

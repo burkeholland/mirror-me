@@ -555,6 +555,11 @@ try {
     if (-not $isReferenceBundle -and $nativeSourceCommit -ne $SourceCommit) {
         throw "Native source bundle was collected for $nativeSourceCommit, not $SourceCommit."
     }
+    if (-not $isReferenceBundle -and (
+            $nativeReport.nativeBuildSourceCommit -ne $SourceCommit -or
+            -not $nativeReport.nativeBuildSourceTreeClean)) {
+        throw "The native archive was not built from a clean checkout of $SourceCommit. Run scripts\build-app.ps1 -NativeOnly at that commit first."
+    }
     if (-not (Test-Path -LiteralPath $protocolBundle -PathType Leaf)) {
         throw 'Pinned protocol Git bundle is missing.'
     }

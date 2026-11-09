@@ -346,8 +346,22 @@ try {
     if ($ForDistribution -and @($remainingGaps).Count) {
         throw "Build succeeded for development, but corresponding-source publication remains blocked."
     }
+    # Records what this archive was built from, so a release can refuse one from another commit.
+    $sourceCommit = ''
+    $sourceTreeClean = $false
+    $gitRoot = & git -C $root rev-parse --show-toplevel 2>$null
+    if ($LASTEXITCODE -eq 0 -and $gitRoot -and
+        [IO.Path]::GetFullPath([string]$gitRoot).TrimEnd('\') -eq [IO.Path]::GetFullPath($root).TrimEnd('\')) {
+        $sourceCommit = (& git -C $root rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0) { throw "Could not identify the native source commit." }
+        $sourceTreeStatus = @(& git -C $root status --porcelain --untracked-files=normal)
+        if ($LASTEXITCODE -ne 0) { throw "Could not inspect the native source tree." }
+        $sourceTreeClean = @($sourceTreeStatus | Where-Object { $_ -notmatch '^\?\? build[\\/]' }).Count -eq 0
+    }
     $manifest = [ordered]@{
         protocolCommit = $lock.protocol.commit
+        sourceCommit = $sourceCommit
+        sourceTreeClean = $sourceTreeClean
         production = (-not $ProtocolOnly)
         distributionReady = $provenance.distributionReady
         sourceProvenance = (File-Receipt $provenancePath)

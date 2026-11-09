@@ -31,13 +31,11 @@ function Assert-CleanSource([string]$When) {
 }
 
 function Test-NativeBuildCurrent([string]$Commit) {
-    $reportPath = Join-Path $root 'build\native-sources\bundle\collection-report.json'
     $manifestPath = Join-Path $root 'build\native\link-manifest.json'
-    if (-not (Test-Path -LiteralPath $reportPath) -or -not (Test-Path -LiteralPath $manifestPath)) { return $false }
-    $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+    if (-not (Test-Path -LiteralPath $manifestPath)) { return $false }
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    return $report.applicationSourceCommit -eq $Commit -and
-        $report.nativeMergedArchiveSha256 -eq $manifest.mergedArchiveSha256
+    return $manifest.PSObject.Properties['sourceCommit'] -and $manifest.sourceCommit -eq $Commit -and
+        $manifest.sourceTreeClean -and $manifest.production
 }
 
 Push-Location $root

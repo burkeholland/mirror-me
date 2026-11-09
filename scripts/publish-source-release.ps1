@@ -80,37 +80,27 @@ try {
         throw "Could not determine whether GitHub release $tag already exists: $($existingOutput -join ' ')"
     }
 
-    $packageArtifacts = @($archivePath, $manifestPath, $checksumsPath)
-    $packageIsPresent = @($packageArtifacts | Where-Object {
-        -not (Test-Path -LiteralPath $_ -PathType Leaf)
-    }).Count -eq 0
-    # A package left by an earlier commit is regenerated, never published.
-    if ($packageIsPresent -and
-        (Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json).sourceCommit -ne $SourceCommit) {
-        $packageIsPresent = $false
-    }
-    if (-not $packageIsPresent) {
-        $packageArguments = @(
-            '-ApplicationVersion', $ApplicationVersion,
-            '-SourceCommit', $SourceCommit,
-            '-ToolchainDirectory', $ToolchainDirectory,
-            '-Force'
-        )
-        if ($ReferenceSourceZip) {
-            if (-not [IO.Path]::IsPathRooted($ReferenceSourceZip)) {
-                $ReferenceSourceZip = Join-Path $root $ReferenceSourceZip
-            }
-            if (-not (Test-Path -LiteralPath $ReferenceSourceZip -PathType Leaf)) {
-                throw "Reference source archive is missing: $ReferenceSourceZip"
-            }
-            $packageArguments += @(
-                '-ReferenceSourceZip', $ReferenceSourceZip,
-                '-ReferenceSourceTag', $ReferenceSourceTag,
-                '-ReferenceSourceSha256', $ReferenceSourceSha256
-            )
+    $packageArguments = @(
+        '-ApplicationVersion', $ApplicationVersion,
+        '-SourceCommit', $SourceCommit,
+        '-ToolchainDirectory', $ToolchainDirectory,
+        '-Force'
+    )
+    if ($ReferenceSourceZip) {
+        if (-not [IO.Path]::IsPathRooted($ReferenceSourceZip)) {
+            $ReferenceSourceZip = Join-Path $root $ReferenceSourceZip
         }
-        & (Join-Path $PSScriptRoot 'package-source-release.ps1') @packageArguments
+        if (-not (Test-Path -LiteralPath $ReferenceSourceZip -PathType Leaf)) {
+            throw "Reference source archive is missing: $ReferenceSourceZip"
+        }
+        $packageArguments += @(
+            '-ReferenceSourceZip', $ReferenceSourceZip,
+            '-ReferenceSourceTag', $ReferenceSourceTag,
+            '-ReferenceSourceSha256', $ReferenceSourceSha256
+        )
     }
+    # Always regenerate until the release exists, so a stale package can never be published.
+    & (Join-Path $PSScriptRoot 'package-source-release.ps1') @packageArguments
     & (Join-Path $PSScriptRoot 'verify-source-release.ps1') `
         -ApplicationVersion $ApplicationVersion -ExpectedCommit $SourceCommit `
         -LocalOnly -LocalArchivePath $archivePath

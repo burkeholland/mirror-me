@@ -295,6 +295,8 @@ try {
         schemaVersion = 1
         collectedAtUtc = [DateTime]::UtcNow.ToString('o')
         applicationSourceCommit = $sourceCommit
+        nativeBuildSourceCommit = [string]$nativeLink.sourceCommit
+        nativeBuildSourceTreeClean = [bool]$nativeLink.sourceTreeClean
         pinManifestSha256 = Hash $pinPath
         nativeMergedArchiveSha256 = $initialMergedHash
         thirdPartyLibrarySourceInputsVerified = $true
