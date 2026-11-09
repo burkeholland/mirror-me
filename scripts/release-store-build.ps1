@@ -30,12 +30,9 @@ function Assert-CleanSource([string]$When) {
     if ($changes.Count) { throw "The source tree must be clean $When`: $($changes -join '; ')" }
 }
 
-function Test-NativeBuildCurrent([string]$Commit) {
-    $manifestPath = Join-Path $root 'build\native\link-manifest.json'
-    if (-not (Test-Path -LiteralPath $manifestPath)) { return $false }
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    return $manifest.PSObject.Properties['sourceCommit'] -and $manifest.sourceCommit -eq $Commit -and
-        $manifest.sourceTreeClean -and $manifest.production
+function Test-ReleasePublished([string]$Tag) {
+    & gh release view $Tag --repo $Repository --json tagName *> $null
+    return $LASTEXITCODE -eq 0
 }
 
 Push-Location $root
@@ -52,7 +49,7 @@ try {
     $sourceUrl = "https://github.com/$Repository/releases/tag/$tag"
 
     # A retried release keeps the native archive whose hash it already published.
-    if (-not (Test-NativeBuildCurrent $commit)) {
+    if (-not (Test-ReleasePublished $tag)) {
         & (Join-Path $PSScriptRoot 'build-app.ps1') -ToolchainDirectory $ToolchainDirectory -NativeOnly
         Assert-CleanSource 'after the native build'
     }

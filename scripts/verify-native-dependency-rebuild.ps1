@@ -89,6 +89,14 @@ try {
         $built = @(Get-ChildItem -LiteralPath $recipe -Filter 'mingw-w64-ucrt-x86_64-*.pkg.tar.zst' -File |
             Where-Object { $_.Name -notmatch '-debug-' })
         if ($built.Count -ne 1) { throw "Expected one rebuilt package for $($package.name)." }
+        # A reused package must have come from this exact pinned recipe.
+        $builtInfo = (@(& tar -xOf $built[0].FullName .BUILDINFO) -join "`n")
+        if ($LASTEXITCODE -ne 0) { throw "Could not read .BUILDINFO from $($built[0].Name)." }
+        $builtRecipe = [regex]::Match($builtInfo, '(?m)^pkgbuild_sha256sum = ([a-f0-9]{64})\s*$').Groups[1].Value
+        $builtVersion = [regex]::Match($builtInfo, '(?m)^pkgver = (\S+)\s*$').Groups[1].Value
+        if ($builtRecipe -ne $pin[0].pkgbuildSha256 -or $builtVersion -ne $pin[0].version) {
+            throw "$($built[0].Name) was not built from the pinned $($package.name) recipe. Rerun without -ReusePackages."
+        }
         $archiveMember = [string]$pin[0].archiveMember
         $entries = @(& tar -tf $built[0].FullName)
         if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the rebuilt package.' }

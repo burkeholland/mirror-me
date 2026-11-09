@@ -362,6 +362,9 @@ try {
         protocolCommit = $lock.protocol.commit
         sourceCommit = $sourceCommit
         sourceTreeClean = $sourceTreeClean
+        configuration = $Configuration
+        testsRun = (-not $SkipTests)
+        compilerVersion = (& $gcc -dumpfullversion).Trim()
         production = (-not $ProtocolOnly)
         distributionReady = $provenance.distributionReady
         sourceProvenance = (File-Receipt $provenancePath)

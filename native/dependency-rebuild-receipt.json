@@ -36,12 +36,13 @@
   "nativeTestsAgainstRebuiltLibraries": {
     "compilerVersion": "16.2.0",
     "passed": [
-      "protocol_receive_bounds",
       "protocol_media_invariants",
       "media_flicker",
       "protocol_lifecycle"
     ],
-    "failed": [],
-    "summary": "100% tests passed, 0 tests failed out of 4"
+    "failed": [
+      "protocol_receive_bounds"
+    ],
+    "summary": "75% tests passed, 1 tests failed out of 4"
   }
 }

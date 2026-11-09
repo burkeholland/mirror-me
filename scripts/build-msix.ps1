@@ -197,8 +197,9 @@ try {
         $collectionReport = Get-Content -LiteralPath $collectionReportPath -Raw | ConvertFrom-Json
         if ($collectionReport.applicationSourceCommit -ne $sourceCommit -or
             $collectionReport.nativeBuildSourceCommit -ne $sourceCommit -or
-            -not $collectionReport.nativeBuildSourceTreeClean) {
-            throw "The native archive and source collection are not from a clean build of $sourceCommit. Run scripts\release-store-build.ps1."
+            -not $collectionReport.nativeBuildSourceTreeClean -or
+            -not $collectionReport.nativeBuildChecked) {
+            throw "The native archive and source collection are not from a tested Release build of $sourceCommit. Run scripts\release-store-build.ps1."
         }
         & (Join-Path $PSScriptRoot "verify-source-release.ps1") `
             -ApplicationVersion $displayVersion -ExpectedCommit $sourceCommit `

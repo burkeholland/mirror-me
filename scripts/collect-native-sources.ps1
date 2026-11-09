@@ -297,6 +297,11 @@ try {
         applicationSourceCommit = $sourceCommit
         nativeBuildSourceCommit = [string]$nativeLink.sourceCommit
         nativeBuildSourceTreeClean = [bool]$nativeLink.sourceTreeClean
+        # Only a tested Release build with the pinned compiler and audio SDK matches what this kit describes.
+        nativeBuildChecked = [bool]($nativeLink.configuration -eq 'Release' -and $nativeLink.testsRun -and
+            $nativeLink.compilerVersion -eq $runtime.compilerVersion -and
+            [IO.Path]::GetFullPath([string]$nativeLink.audioSdk) -eq
+                [IO.Path]::GetFullPath((Join-Path $repo 'build\native-audio\install')))
         pinManifestSha256 = Hash $pinPath
         nativeMergedArchiveSha256 = $initialMergedHash
         thirdPartyLibrarySourceInputsVerified = $true
