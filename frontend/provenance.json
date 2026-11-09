@@ -1,0 +1,9 @@
+{
+  "component": "lucide",
+  "version": "1.39.0",
+  "packageIntegrity": "sha1-sipkeC2cFx7kl8uUiZFyS8xIzTM=",
+  "packageSha256": "cd25694d774e41a1690c688d4269f1e9c7a47c32f7a527aa10219532bfe16034",
+  "upstreamCommit": "eaace8a81bc9448c9e9b924354d878fa67ca9620",
+  "upstreamSourceSha256": "36c1d82469bc9d3ae99d118f51122691e2171150887475a6672ed988e0b61cee",
+  "upstreamRepository": "https://github.com/lucide-icons/lucide"
+}

@@ -20,6 +20,17 @@ function Invoke-Checked([string]$Program, [string[]]$Arguments) {
 
 Push-Location $root
 try {
+    $sourceCommit = (& git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $sourceCommit) {
+        throw "Could not identify the application source commit."
+    }
+    $sourceTreeStatus = @(& git status --porcelain --untracked-files=normal)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not inspect the application source tree."
+    }
+    $sourceTreeChanges = @($sourceTreeStatus | Where-Object {
+        $_ -notmatch '^\?\? build[\\/]'
+    })
     $env:PATH = "$ToolchainDirectory;$env:ProgramFiles\Go\bin;$env:PATH"
     $env:CGO_ENABLED = "1"
     foreach ($tool in @("go", "node", "npm", "gcc", "objdump", "git", "cmake", "ninja", "python", "tar", "gmake")) {
@@ -74,6 +85,8 @@ try {
     $version = (Get-Item -LiteralPath $env:MIRRORME_NATIVE_BINARY).VersionInfo
     [ordered]@{
         version = "{0}.{1}.{2}" -f $version.ProductMajorPart, $version.ProductMinorPart, $version.ProductBuildPart
+        sourceCommit = $sourceCommit
+        sourceTreeClean = ($sourceTreeChanges.Count -eq 0)
         backend = "native"
         executable = $OutputName
         applicationSha256 = (Get-FileHash -LiteralPath $env:MIRRORME_NATIVE_BINARY -Algorithm SHA256).Hash.ToLowerInvariant()

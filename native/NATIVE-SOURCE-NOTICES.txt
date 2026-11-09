@@ -5,6 +5,14 @@ This is a native dependency source inventory, not release approval or legal
 advice. It does not certify physical Apple-device interoperability. No binary
 publication is performed by the collector.
 
+GPL-3.0-or-later §5(a) modification notice
+-----------------------------------------
+The pinned libuxplay source is modified by the MirrorMe project as of
+2026-09-14. Modifications include Windows integration, native-host lifecycle
+and error handling, and the checked transformations in
+native/patches/prepare-protocol.py. The release source kit retains the pinned
+upstream source and the patched build snapshot.
+
 Collect and verify (PowerShell 7.2+, existing tools, no rebuild or installs):
   .\scripts\collect-native-sources.ps1
   .\scripts\collect-native-sources.ps1 -Offline

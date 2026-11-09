@@ -17,12 +17,21 @@ identity**:
 
 ```powershell
 .\scripts\build-msix.ps1 `
+  -BuildApplication `
   -StoreSubmission `
   -IdentityName '<Partner Center package identity name>' `
   -Publisher '<Partner Center publisher ID>' `
   -PublisherDisplayName '<Partner Center publisher display name>' `
   -ProductDisplayName '<reserved Store product name>'
 ```
+
+`-StoreSubmission` requires a clean committed source tree and `-BuildApplication`.
+It verifies the exact source tag and release, then checks the freshly built
+application and sender hashes against the build receipt before approving the
+package. It remains blocked while the readiness fields in
+`native/dependencies.json` are false, and Partner Center identity overrides
+without `-StoreSubmission` are rejected. Do not mark distribution readiness or
+a build receipt approved until the corresponding checks have passed.
 
 Store submission MSIX packages are intentionally unsigned. Microsoft signs the
 package after certification. A package distributed outside the Store must be

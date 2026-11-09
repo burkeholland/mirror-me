@@ -1,5 +1,2 @@
-MirrorMe corresponding source and release materials:
-https://github.com/burkeholland/mirror-me
-
-Published source archives:
-https://github.com/burkeholland/mirror-me/releases
+MirrorMe 0.2.8 source release:
+https://github.com/burkeholland/mirror-me/releases/tag/v0.2.8-preview.1

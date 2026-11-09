@@ -179,6 +179,11 @@ try {
     if ($head -ne $protocol.commit -or $dirty) { throw 'Pinned protocol checkout is not pristine.' }
     $protocolArchive = Get-Pinned $protocol.sourceFile $protocol.sourceUrl $protocol.sourceSha256
     Copy-Verified $protocolArchive (Join-Path $staging "protocol\$($protocol.sourceFile)")
+    $protocolBundle = Join-Path $staging 'protocol.git.bundle'
+    & $git -C $vendor bundle create $protocolBundle --all
+    Assert-Exit 'Creating pinned protocol Git bundle'
+    & $git bundle verify $protocolBundle
+    Assert-Exit 'Verifying pinned protocol Git bundle'
     $members = @($protocol.licenseMembers | ForEach-Object { "$($protocol.sourceRoot)/$_" })
     Extract-Selected $protocolArchive (Join-Path $staging 'licenses\protocol') $members 1
     Snapshot-Tree (Join-Path $repo 'build\native\protocol') (Join-Path $staging 'protocol\patched')
@@ -274,9 +279,12 @@ try {
     $currentLink = Get-Content $nativeLinkPath -Raw | ConvertFrom-Json
     if ($currentLink.mergedArchiveSha256 -ne $initialMergedHash) { throw 'Native build changed during collection; retry.' }
 
+    $sourceCommit = (& $git -C $repo rev-parse HEAD).Trim()
+    Assert-Exit 'Application source commit identification'
     $report = [ordered]@{
         schemaVersion = 1
         collectedAtUtc = [DateTime]::UtcNow.ToString('o')
+        applicationSourceCommit = $sourceCommit
         pinManifestSha256 = Hash $pinPath
         nativeMergedArchiveSha256 = $initialMergedHash
         thirdPartyLibrarySourceInputsVerified = $true

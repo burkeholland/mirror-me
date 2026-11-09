@@ -56,7 +56,7 @@ window.go = { main: { App: {
     }
   },
   ForgetCastTarget: async id => { calls.push(['cast-forget', id]); },
-  GetVersion: async () => 'UI preview',
+  GetVersion: async () => params.get('version') || 'UI preview',
   GetSettingsFolder: async () => 'Preview only - no files are changed',
   GetLogsFolder: async () => 'Preview only - no log files are created',
   SaveSettings: async next => {

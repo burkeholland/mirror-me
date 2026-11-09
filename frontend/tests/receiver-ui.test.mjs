@@ -82,6 +82,19 @@ test('title bar and About use the unchanged website brand mark', async () => {
   }
 });
 
+test('About shows copyright and warranty information with version-specific source links', () => {
+  state.route = 'about';
+  state.version = '0.2.8';
+  const html = renderHTML();
+  assert.match(html, /Copyright &copy; 2026 Burke Holland/);
+  assert.match(html, /Provided as is, without warranty of any kind/);
+  assert.match(html, /The combined app is distributed under GNU GPL version 3 or later; redistribution and modification are allowed under that license/);
+  assert.match(html, /MirrorMe is not affiliated with or endorsed by Apple Inc\./);
+  assert.match(html, /href="https:\/\/www\.gnu\.org\/licenses\/gpl-3\.0\.txt"[^>]+id="about-license"/);
+  assert.match(html, /href="https:\/\/github\.com\/burkeholland\/mirror-me\/releases\/tag\/v0\.2\.8-preview\.1"[^>]+id="about-source"/);
+  assert.match(html, /id="about-source"[^>]+data-action="open-link"/);
+});
+
 test('startup and connection can both be cancelled', () => {
   for (const status of ['starting', 'connecting']) {
     state.status = { status };
