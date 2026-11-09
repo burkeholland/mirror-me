@@ -300,6 +300,10 @@ function Assert-SourceTextSafe([string]$Text, [string]$Name) {
             throw "Source release contains a developer-local path in $Name."
         }
     }
+    if ($env:COMPUTERNAME -and [regex]::IsMatch(
+            $scanText, '(?i)(?<![A-Za-z0-9_-])' + [regex]::Escape($env:COMPUTERNAME) + '(?![A-Za-z0-9_-])')) {
+        throw "Source release contains this PC's name in $Name."
+    }
     foreach ($pattern in $secretPatterns) {
         if ([regex]::IsMatch($scanText, $pattern)) {
             throw "Source release contains a possible credential or private key in $Name."

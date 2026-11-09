@@ -332,6 +332,9 @@ try {
             ForEach-Object { [pscustomobject]@{ path = $_; label = $label } }
     }
     $profileSpelling = '(?i)(?:[A-Za-z]\$?:)?[\\/]+Users[\\/]+' + [regex]::Escape($env:USERNAME) + '(?![A-Za-z0-9_-])'
+    # CMake also records this PC's name as the CTest SITE.
+    $evidenceRoot = Join-Path $staging 'build-evidence'
+    $machineName = '(?i)(?<![A-Za-z0-9_-])' + [regex]::Escape([string]$env:COMPUTERNAME) + '(?![A-Za-z0-9_-])'
     foreach ($file in Get-ChildItem -LiteralPath $staging -Recurse -File -Force) {
         if ($file.Extension -notin @('.json', '.txt', '.sh', '.ninja', '.mak', '.h', '.pc')) { continue }
         $text = [IO.File]::ReadAllText($file.FullName)
@@ -340,6 +343,9 @@ try {
             $updated = $updated.Replace($replacement.path, $replacement.label, [StringComparison]::OrdinalIgnoreCase)
         }
         $updated = [regex]::Replace($updated, $profileSpelling, '<user-profile>')
+        if ($env:COMPUTERNAME -and $file.FullName.StartsWith($evidenceRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            $updated = [regex]::Replace($updated, $machineName, '<computer-name>')
+        }
         if ($updated -cne $text) {
             [IO.File]::WriteAllText($file.FullName, $updated, [Text.UTF8Encoding]::new($false))
         }
