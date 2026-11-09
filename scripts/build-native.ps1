@@ -93,7 +93,7 @@ function Restore-SourceInput($inputFile, [string]$directory) {
 
 $priorPath = $env:PATH
 try {
-    if ($ForDistribution -and (-not $lock.distribution.ready -or
+    if ($ForDistribution -and (@($lock.distribution.remainingGaps).Count -or
         -not $lock.toolchain.sourceProvenanceComplete -or $ProtocolOnly -or $SkipTests)) {
         throw "Distribution is blocked. See native\dependencies.json distribution.remainingGaps; production=true means real implementation, NOT permission to publish."
     }
@@ -343,7 +343,7 @@ try {
         cmakeCache = (File-Receipt (Join-Path $cmakeBuild "CMakeCache.txt"))
     }
     $provenance | ConvertTo-Json -Depth 8 | Set-Content $provenancePath -Encoding UTF8
-    if ($ForDistribution -and -not $provenance.distributionReady) {
+    if ($ForDistribution -and @($remainingGaps).Count) {
         throw "Build succeeded for development, but corresponding-source publication remains blocked."
     }
     $manifest = [ordered]@{
@@ -369,5 +369,5 @@ try {
     $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath -Encoding UTF8
     Copy-Item (Join-Path $native "dependencies.json") (Join-Path $build "dependencies.json") -Force
     Write-Host "Static native build complete; production=$(-not $ProtocolOnly); distributionReady=false. No old engine files were modified."
-    Write-Warning "Do not publish this development build. See build\native\source-provenance.json for remaining source/rebuild gaps."
+    Write-Warning "A native build is not release approval. Only scripts\release-store-build.ps1 approves a Store package; see build\native\source-provenance.json for any open source gaps."
 } finally { $env:PATH = $priorPath }

@@ -67,12 +67,14 @@ and source build script; see native\audio-dependencies.json / AUDIO-NOTICES.txt.
 Corresponding-source evidence and publication gate
 -------------------------------------------------
 
-DO NOT PUBLISH THE CURRENT DEVELOPMENT BUILD. production=true in the link
+A native build alone is not release approval. production=true in the link
 manifest means the real media implementation, not distribution readiness.
 Both link-manifest.json and source-provenance.json report distributionReady=false.
 The explicit .\scripts\build-native.ps1 -ForDistribution command rejects the
-current incomplete provenance before building. Successful tests, static linking,
-or an OS-only import table do not satisfy the source/publication gate.
+build while any source gap is open. Only .\scripts\release-store-build.ps1
+approves a Store package, after its source tag and release checks pass.
+Successful tests, static linking, or an OS-only import table do not satisfy the
+source/publication gate.
 
 Normal builds preserve these inputs and verify their SHA-256 pins:
 

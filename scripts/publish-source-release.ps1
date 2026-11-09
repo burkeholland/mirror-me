@@ -10,6 +10,7 @@ param(
     [string]$ReferenceSourceTag = 'v0.2.4-preview.1',
     [string]$ReferenceSourceSha256 = '4fab1d0a86111ecefef0a53767bb931d147da2191846334e02aefcd1bcf38b8a',
     [string]$StorePackageVersion = '',
+    [string]$ToolchainDirectory = 'C:\Strawberry\c\bin',
     [string]$Repository = 'burkeholland/mirror-me'
 )
 
@@ -83,10 +84,16 @@ try {
     $packageIsPresent = @($packageArtifacts | Where-Object {
         -not (Test-Path -LiteralPath $_ -PathType Leaf)
     }).Count -eq 0
+    # A package left by an earlier commit is regenerated, never published.
+    if ($packageIsPresent -and
+        (Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json).sourceCommit -ne $SourceCommit) {
+        $packageIsPresent = $false
+    }
     if (-not $packageIsPresent) {
         $packageArguments = @(
             '-ApplicationVersion', $ApplicationVersion,
             '-SourceCommit', $SourceCommit,
+            '-ToolchainDirectory', $ToolchainDirectory,
             '-Force'
         )
         if ($ReferenceSourceZip) {
@@ -135,7 +142,7 @@ try {
 
 Source archive for MirrorMe $ApplicationVersion, target commit $SourceCommit. The reported Store package version is $StorePackageVersion.
 
-The MirrorMe.exe match to this source commit was not verified. The release includes the source archive, manifest, and SHA-256 checksums.
+The Store build of MirrorMe.exe is made from this commit after this release; a byte-for-byte rebuild match is not verified. The release includes the source archive, manifest, and SHA-256 checksums.
 "@
     [IO.File]::WriteAllText($notesPath, $notes, [Text.UTF8Encoding]::new($false))
     Invoke-Checked 'gh' @(

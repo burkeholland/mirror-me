@@ -35,7 +35,9 @@ function Copy-LicenseFiles([string]$Source, [string]$Destination, [string]$Compo
     $files = @(Get-ChildItem -LiteralPath $Source -Recurse -File -Force |
         Where-Object {
             $_.Extension -eq '.nuspec' -or
-                $_.Name -match '(^|[-_.])(LICENSE|LICENCE|COPYING|NOTICE|NOTICES|COPYRIGHT)(?:$|[._-])'
+                ($_.Name -match '(^|[-_.])(LICENSE|LICENCE|COPYING|NOTICE|NOTICES|COPYRIGHT)(?:$|[._-])' -and
+                    # Code named like a notice, such as x/tools copyright.go, is not a license text.
+                    $_.Extension -notin @('.go', '.c', '.h', '.cc', '.cpp', '.cs', '.js', '.ts', '.py', '.s'))
         })
     if (-not $files.Count) {
         throw "No license, notice, or NuGet license metadata was found for $Component in $Source"

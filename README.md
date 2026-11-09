@@ -25,7 +25,7 @@ for receiving still remains open.
 
 ![MirrorMe discovering AirPlay targets for desktop casting](store-assets/screenshots/desktop-casting-discovery.png)
 
-The current **0.2.7 source build** has a built-in receiver. It uses Windows
+The current **0.2.8 source build** has a built-in receiver. It uses Windows
 media and discovery APIs and statically linked protocol/audio libraries:
 no UxPlay executable, GStreamer bundle, Bonjour installation, or receiver
 download is needed. It is not a clean-room AirPlay implementation.
@@ -118,12 +118,15 @@ To build from source you'll also need:
 - [Go](https://go.dev/) 1.25 or later
 - [Node.js](https://nodejs.org/) 20.19+ or 22.12+ (required by Vite 7)
 - The [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation) (`go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`)
-- An x64 **UCRT** MinGW toolchain (tested: Strawberry GCC 13.2.0 at
-  `C:\Strawberry\c\bin`), CMake, Ninja, Python, Git for Windows with Bash,
-  GNU Make, and tar. An MSVCRT-only compiler cannot consume the pinned SDK.
+- An x64 **UCRT** MinGW toolchain (tested: WinLibs GCC 13.2.0 r8, also shipped by
+  Strawberry at `C:\Strawberry\c\bin`), CMake, Ninja, Python, Git for Windows with
+  Bash, GNU Make, and tar. An MSVCRT-only compiler cannot consume the pinned SDK.
+  With a standalone WinLibs, pass `-ToolchainDirectory <mingw64\bin>` and copy its
+  `mingw32-make.exe` to `gmake.exe`. This also works on Windows on Arm, under x64
+  emulation.
 - Internet for the pinned source/build dependencies on the first build.
-- The .NET 8 SDK or later for building the desktop sender (not required on
-  users' PCs).
+- .NET SDK 8.0.426 for building the desktop sender (not required on users' PCs). A
+  newer SDK can fail the locked restore.
 
 ## Getting started
 
@@ -184,10 +187,12 @@ AppData profiles. This is not a physical-iPhone compatibility test.
 `collect-native-sources.ps1` collects pinned native sources, exact MSYS2
 recipes/patches, and compiler-runtime notices into `build\native-sources\bundle`.
 Its `-Offline` mode rechecks the cached inputs. This native source inventory
-is not yet a complete application distribution package: publication must also
-bind the final executable to the matching application/frontend sources and
-dependency notices. The app build writes a `.build.json` fingerprint beside
-its executable and deliberately does not mark the build approved for release.
+is not a complete application distribution package by itself. For a Store
+build, `scripts\release-store-build.ps1` publishes the complete source release
+first, then builds the MSIX from that commit; see
+[packaging/msix/README.md](packaging/msix/README.md). The app build writes a
+`.build.json` fingerprint beside its executable and leaves it unapproved; only
+that release gate can approve a package.
 
 ## Using MirrorMe
 

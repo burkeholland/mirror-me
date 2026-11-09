@@ -7,6 +7,8 @@ param(
     [ValidatePattern('^[0-9a-fA-F]{40}$')]
     [string]$ExpectedCommit,
     [string]$Repository = 'burkeholland/mirror-me',
+    [ValidatePattern('^$|^[0-9a-fA-F]{64}$')]
+    [string]$ExpectedCollectionReportSha256 = '',
     [switch]$LocalOnly,
     [string]$LocalArchivePath = ''
 )
@@ -218,6 +220,22 @@ try {
         foreach ($required in $requiredEntries) {
             if ($required -notin $entryNames) {
                 throw "Source archive is missing required content: $required"
+            }
+        }
+        $nativePins = Get-ZipEntryText $archive 'MirrorMe-source/native-sources/rebuild-inputs/native/source-dependencies.json' |
+            ConvertFrom-Json
+        foreach ($resource in $nativePins.additionalResources) {
+            $entryName = 'MirrorMe-source/native-sources/' + ([string]$resource.destination).Replace('\', '/')
+            $entry = $archive.GetEntry($entryName)
+            if (-not $entry -or (Get-ZipEntryHash $entry) -ne [string]$resource.sha256) {
+                throw "Source archive is missing pinned native source input: $entryName"
+            }
+        }
+        if ($ExpectedCollectionReportSha256) {
+            $reportEntry = $archive.GetEntry('MirrorMe-source/native-sources/collection-report.json')
+            if (-not $reportEntry -or
+                (Get-ZipEntryHash $reportEntry) -ne $ExpectedCollectionReportSha256.ToLowerInvariant()) {
+                throw 'Published native source report does not match the local native build.'
             }
         }
         $senderPackages = @($archive.Entries | Where-Object {

@@ -80,7 +80,8 @@
     "mingwNoticeCommit": "c3e587c067a00a561899d49d3e63a659e38802ec",
     "sourceObligation": "GCC Runtime Library Exception 3.1 permits the final eligible-compiled combination under its independent modules' terms. Preserve GPLv3/exception and MinGW runtime/winpthreads notices. Do not treat this as permission to redistribute a standalone compiler/runtime SDK without its own compliance analysis.",
     "vendorRuntimeArchiveHashesVerified": true,
-    "compilerSourceRebuilt": false
+    "compilerSourceRebuilt": false,
+    "distributorRecipeCorrespondence": "WinLibs recipes.winlib files are the published build recipes, including their inline patches. gcc.winlib 7f50c94 has VERSION=13.2.0 active, its configure line matches the toolchain's reported configuration, and it writes the 'Ctags' line found in r8 version_info.txt; the next recipe commit changes that line. mingw-w64.winlib 04c9221 has VERSION=11.0.1 active and downloads the retained archive. WinLibs does not publish a per-release recipe revision, so this is strong identification by content, not a byte-for-byte rebuild proof."
   },
   "noticeResources": [
     {"file": "msys2-LICENSE", "url": "https://raw.githubusercontent.com/msys2/MINGW-packages/b3b7d1fbab1a931ff4295cbad55bffcc4f223bc4/LICENSE", "sha256": "e08ac31ef517ea449b7f402ab7940c750127c1de0566458d8e80635be9fa4055"},
@@ -100,6 +101,11 @@
     {"file": "openssl-3.6.1.tar.gz.asc", "url": "https://github.com/openssl/openssl/releases/download/openssl-3.6.1/openssl-3.6.1.tar.gz.asc", "sha256": "a549571f98ac883a6eca7a2c21021a9d2129e6f4bcad2a261f9bd2487fb80f4b", "destination": "recipes/openssl/openssl-3.6.1.tar.gz.asc"},
     {"file": "ffmpeg-8.0.1.tar.xz.asc", "url": "https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz.asc", "sha256": "54ab4020bb4eb280444da74d7aabc282acf6e8500cf6feaefd9821373fa9e72c", "destination": "audio/ffmpeg-8.0.1.tar.xz.asc"},
     {"file": "ffmpeg-devel.asc", "url": "https://ffmpeg.org/ffmpeg-devel.asc", "sha256": "397b3becedcd5a98769967ff1ff8501ddc89f8368b8f766e4701377d7dbaabe5", "destination": "audio/ffmpeg-devel.asc"},
-    {"file": "winlibs.sha256", "url": "https://github.com/brechtsanders/winlibs_mingw/releases/download/13.2.0posix-18.1.5-11.0.1-ucrt-r8/winlibs-x86_64-posix-seh-gcc-13.2.0-mingw-w64ucrt-11.0.1-r8.7z.sha256", "sha256": "1ce1b376ccaf53acefbed98fc403f378b5090086ccc674dae54bdf217100e05f", "destination": "compiler-runtime/winlibs.sha256"}
+    {"file": "winlibs.sha256", "url": "https://github.com/brechtsanders/winlibs_mingw/releases/download/13.2.0posix-18.1.5-11.0.1-ucrt-r8/winlibs-x86_64-posix-seh-gcc-13.2.0-mingw-w64ucrt-11.0.1-r8.7z.sha256", "sha256": "1ce1b376ccaf53acefbed98fc403f378b5090086ccc674dae54bdf217100e05f", "destination": "compiler-runtime/winlibs.sha256"},
+    {"file": "gcc-13.2.0.tar.xz", "url": "https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz", "sha256": "e275e76442a6067341a27f04c5c6b83d8613144004c0413528863dc6b5c743da", "destination": "compiler-runtime/gcc-13.2.0.tar.xz", "upstreamSourceArchive": true},
+    {"file": "mingw-w64-v11.0.1.tar.bz2", "url": "https://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/mingw-w64-v11.0.1.tar.bz2", "sha256": "3f66bce069ee8bed7439a1a13da7cb91a5e67ea6170f21317ac7f5794625ee10", "destination": "compiler-runtime/mingw-w64-v11.0.1.tar.bz2", "upstreamSourceArchive": true},
+    {"file": "winlibs-gcc-7f50c94.winlib", "url": "https://raw.githubusercontent.com/brechtsanders/winlibs_recipes/7f50c9404769040c54f417efa15ce77998c0422d/recipes/gcc.winlib", "sha256": "fa4ebebfb9a76d59ed9d0c400108222b51b9d52b4bbe8a78e07188205ba36f27", "destination": "compiler-runtime/winlibs-gcc-7f50c94.winlib"},
+    {"file": "winlibs-mingw-w64-04c9221.winlib", "url": "https://raw.githubusercontent.com/brechtsanders/winlibs_recipes/04c9221bdbe989081ee2d7ee233b08db5f70679c/recipes/mingw-w64.winlib", "sha256": "21e18dfda397284bf0deec4efc6144bd1550dd535fd80de3608f2d148589527e", "destination": "compiler-runtime/winlibs-mingw-w64-04c9221.winlib"},
+    {"file": "winlibs-recipes-LICENSE", "url": "https://raw.githubusercontent.com/brechtsanders/winlibs_recipes/7f50c9404769040c54f417efa15ce77998c0422d/LICENSE", "sha256": "41fe7628056a315529057a17777bacd3323903cca346f96a6868a603aa1a956e", "destination": "compiler-runtime/winlibs-recipes-LICENSE"}
   ]
 }

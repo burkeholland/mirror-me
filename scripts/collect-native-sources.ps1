@@ -62,7 +62,8 @@ function Get-Pinned([string]$file, [string]$url, [string]$expected) {
     $destination = Join-Path $downloads $file
     $partial = "$destination.partial"
     try {
-        Invoke-WebRequest -Uri $url -OutFile $partial
+        # SourceForge serves an HTML interstitial to browser-like user agents.
+        Invoke-WebRequest -Uri $url -OutFile $partial -UserAgent 'curl/8.0'
         Assert-Hash $partial $expected
         Move-Item -LiteralPath $partial -Destination $destination -Force
     } finally {
@@ -249,6 +250,15 @@ try {
     $versionInfo = Join-Path $toolchainRoot 'version_info.txt'
     Assert-Hash $versionInfo $runtime.installedVersionInfoSha256
     Copy-Verified $versionInfo (Join-Path $staging 'compiler-runtime\installed-version_info.txt')
+    # Only the vendor's configuration lines are kept; the rest of this output names local paths.
+    $configuration = @(& $gcc -v 2>&1 | ForEach-Object { [string]$_ } |
+        Where-Object { $_ -match '^(Target|Configured with|Thread model|gcc version)\b' })
+    Assert-Exit 'Compiler configuration identification'
+    if (-not @($configuration | Where-Object { $_ -match '^Configured with:' }).Count) {
+        throw 'Compiler configuration was not reported.'
+    }
+    [IO.File]::WriteAllLines((Join-Path $staging 'compiler-runtime\gcc-configuration.txt'), $configuration,
+        [Text.UTF8Encoding]::new($false))
     Copy-Verified (Join-Path $runtimeWork 'mingw64\version_info.txt') (Join-Path $staging 'compiler-runtime\vendor-version_info.txt')
     foreach ($entry in @(
         @('include\c++\13.2.0\thread', 'libstdcxx-thread-header.txt'),
@@ -293,14 +303,37 @@ try {
         finalApplicationDistributionApproved = $false
         observations = @($observations.ToArray())
         remainingChecks = @(
-            'MSYS2 historical binaries were not byte-rebuilt; BUILDINFO records GCC 15.2/MinGW 13 environments, not the final GCC 13.2/MinGW 11 toolchain. Exact source/recipe correspondence and package archive equality are verified.',
-            'Current local native source/build inputs are snapshotted. Before distributing, freeze the final application source revision, rebuild from those final inputs, and bind executable hash to its complete corresponding-source package.',
-            'This native kit does not contain all Go/frontend/application dependencies or installation information. The application distributor must supply those and applicable GPL/LGPL notices/rights.',
+            'MSYS2 historical binaries were not byte-rebuilt; BUILDINFO records GCC 15.2/MinGW 13 environments, not the final GCC 13.2/MinGW 11 toolchain. Exact source/recipe correspondence and package archive equality are verified. native/dependency-rebuild-receipt.json records a separate verification rebuild from the retained recipes.',
+            'WinLibs itself was not rebuilt. Its upstream GCC and MinGW-w64 sources and published recipes are retained and identified by version, configuration and version_info text, not by a byte-for-byte rebuild.',
+            'Current local native source/build inputs are snapshotted. scripts/release-store-build.ps1 freezes the application revision and links the native archive this report records.',
+            'This native kit does not contain the Go/frontend/application dependencies or installation information. The source release adds them.',
             'Runtime exception applies to an eligible-compiled final combination. Do not distribute standalone compiler/runtime binary SDKs or rely on non-GPL-compatible GCC intermediate-code transformations without separate review.',
             'Patent/trademark/device-interoperability questions are separate; no publication or physical-device compatibility is certified.'
         )
     }
     $report | ConvertTo-Json -Depth 12 | Set-Content (Join-Path $staging 'collection-report.json') -Encoding utf8
+    # Generated build evidence records absolute paths. Keep the evidence, not this machine's layout.
+    $repoPath = [IO.Path]::GetFullPath($repo).TrimEnd('\')
+    $profilePath = [IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\')
+    $msysPath = { param($path) '/' + $path.Substring(0, 1).ToLowerInvariant() + $path.Substring(2).Replace('\', '/') }
+    $replacements = @(
+        @($repoPath, '<source-root>'), @($profilePath, '<user-profile>')
+    ) | ForEach-Object {
+        $path, $label = $_
+        @($path, $path.Replace('\', '/'), $path.Replace('\', '\\'), (& $msysPath $path)) |
+            ForEach-Object { [pscustomobject]@{ path = $_; label = $label } }
+    }
+    foreach ($file in Get-ChildItem -LiteralPath $staging -Recurse -File -Force) {
+        if ($file.Extension -notin @('.json', '.txt', '.sh', '.ninja', '.mak', '.h', '.pc')) { continue }
+        $text = [IO.File]::ReadAllText($file.FullName)
+        $updated = $text
+        foreach ($replacement in $replacements) {
+            $updated = $updated.Replace($replacement.path, $replacement.label, [StringComparison]::OrdinalIgnoreCase)
+        }
+        if ($updated -cne $text) {
+            [IO.File]::WriteAllText($file.FullName, $updated, [Text.UTF8Encoding]::new($false))
+        }
+    }
     $inventory = @(Get-ChildItem -LiteralPath $staging -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
         [ordered]@{
             path = [IO.Path]::GetRelativePath($staging, $_.FullName).Replace('\', '/')

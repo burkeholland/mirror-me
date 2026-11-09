@@ -16,6 +16,7 @@ param(
     [string]$OutputPath = "",
     [switch]$BuildApplication,
     [switch]$StoreSubmission,
+    [string]$ToolchainDirectory = "C:\Strawberry\c\bin",
     [string]$CertificatePath = "",
     [string]$CertificatePasswordEnvironmentVariable = "MIRRORME_MSIX_CERT_PASSWORD",
     [switch]$Force
@@ -109,6 +110,9 @@ try {
     $applicationReceipt = $null
     $applicationReceiptVerified = $false
     $sourceTreeCleanAtEnd = $false
+    $packageCreated = $false
+    $storeApproved = $false
+    $collectionReport = $null
     $config = Get-Content -LiteralPath "wails.json" -Raw | ConvertFrom-Json
     if (-not $ApplicationVersion) {
         $ApplicationVersion = [string]$config.info.productVersion
@@ -140,7 +144,7 @@ try {
     }
 
     $sourceReleaseVerified = $false
-    $nativeDistributionReady = $false
+    $nativeProvenanceVerified = $false
     if ($StoreSubmission) {
         if (-not $BuildApplication) {
             throw "Store packaging requires -BuildApplication so the executable is built from the verified source commit."
@@ -159,14 +163,41 @@ try {
 
         $nativeDependencies = Get-Content -LiteralPath (Join-Path $root "native\dependencies.json") -Raw |
             ConvertFrom-Json
-        $nativeDistributionReady = [bool]$nativeDependencies.distribution.ready -and
-            [bool]$nativeDependencies.toolchain.sourceProvenanceComplete
-        if (-not $nativeDistributionReady) {
+        if ($nativeDependencies.distribution.ready) {
+            throw "native\dependencies.json must keep distribution.ready false; only the Store gate sets it, in build output, after its checks pass."
+        }
+        $remainingGaps = @($nativeDependencies.distribution.remainingGaps)
+        if (-not $nativeDependencies.toolchain.sourceProvenanceComplete -or $remainingGaps.Count) {
             throw "Store packaging is blocked by native source-provenance gaps in native\dependencies.json."
         }
+        $rebuildReceipt = Get-Content -LiteralPath (Join-Path $root "native\dependency-rebuild-receipt.json") -Raw |
+            ConvertFrom-Json
+        if (-not $rebuildReceipt.recipesExecuted -or -not $rebuildReceipt.nativeTestsAgainstRebuiltLibraries.passed) {
+            throw "native\dependency-rebuild-receipt.json does not record a passing verification rebuild."
+        }
+        foreach ($package in $nativeDependencies.packages) {
+            $rebuilt = @($rebuildReceipt.packages | Where-Object {
+                $_.name -eq $package.name -and
+                $_.pinnedPackageSha256 -eq $package.sha256 -and
+                $_.pkgbuildSha256 -eq $package.recipeSha256FromBuildInfo
+            })
+            if ($rebuilt.Count -ne 1) {
+                throw "The verification rebuild receipt does not cover the pinned $($package.name) package. Rerun scripts\verify-native-dependency-rebuild.ps1."
+            }
+        }
+        $nativeProvenanceVerified = $true
 
+        $collectionReportPath = Join-Path $root "build\native-sources\bundle\collection-report.json"
+        if (-not (Test-Path -LiteralPath $collectionReportPath -PathType Leaf)) {
+            throw "No native source collection exists for this commit. Run scripts\release-store-build.ps1."
+        }
+        $collectionReport = Get-Content -LiteralPath $collectionReportPath -Raw | ConvertFrom-Json
+        if ($collectionReport.applicationSourceCommit -ne $sourceCommit) {
+            throw "The native source collection is for $($collectionReport.applicationSourceCommit), not $sourceCommit. Run scripts\release-store-build.ps1."
+        }
         & (Join-Path $PSScriptRoot "verify-source-release.ps1") `
-            -ApplicationVersion $displayVersion -ExpectedCommit $sourceCommit
+            -ApplicationVersion $displayVersion -ExpectedCommit $sourceCommit `
+            -ExpectedCollectionReportSha256 (Get-FileHash -LiteralPath $collectionReportPath -Algorithm SHA256).Hash
         $sourceReleaseVerified = $true
     } else {
         $identityParameters = @(
@@ -198,7 +229,10 @@ try {
     }
 
     if ($BuildApplication) {
-        & (Join-Path $PSScriptRoot "build-app.ps1")
+        $applicationBuild = @{ ToolchainDirectory = $ToolchainDirectory }
+        # A Store build links the native archive whose hash the published source release records.
+        if ($StoreSubmission) { $applicationBuild.SkipNativeBuild = $true }
+        & (Join-Path $PSScriptRoot "build-app.ps1") @applicationBuild
     }
     if (-not $Executable) {
         $Executable = Join-Path $root "build\bin\MirrorMe.exe"
@@ -219,6 +253,9 @@ try {
             $applicationReceipt.sourceCommit -ne $sourceCommit -or
             -not $applicationReceipt.sourceTreeClean) {
             throw "Application build receipt does not identify a clean build of source commit $sourceCommit."
+        }
+        if ([string]$applicationReceipt.nativeArchiveSha256 -ne [string]$collectionReport.nativeMergedArchiveSha256) {
+            throw "The application did not link the native archive recorded in the published source release."
         }
         $receiptApplicationHash = (Get-FileHash -LiteralPath $Executable -Algorithm SHA256).Hash.ToLowerInvariant()
         if ([string]$applicationReceipt.applicationSha256 -ne $receiptApplicationHash) {
@@ -262,7 +299,7 @@ try {
     New-Item -ItemType Directory -Path (Split-Path -Parent $OutputPath) -Force | Out-Null
 
     if (-not (Test-Path -LiteralPath (Join-Path $root "build\native-sources\bundle\licenses") -PathType Container)) {
-        & (Join-Path $PSScriptRoot "collect-native-sources.ps1")
+        & (Join-Path $PSScriptRoot "collect-native-sources.ps1") -ToolchainDirectory $ToolchainDirectory
     }
     & (Join-Path $PSScriptRoot "collect-app-licenses.ps1") `
         -ApplicationVersion $displayVersion -Force
@@ -290,6 +327,14 @@ try {
             throw "Desktop casting helper artifact is missing: $sourcePath"
         }
         Copy-Item -LiteralPath $sourcePath -Destination $senderLayout -Recurse -Force
+    }
+    if ($StoreSubmission) {
+        # Every pre-package gate has passed. If a later check fails, the unapproved MSIX is deleted.
+        $packagedSenderReceiptPath = Join-Path $senderLayout "sender.build.json"
+        $packagedSenderReceipt = Get-Content -LiteralPath $packagedSenderReceiptPath -Raw | ConvertFrom-Json
+        $packagedSenderReceipt.distributionApproved = $true
+        $packagedSenderReceipt | ConvertTo-Json -Depth 8 |
+            Set-Content -LiteralPath $packagedSenderReceiptPath -Encoding utf8
     }
     foreach ($relativePath in @(
         "LICENSE",
@@ -346,6 +391,7 @@ try {
     }
 
     Invoke-Checked $makeAppx @("pack", "/d", $layout, "/p", $OutputPath, "/o")
+    $packageCreated = $true
 
     if ($CertificatePath) {
         $CertificatePath = (Resolve-Path -LiteralPath $CertificatePath).Path
@@ -447,7 +493,7 @@ try {
         sourceReleaseVerified = $sourceReleaseVerified
         licenseFileCount = $expectedLicenseFiles.Count
         distributionApproved = [bool](
-            $StoreSubmission -and $sourceReleaseVerified -and $nativeDistributionReady -and
+            $StoreSubmission -and $sourceReleaseVerified -and $nativeProvenanceVerified -and
             $applicationReceiptVerified -and $sourceTreeCleanAtEnd
         )
         startupTaskId = "MirrorMeStartupTask"
@@ -455,11 +501,18 @@ try {
     }
     $receiptPath = "$OutputPath.json"
     $receipt | ConvertTo-Json | Set-Content -LiteralPath $receiptPath -Encoding utf8
-    if ($receipt.distributionApproved -and (Test-Path -LiteralPath $applicationReceiptPath)) {
+    if ($receipt.distributionApproved) {
         $applicationReceipt = Get-Content -LiteralPath $applicationReceiptPath -Raw | ConvertFrom-Json
         $applicationReceipt.distributionApproved = $true
         $applicationReceipt | ConvertTo-Json -Depth 8 |
             Set-Content -LiteralPath $applicationReceiptPath -Encoding utf8
+        # The checked-in file stays false; only this build's generated copy records readiness.
+        $generatedDependenciesPath = Join-Path $root "build\native\dependencies.json"
+        $generatedDependencies = Get-Content -LiteralPath $generatedDependenciesPath -Raw | ConvertFrom-Json
+        $generatedDependencies.distribution.ready = $true
+        $generatedDependencies | ConvertTo-Json -Depth 12 |
+            Set-Content -LiteralPath $generatedDependenciesPath -Encoding utf8
+        $storeApproved = $true
     }
     Write-Host "MSIX package: $OutputPath"
     Write-Host "SHA-256: $($receipt.packageSha256)"
@@ -468,5 +521,9 @@ try {
         Write-Warning "This package uses a development identity. Use -StoreSubmission with Partner Center identity values before uploading."
     }
 } finally {
+    # A Store package that failed any later check must not survive looking approved.
+    if ($StoreSubmission -and $packageCreated -and -not $storeApproved) {
+        Remove-Item -LiteralPath $OutputPath, "$OutputPath.json" -Force -ErrorAction SilentlyContinue
+    }
     Pop-Location
 }

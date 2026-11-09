@@ -81,6 +81,14 @@ toolchain's notices. These historical MSYS2 compiler environments have not
 been reconstructed or archived in full. This is a binary-reproduction gap,
 not a claim that mere upstream version strings establish correspondence.
 
+native/dependency-rebuild-receipt.json records a separate verification rebuild:
+scripts/verify-native-dependency-rebuild.ps1 runs both retained recipes in a
+current MSYS2 UCRT64 environment, then runs the native tests against the
+rebuilt libraries. Its newer compiler means the outputs are not expected to
+match the pinned archives byte-for-byte; the receipt records both hashes. The
+application still links the pinned archives, so a dependency update cannot
+change protocol or crypto behavior through this check.
+
 The collected recipes and source archives can be rebuilt in a compatible
 MSYS2 UCRT64 development environment. For historical reproduction, first
 restore the exact tool/package versions recorded in .BUILDINFO and the
@@ -121,7 +129,7 @@ checkout of the pinned protocol commit at receiver/vendor/libuxplay.
 Compiler runtimes: what must be preserved
 ----------------------------------------
 The current compiler is the WinLibs GCC 13.2.0, MinGW-w64 11.0.1 UCRT,
-POSIX-thread-model r8 build packaged on 2024-05-04 and shipped by Strawberry.
+POSIX-thread-model r8 build packaged on 2024-05-04, also shipped by Strawberry.
 Its fixed-release original archive is identified and SHA-256-verified:
   winlibs-x86_64-posix-seh-gcc-13.2.0-mingw-w64ucrt-11.0.1-r8.7z
   54535ca325de2cf84679bc17846e9a2356acd042ceb21e424450836cde02ab9e
@@ -130,6 +138,22 @@ verified byte-for-byte against that archive, not just by reported versions.
 Their precise hashes and vendor paths are in source-dependencies.json.
 Installed header license statements and vendor/installed version metadata
 are included as supporting evidence.
+
+WinLibs publishes no per-build source bundle: this release's "source code"
+asset contains only a README. The source kit's compiler-runtime directory
+therefore retains the upstream sources and the distributor's published recipes:
+  gcc-13.2.0.tar.xz (hash also checked against the gcc.gnu.org sha512.sum)
+  mingw-w64-v11.0.1.tar.bz2 (the URL in the WinLibs recipe)
+  winlibs-gcc-7f50c94.winlib, winlibs-mingw-w64-04c9221.winlib, their patches
+  inline, with winlibs-recipes-LICENSE and gcc-configuration.txt.
+The recipe revisions are identified by content. In gcc.winlib, VERSION=13.2.0
+is active, the configure line gives the toolchain's reported configuration, and
+it writes the "Ctags" line of r8's version_info.txt, which the next revision
+changes. Its active patches do not touch libstdc++ or libgcc sources. The
+MinGW-w64 recipe patches winpthreads thread.c (an include and ARM conditionals).
+WinLibs records no recipe revision per release, and r8's release notes list only
+LLVM and Cppcheck changes, so GCC may have been built from an earlier revision.
+This is identification, not proof, and WinLibs itself has not been rebuilt.
 
 GCC libstdc++/libgcc are GPLv3-or-later with GCC Runtime Library Exception 3.1.
 The full COPYING3 and COPYING.RUNTIME texts are included from the immutable
@@ -157,23 +181,18 @@ both are retained. No corresponding-source obligation is imposed by those
 permissive runtime terms merely for inclusion in the final executable.
 The current collection does not claim to have rebuilt WinLibs itself.
 
-Remaining application distribution work
----------------------------------------
+Application distribution work
+-----------------------------
 No unresolved upstream-source or recipe-hash gap remains for the two pinned
 MSYS2 libraries after a successful collection. However, the kit is not by
 itself a complete corresponding-source delivery for the final MirrorMe exe.
-Before publication, the application owner still must:
-  - Freeze the final application/native source revision, rebuild, and bind
-    the executable hash to that exact complete source/rebuild package.
-  - Include all applicable Go/frontend/application sources and dependency
-    notices, build/install instructions, and any required installation
-    information; those are outside this bounded native collection.
-  - Deliver the full applicable license texts/notices and recipients'
-    GPL/LGPL source/rebuild/relink rights under the selected distribution
-    method. A URL to an upstream homepage or a binary SDK is not enough.
-  - Recollect when native pins, SDK archives, runtime archives or final
-    source/build inputs change. Preserve .BUILDINFO and exact package
-    recipes even if a newer package has the same upstream version.
+scripts/release-store-build.ps1 assembles the rest for each Store build: it
+freezes a main commit, publishes the source release with the Go, frontend and
+sender sources and the license texts, then builds the exe from that commit and
+links the native archive whose hash collection-report.json records. Recollect
+when native pins, SDK archives, runtime archives or final source/build inputs
+change. Preserve .BUILDINFO and exact package recipes even if a newer package
+has the same upstream version.
 
 Historical bit-reproducibility, patent rights, trademarks and physical-device
 interoperability are separate questions and are not certified here.

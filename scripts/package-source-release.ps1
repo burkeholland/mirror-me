@@ -10,6 +10,7 @@ param(
     [string]$ReferenceSourceTag = 'v0.2.4-preview.1',
     [string]$ReferenceSourceSha256 = '4fab1d0a86111ecefef0a53767bb931d147da2191846334e02aefcd1bcf38b8a',
     [string]$OutputPath = '',
+    [string]$ToolchainDirectory = 'C:\Strawberry\c\bin',
     [switch]$Force
 )
 
@@ -146,9 +147,9 @@ function ConvertTo-GoEscape([string]$Value) {
 function Test-SourceTextFile([string]$Path) {
     $textExtensions = @(
         '.asc', '.c', '.cc', '.cmake', '.cpp', '.cs', '.csproj', '.css', '.go', '.h', '.html',
-        '.hpp', '.ini', '.js', '.json', '.key', '.lock', '.md', '.mjs', '.mod', '.patch',
-        '.pem', '.props', '.ps1', '.py', '.rst', '.sh', '.sum', '.text', '.toml',
-        '.txt', '.xml', '.yaml', '.yml'
+        '.hpp', '.ini', '.js', '.json', '.key', '.lock', '.mak', '.md', '.mjs', '.mod', '.ninja', '.patch',
+        '.pc', '.pem', '.props', '.ps1', '.py', '.rst', '.sh', '.sum', '.text', '.toml',
+        '.txt', '.winlib', '.xml', '.yaml', '.yml'
     )
     $textNames = @(
         '.editorconfig', '.gitattributes', '.gitignore', 'AUTHORS', 'COPYING',
@@ -271,6 +272,10 @@ function Assert-SourceTextSafe([string]$Text, [string]$Name) {
         $pathPatterns.Add(
             '(?i)(?:^|[\s"''=])/(?:Users|home)/' + [regex]::Escape($env:USERNAME) + '/'
         )
+        # Catches every spelling of the profile path: C:\Users\x, C:\\Users\\x, C:/Users/x and /c/Users/x.
+        $pathPatterns.Add(
+            '(?i)[\\/]Users[\\/]+' + [regex]::Escape($env:USERNAME) + '(?![A-Za-z0-9_-])'
+        )
     }
     $isKnownTestKey = Test-KnownOpenSslTestPrivateKeyFixture $Name
     $keyPatterns = @(
@@ -364,13 +369,19 @@ function Assert-TarSourceSafe([string]$ArchivePath, [string]$WorkingRoot) {
     }
 }
 
-function Assert-NestedSourceArchivesSafe([string]$Path, [string]$WorkingRoot) {
+function Assert-NestedSourceArchivesSafe(
+    [string]$Path,
+    [string]$WorkingRoot,
+    [string[]]$PinnedUpstreamHashes = @()
+) {
     $archives = Get-ChildItem -LiteralPath $Path -Recurse -File -Force |
         Where-Object {
             $_.Extension -in @('.zip', '.nupkg') -or
             $_.Name -match '(?i)\.(?:tar|tar\.(?:gz|xz|bz2|zst)|tgz|tbz2?)$'
         }
     foreach ($archive in $archives) {
+        # Hash-pinned public compiler sources hold nothing of ours; GCC also ships upstream test keys.
+        if ((Get-Hash $archive.FullName) -in $PinnedUpstreamHashes) { continue }
         if ($archive.Extension -in @('.zip', '.nupkg')) {
             Assert-ZipSourceSafe $archive.FullName
         } else {
@@ -514,7 +525,7 @@ try {
         New-Item -ItemType Directory -Force -Path $nativeBundle | Out-Null
         Import-ReferenceNativeSources $ReferenceSourceZip $ReferenceSourceSha256 $nativeBundle $protocolBundle
     } else {
-        & (Join-Path $PSScriptRoot 'collect-native-sources.ps1')
+        & (Join-Path $PSScriptRoot 'collect-native-sources.ps1') -ToolchainDirectory $ToolchainDirectory
         $protocolBundle = Join-Path $nativeBundle 'protocol.git.bundle'
     }
     if (-not (Test-Path -LiteralPath $protocolBundle -PathType Leaf)) {
@@ -779,6 +790,7 @@ protocol.git.bundle
   Pinned libuxplay Git history required by the native build.
 native-sources/
   Pinned native sources, build inputs, recipes, and source correspondence data.
+  compiler-runtime/ holds the GCC and MinGW-w64 sources and WinLibs recipes.
 go-modules/ and go-modules.json
   Downloaded source ZIPs and checksum metadata for the frozen Go module graph.
 $goVersion.src.tar.gz
@@ -803,7 +815,10 @@ build recipes are provided to support inspection, modification, and rebuilding.
     [IO.File]::WriteAllText((Join-Path $packageRoot 'SOURCE.txt'), $sourceText, [Text.UTF8Encoding]::new($false))
 
     Assert-SourceTreeSafe $packageRoot
-    Assert-NestedSourceArchivesSafe $packageRoot $workingRoot
+    $pinnedUpstreamHashes = @($sourcePins.additionalResources | Where-Object {
+        $_.PSObject.Properties['upstreamSourceArchive'] -and $_.upstreamSourceArchive
+    } | ForEach-Object { [string]$_.sha256 })
+    Assert-NestedSourceArchivesSafe $packageRoot $workingRoot $pinnedUpstreamHashes
     $inventory = @(Get-ChildItem -LiteralPath $packageRoot -Recurse -File -Force |
         Where-Object { $_.FullName -ne (Join-Path $packageRoot 'file-inventory.json') } |
         Sort-Object FullName | ForEach-Object {
