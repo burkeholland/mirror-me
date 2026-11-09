@@ -1,5 +1,5 @@
 diff --git a/src/WinPlay.Capture/DesktopDuplicator.cs b/src/WinPlay.Capture/DesktopDuplicator.cs
-index 22111b1..0635dd9 100644
+index 22111b1..4cd56e3 100644
 --- a/src/WinPlay.Capture/DesktopDuplicator.cs
 +++ b/src/WinPlay.Capture/DesktopDuplicator.cs
 @@ -3,6 +3,7 @@ using SharpGen.Runtime;
@@ -30,7 +30,7 @@ index 22111b1..0635dd9 100644
              DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport, levels,
              out ID3D11Device? device).CheckError();
          Device = device!;
-@@ -35,7 +40,7 @@ internal sealed class DesktopDuplicator : IDisposable
+@@ -35,18 +40,51 @@ internal sealed class DesktopDuplicator : IDisposable
  
          using var dxgiDevice = Device.QueryInterface<IDXGIDevice>();
          using var adapter = dxgiDevice.GetAdapter();
@@ -39,7 +39,19 @@ index 22111b1..0635dd9 100644
          using (output)
          using (var output1 = output.QueryInterface<IDXGIOutput1>())
          {
-@@ -47,6 +52,34 @@ internal sealed class DesktopDuplicator : IDisposable
+-            var desc = output.Description;
+-            Width = desc.DesktopCoordinates.Right - desc.DesktopCoordinates.Left;
+-            Height = desc.DesktopCoordinates.Bottom - desc.DesktopCoordinates.Top;
+             _duplication = output1.DuplicateOutput(Device);
++            // Size from the duplication, not DesktopCoordinates: in a process that is not
++            // per-monitor DPI aware, DesktopCoordinates are DPI-virtualized (e.g. 1664x1109
++            // for a 2496x1664 panel at 150%), but duplicated frames are always physical.
++            // CopyResource silently does nothing when the sizes differ, which sends only
++            // the composited pointer over a blank desktop.
++            var mode = _duplication.Description.ModeDescription;
++            Width = (int)mode.Width;
++            Height = (int)mode.Height;
+         }
          Format = Format.B8G8R8A8_UNorm;
      }
  
@@ -74,7 +86,7 @@ index 22111b1..0635dd9 100644
      /// <summary>Creates a texture matching the desktop, suitable as a video-processor input.</summary>
      public ID3D11Texture2D CreateBgraTexture() => Device.CreateTexture2D(new Texture2DDescription
      {
-@@ -69,7 +102,7 @@ internal sealed class DesktopDuplicator : IDisposable
+@@ -69,7 +107,7 @@ internal sealed class DesktopDuplicator : IDisposable
      /// </summary>
      public bool TryCaptureInto(ID3D11Texture2D dest, int timeoutMs)
      {
@@ -83,12 +95,16 @@ index 22111b1..0635dd9 100644
          if (acquire == Vortice.DXGI.ResultCode.WaitTimeout)
          {
              resource?.Dispose();
-@@ -78,19 +111,87 @@ internal sealed class DesktopDuplicator : IDisposable
+@@ -78,19 +116,91 @@ internal sealed class DesktopDuplicator : IDisposable
          acquire.CheckError();
          try
          {
 +            UpdatePointer(frame);
              using var texture = resource!.QueryInterface<ID3D11Texture2D>();
++            var size = texture.Description;
++            if (size.Width != (uint)Width || size.Height != (uint)Height)
++                throw new InvalidOperationException(
++                    $"The desktop changed size ({Width}x{Height} to {size.Width}x{size.Height}). Start sharing again.");
 +            // Always start from DXGI's untouched image, including pointer-only
 +            // frames. Never draw over the previous frame's cursor.
              Context.CopyResource(dest, texture);
@@ -292,8 +308,99 @@ index 0000000..0aff02f
 +        }
 +    }
 +}
+diff --git a/src/WinPlay.Capture/HardwareH264Encoder.cs b/src/WinPlay.Capture/HardwareH264Encoder.cs
+index 00f0167..aea6312 100644
+--- a/src/WinPlay.Capture/HardwareH264Encoder.cs
++++ b/src/WinPlay.Capture/HardwareH264Encoder.cs
+@@ -53,6 +53,13 @@ internal sealed class HardwareH264Encoder : IH264Encoder
+ 
+     public string Name { get; }
+     public event Action<byte[]>? Encoded;
++    /// <summary>Raised for encoder renegotiations and recoverable errors.</summary>
++    public event Action<string>? Diagnostic;
++
++    private const int MfETransformStreamChange = unchecked((int)0xC00D6D61);
++    private volatile Exception? _fault;
++    private int _inputErrors;
++    private int _outputErrors;
+ 
+     public HardwareH264Encoder(int width, int height, int fps, int bitrate)
+     {
+@@ -146,6 +153,10 @@ internal sealed class HardwareH264Encoder : IH264Encoder
+     /// <summary>Queues one NV12 system-memory frame for encoding (drops if the encoder is saturated).</summary>
+     public void Encode(byte[] nv12)
+     {
++        // The async event loop cannot throw into the capture thread; surface its
++        // failure here so the source reports it instead of silently sending nothing.
++        if (_fault is { } fault)
++            throw new InvalidOperationException($"{Name} stopped: {fault.Message}", fault);
+         if (_stopped) return;
+         // Non-blocking: if the encoder is behind, drop this frame to stay live (better than a stall).
+         _pending.TryAdd(nv12.Clone() as byte[] ?? nv12, 0);
+@@ -159,7 +170,11 @@ internal sealed class HardwareH264Encoder : IH264Encoder
+             {
+                 IMFMediaEvent evt;
+                 try { evt = _events.GetEvent(0); }
+-                catch (SharpGenException) { return; }
++                catch (SharpGenException ex)
++                {
++                    if (!_stopped) _fault = ex;
++                    return;
++                }
+ 
+                 using (evt)
+                 {
+@@ -176,7 +191,10 @@ internal sealed class HardwareH264Encoder : IH264Encoder
+                 }
+             }
+         }
+-        catch (Exception) { /* shutting down */ }
++        catch (Exception ex)
++        {
++            if (!_stopped) _fault = ex;
++        }
+     }
+ 
+     private void FeedInput(byte[] nv12)
+@@ -194,7 +212,11 @@ internal sealed class HardwareH264Encoder : IH264Encoder
+         sample.SampleDuration = duration;
+         _frameIndex++;
+         try { _transform.ProcessInput(0, sample, 0); }
+-        catch (SharpGenException) { /* encoder not ready; drop */ }
++        catch (SharpGenException ex)
++        {
++            // Encoder not ready; drop this frame.
++            if (++_inputErrors <= 3) Diagnostic?.Invoke($"encoder rejected input: {ex.Message}");
++        }
+     }
+ 
+     private void DrainOutput()
+@@ -208,7 +230,22 @@ internal sealed class HardwareH264Encoder : IH264Encoder
+ 
+         var dataBuffer = new OutputDataBuffer { StreamID = 0, Sample = outSample! };
+         Result result = _transform.ProcessOutput(ProcessOutputFlags.None, 1, ref dataBuffer, out ProcessOutputStatus _);
+-        if (result == ResultCode.TransformNeedMoreInput || result.Failure) return;
++        if (result.Code == MfETransformStreamChange)
++        {
++            // Some encoders (Intel Quick Sync) renegotiate their output type before the
++            // first sample. Accept the new type; the output follows with the next
++            // TransformHaveOutput event. Ignoring this stalls the MFT permanently.
++            using (var newType = _transform.GetOutputAvailableType(0, 0))
++                _transform.SetOutputType(0, newType, 0);
++            Diagnostic?.Invoke("encoder output type renegotiated");
++            return;
++        }
++        if (result == ResultCode.TransformNeedMoreInput) return;
++        if (result.Failure)
++        {
++            if (++_outputErrors <= 3) Diagnostic?.Invoke($"encoder output failed: 0x{result.Code:X8}");
++            return;
++        }
+ 
+         var produced = dataBuffer.Sample;
+         using var converted = produced.ConvertToContiguousBuffer();
 diff --git a/src/WinPlay.Capture/ScreenMirrorSource.cs b/src/WinPlay.Capture/ScreenMirrorSource.cs
-index a264439..a752ed2 100644
+index a264439..8e1ee5b 100644
 --- a/src/WinPlay.Capture/ScreenMirrorSource.cs
 +++ b/src/WinPlay.Capture/ScreenMirrorSource.cs
 @@ -27,6 +27,7 @@ public sealed class ScreenMirrorSource : IH264VideoSource
@@ -312,6 +419,17 @@ index a264439..a752ed2 100644
 +            if (!ct.IsCancellationRequested) Failed?.Invoke(ex);
          }
          finally
+         {
+@@ -125,7 +126,9 @@ public sealed class ScreenMirrorSource : IH264VideoSource
+     {
+         try
+         {
+-            return new HardwareH264Encoder(width, height, fps, bitrate);
++            var encoder = new HardwareH264Encoder(width, height, fps, bitrate);
++            encoder.Diagnostic += d => Diagnostic?.Invoke(d);
++            return encoder;
+         }
+         catch (Exception ex)
          {
 diff --git a/src/WinPlay.Core/Hap/ReceiverPairing.cs b/src/WinPlay.Core/Hap/ReceiverPairing.cs
 index a87a524..622c086 100644

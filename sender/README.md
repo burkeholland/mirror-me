@@ -45,12 +45,18 @@ NuGet archives (including runtime/reference packs), and build instructions under
 `sender.build.json`. The checked-in patch:
 
 - selects the actual primary monitor and refuses unsupported rotation;
+- sizes capture from the duplicated output mode rather than DPI-virtualized desktop
+  coordinates (scaled displays otherwise sent only the pointer), and fails if a
+  duplicated frame no longer matches that size;
 - composites separate DXGI hardware pointers before scaling/encoding, including
   color transparency, monochrome AND/XOR masks, masked-color cursors, pointer-only
   moves, and clipping at monitor edges without leaving trails or drawing a
   second software cursor; an invalid, oversized, or missing pointer shape hides
   the cursor instead of ending the share;
 - propagates capture and network failures, including a bounded feedback timeout;
+- accepts hardware-encoder output type renegotiation (`MF_E_TRANSFORM_STREAM_CHANGE`,
+  raised by Intel Quick Sync before its first frame) instead of stalling, and reports
+  a failed encoder event loop rather than silently sending no video;
 - counts video only after completed TCP writes;
 - never discards encrypted packets (their nonce sequence must remain intact);
 - explicitly initializes the video cipher nonce.
@@ -95,6 +101,10 @@ moving or hiding a pointer restores the old background. Composition happens
 before BGRA-to-NV12 conversion and scaling, so the cursor and desktop stay aligned.
 `DesktopPointerTests` in the patched upstream test project exercises the shared
 pixel-composition code without requiring a Windows GPU.
+
+The helper writes capture/encoder diagnostics (sizes, encoder name, renegotiation,
+recoverable encoder errors) to stderr, never stdout. The host currently discards
+stderr; run the helper directly to see them.
 
 The UI reports streaming only after a video packet is written, not after a
 successful handshake. This does not claim that the TV has displayed the frame.

@@ -31,6 +31,12 @@ internal static class Program
             Console.WriteLine(JsonSerializer.Serialize(new { protocol = 1, status, targets, error }, Json));
     }
 
+    private static void Diagnose(string message)
+    {
+        lock (OutputLock)
+            Console.Error.WriteLine($"{DateTime.Now:HH:mm:ss.fff} {message}");
+    }
+
     public static async Task<int> Main()
     {
         using var lifetime = new CancellationTokenSource();
@@ -164,6 +170,10 @@ internal static class Program
         var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var source = new ScreenMirrorSource(fps: 30);
         source.Failed += ex => failed.TrySetException(ex);
+        // Capture/encoder details (sizes, encoder name, renegotiations) go to stderr,
+        // never stdout, which carries only typed protocol events. They contain no keys
+        // or screen data.
+        source.Diagnostic += Diagnose;
         await session.StartStreamingAsync(source);
         long lastFrames = 0;
         var progress = Stopwatch.StartNew();
@@ -181,6 +191,7 @@ internal static class Program
                 {
                     // Count completed TCP writes, not captured or queued frames.
                     streaming = true;
+                    Diagnose("first video frame written to the AirPlay data channel");
                     Emit("streaming");
                 }
             }
