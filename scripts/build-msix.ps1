@@ -142,6 +142,14 @@ try {
         $applicationReceipt | ConvertTo-Json -Depth 8 |
             Set-Content -LiteralPath $applicationReceiptPath -Encoding utf8
     }
+    # Readiness describes one approved build, so every run starts from false.
+    $generatedDependenciesPath = Join-Path $root "build\native\dependencies.json"
+    if (Test-Path -LiteralPath $generatedDependenciesPath) {
+        $generatedDependencies = Get-Content -LiteralPath $generatedDependenciesPath -Raw | ConvertFrom-Json
+        $generatedDependencies.distribution.ready = $false
+        $generatedDependencies | ConvertTo-Json -Depth 12 |
+            Set-Content -LiteralPath $generatedDependenciesPath -Encoding utf8
+    }
 
     $sourceReleaseVerified = $false
     $nativeProvenanceVerified = $false
@@ -294,6 +302,7 @@ try {
             throw "MSIX already exists: $OutputPath. Use -Force only for a local rebuild."
         }
         Remove-Item -LiteralPath $OutputPath -Force
+        if (Test-Path -LiteralPath "$OutputPath.json") { Remove-Item -LiteralPath "$OutputPath.json" -Force }
     }
     foreach ($directory in @($layout, $verification)) {
         if (Test-Path -LiteralPath $directory) {
@@ -513,7 +522,6 @@ try {
         $applicationReceipt | ConvertTo-Json -Depth 8 |
             Set-Content -LiteralPath $applicationReceiptPath -Encoding utf8
         # The checked-in file stays false; only this build's generated copy records readiness.
-        $generatedDependenciesPath = Join-Path $root "build\native\dependencies.json"
         $generatedDependencies = Get-Content -LiteralPath $generatedDependenciesPath -Raw | ConvertFrom-Json
         $generatedDependencies.distribution.ready = $true
         $generatedDependencies | ConvertTo-Json -Depth 12 |
