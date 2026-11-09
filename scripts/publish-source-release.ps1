@@ -80,12 +80,12 @@ try {
         throw "Could not determine whether GitHub release $tag already exists: $($existingOutput -join ' ')"
     }
 
-    $packageArguments = @(
-        '-ApplicationVersion', $ApplicationVersion,
-        '-SourceCommit', $SourceCommit,
-        '-ToolchainDirectory', $ToolchainDirectory,
-        '-Force'
-    )
+    $packageArguments = @{
+        ApplicationVersion = $ApplicationVersion
+        SourceCommit = $SourceCommit
+        ToolchainDirectory = $ToolchainDirectory
+        Force = $true
+    }
     if ($ReferenceSourceZip) {
         if (-not [IO.Path]::IsPathRooted($ReferenceSourceZip)) {
             $ReferenceSourceZip = Join-Path $root $ReferenceSourceZip
@@ -93,11 +93,9 @@ try {
         if (-not (Test-Path -LiteralPath $ReferenceSourceZip -PathType Leaf)) {
             throw "Reference source archive is missing: $ReferenceSourceZip"
         }
-        $packageArguments += @(
-            '-ReferenceSourceZip', $ReferenceSourceZip,
-            '-ReferenceSourceTag', $ReferenceSourceTag,
-            '-ReferenceSourceSha256', $ReferenceSourceSha256
-        )
+        $packageArguments.ReferenceSourceZip = $ReferenceSourceZip
+        $packageArguments.ReferenceSourceTag = $ReferenceSourceTag
+        $packageArguments.ReferenceSourceSha256 = $ReferenceSourceSha256
     }
     # Always regenerate until the release exists, so a stale package can never be published.
     & (Join-Path $PSScriptRoot 'package-source-release.ps1') @packageArguments
