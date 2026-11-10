@@ -8,6 +8,11 @@
 /build/releases/
 /build/release-stage/
 /build/winget-*/
+/build/licenses/
+/build/source-release/
+/build/toolchain/
+/build/ndr/
+/build/qa-*/
 /engine/
 /receiver/vendor/
 /receiver/libuxplay.bundle

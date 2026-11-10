@@ -21,7 +21,11 @@ test('the app preview is static, without an embedded app or sample toolbar', asy
 });
 
 test('the landing page is concise and excludes the removed section and runtime names', () => {
-  assert.match(html, /<h1 id="headline">Mirror your iPhone<br>to Windows\.<\/h1>/);
+  assert.match(html, /<title>MirrorMe - screen mirroring for Windows<\/title>/);
+  assert.match(html, /<h1 id="headline">MirrorMe<\/h1>/);
+  assert.match(html, /iPhone screen mirroring for Windows over AirPlay\./);
+  assert.match(html, /Apple, the Apple logo, iPhone and AirPlay are trademarks of Apple Inc\./);
+  assert.match(html, /MirrorMe is not affiliated with or endorsed by Apple Inc\./);
   assert.doesNotMatch(html, /ux\s*play|About this preview|details-section|<details\b|Simulated connection|More room|A little perspective/i);
   const words = html.split('<body>')[1].replace(/<svg\b[\s\S]*?<\/svg>/g, '')
     .replace(/<[^>]+>/g, ' ').replace(/&[a-z0-9#]+;/gi, ' ').trim().split(/\s+/).length;

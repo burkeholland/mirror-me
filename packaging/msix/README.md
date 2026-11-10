@@ -15,14 +15,30 @@ For Microsoft Store submission, reserve the product in Partner Center and use
 the exact package identity values shown under **Product management > Product
 identity**:
 
+`scripts/release-store-build.ps1` is the only supported way to make a Store
+package. From a clean checkout of the latest `main`, it runs the native build and
+tests, tags that commit, publishes and verifies the source release, then builds
+the MSIX. It never uploads or submits anything. On Windows on Arm, use the x64
+WinLibs toolchain and put .NET SDK 8.0.426 first on `PATH`:
+
 ```powershell
-.\scripts\build-msix.ps1 `
-  -StoreSubmission `
+.\scripts\release-store-build.ps1 `
   -IdentityName '<Partner Center package identity name>' `
   -Publisher '<Partner Center publisher ID>' `
   -PublisherDisplayName '<Partner Center publisher display name>' `
   -ProductDisplayName '<reserved Store product name>'
 ```
+
+`-StoreSubmission` requires a clean committed source tree and `-BuildApplication`.
+It verifies the exact source tag and release before it builds anything, then checks
+the freshly built application and sender hashes against the build receipt and the
+native archive hash against the published source release before approving the
+package. It is blocked while `native/dependencies.json` lists remaining gaps or
+`native/dependency-rebuild-receipt.json` does not cover the pinned packages, and
+Partner Center identity overrides without `-StoreSubmission` are rejected. A failed
+Store build deletes its package. `distribution.ready` stays false in
+`native/dependencies.json`; only the generated `build/native/dependencies.json`
+and the receipts of an approved build record readiness.
 
 Store submission MSIX packages are intentionally unsigned. Microsoft signs the
 package after certification. A package distributed outside the Store must be

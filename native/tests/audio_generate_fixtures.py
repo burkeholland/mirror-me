@@ -24,7 +24,7 @@ COMMANDS = []
 
 def run(*args, capture=False):
     args = [str(arg) for arg in args]
-    COMMANDS.append(args)
+    COMMANDS.append([Path(args[0]).stem, *args[1:]])
     return subprocess.run(args, check=True, stdout=subprocess.PIPE if capture else None,
                           stderr=subprocess.PIPE if capture else None).stdout
 

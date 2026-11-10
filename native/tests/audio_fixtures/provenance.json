@@ -116,7 +116,7 @@
   ],
   "commands": [
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -132,7 +132,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\alac-44100-16-352.wav"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -144,7 +144,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\alac-44100-16-352.m4a"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffprobe.EXE",
+      "ffprobe",
       "-v",
       "error",
       "-show_packets",
@@ -155,7 +155,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\alac-44100-16-352.m4a"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -169,7 +169,7 @@
       "X:\\burkeholland\\mirror-me\\native\\tests\\audio_fixtures\\alac-44100-16-352.s16le"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -185,7 +185,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\alac-48000-24.wav"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -197,7 +197,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\alac-48000-24.m4a"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffprobe.EXE",
+      "ffprobe",
       "-v",
       "error",
       "-show_packets",
@@ -208,7 +208,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\alac-48000-24.m4a"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -222,7 +222,7 @@
       "X:\\burkeholland\\mirror-me\\native\\tests\\audio_fixtures\\alac-48000-24.s16le"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -238,7 +238,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\aac-lc-44100.wav"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -254,7 +254,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\aac-lc-44100.m4a"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffprobe.EXE",
+      "ffprobe",
       "-v",
       "error",
       "-show_packets",
@@ -265,7 +265,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\aac-lc-44100.m4a"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -279,7 +279,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\aac-lc-44100.aac"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -295,7 +295,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\aac-lc-48000.wav"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -311,7 +311,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\aac-lc-48000.m4a"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffprobe.EXE",
+      "ffprobe",
       "-v",
       "error",
       "-show_packets",
@@ -322,7 +322,7 @@
       "X:\\burkeholland\\mirror-me\\build\\native-audio\\aac-lc-48000.m4a"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -376,7 +376,7 @@
       "6"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -403,7 +403,7 @@
       "-esbr:0"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-hide_banner",
       "-loglevel",
       "error",
@@ -430,7 +430,7 @@
       "-esbr:0"
     ],
     [
-      "C:\\Users\\buhollan\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.EXE",
+      "ffmpeg",
       "-version"
     ]
   ]

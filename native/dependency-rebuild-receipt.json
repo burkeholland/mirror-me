@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "scope": "Verification rebuild from the retained MSYS2 recipes. The application still links the pinned package archives, not these outputs.",
+  "executedOnUtc": "2026-11-10",
+  "recipesExecuted": true,
+  "upstreamCheckPhaseRun": false,
+  "rebuildEnvironment": [
+    "gcc.exe (Rev6, Built by MSYS2 project) 16.2.0",
+    "mingw-w64-ucrt-x86_64-crt 14.0.0.r569.g34eeafb7d-1"
+  ],
+  "hostArchitecture": "X64",
+  "sourceCommit": "c56a7dfd18a05ebf7a4db129e7caf9677898b330",
+  "protocolPatchSha256": "f2bd92f0c31dc2acf34751e738f4480bd4bbdd77f39363ae7fe6e2d3b17a377e",
+  "runUrl": "https://github.com/burkeholland/mirror-me/actions/runs/42874752665",
+  "packages": [
+    {
+      "name": "libplist",
+      "version": "2.7.0-3",
+      "pinnedPackageSha256": "f799bb20db57b0d34a14659b8794658f638276c703fa7fee3ecfa47aee54d255",
+      "pkgbuildSha256": "144012571f9ed35c8bf447e9a5d8e7c0689fc4acccd552821fa93b75978aecae",
+      "upstreamSourceSha256": "7ac42301e896b1ebe3c654634780c82baa7cb70df8554e683ff89f7c2643eb8b",
+      "archiveMember": "ucrt64/lib/libplist-2.0.a",
+      "pinnedArchiveSha256": "119cb99e900ea3d98d3af704baa2c31367f0834e9f287a15561ff08c840b4450",
+      "rebuiltArchiveSha256": "633dd05a60e05126c3dfdcb32357a6b97b67d4983ccf7d391b41a7634fb62fdb",
+      "byteIdenticalToPinned": false
+    },
+    {
+      "name": "openssl",
+      "version": "3.6.1-1",
+      "pinnedPackageSha256": "ad33a107baaad9e689612c6137b1f9ca7d7e6b118dab632e414b2cfa4f21865c",
+      "pkgbuildSha256": "6ab518bc5ab9a4776a324d0099b9b3c1756616c37aa99cf4a09a2927deef65e4",
+      "upstreamSourceSha256": "b1bfedcd5b289ff22aee87c9d600f515767ebf45f77168cb6d64f231f518a82e",
+      "archiveMember": "ucrt64/lib/libcrypto.a",
+      "pinnedArchiveSha256": "f862b717cf6436371c1b0f6fb8bfc7b353c6887b9f4fa81ae0518f565519fde7",
+      "rebuiltArchiveSha256": "369b0f8f01ebd9b44c428422ee1a221c2fdf3417be72f660c8922f11935d2a96",
+      "byteIdenticalToPinned": false
+    }
+  ],
+  "nativeTestsAgainstRebuiltLibraries": {
+    "compilerVersion": "16.2.0",
+    "passed": [
+      "protocol_receive_bounds",
+      "protocol_media_invariants",
+      "media_flicker",
+      "protocol_lifecycle"
+    ],
+    "failed": [],
+    "summary": "100% tests passed, 0 tests failed out of 4"
+  }
+}

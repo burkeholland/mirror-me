@@ -34,15 +34,21 @@ discovery and quitting do not start another scan.
 ## Build
 
 Run `.\scripts\build-sender.ps1` (also called by `build-app.ps1`). Build-time
-requirements are Git and the .NET 8 SDK or later. NuGet dependencies are locked
-in `packages.lock.json`. Keep the entire `build\bin\sender` directory alongside
-`MirrorMe.exe`; receiving still works if that directory is absent.
+requirements are Git and .NET SDK 8.0.426 for the current lock; a newer SDK can
+change implicit package versions and fail the locked restore. The
+`packages.lock.json` pins the sender's dependency graph. Keep the entire
+`build\bin\sender` directory alongside `MirrorMe.exe`; receiving still works if
+that directory is absent.
 
 The script checks the exact upstream commit and patch, publishes the helper,
 retains the pristine upstream archive, local changes, wrapper sources, original
 NuGet archives (including runtime/reference packs), and build instructions under
-`build\native-sender\source`, and writes hashes to
-`sender.build.json`. The checked-in patch:
+`build\native-sender\source`, and writes hashes to `sender.build.json`.
+Source-release collection invokes the same script with `-SourceOnly -SourceRoot`
+pointing at the frozen sender tree. It uses
+`build\native-sender\source-release`, performs a fresh isolated locked restore,
+includes its resolved runtime/reference package downloads, and leaves the normal
+build inputs untouched. The checked-in patch:
 
 - selects the actual primary monitor and refuses unsupported rotation;
 - composites separate DXGI hardware pointers before scaling/encoding, including
@@ -108,6 +114,14 @@ doubletake project. Preserve upstream copyrights, LICENSE and
 THIRD_PARTY_NOTICES.md, the pinned source, this wrapper, the patch, and build inputs
 with distributions. MirrorMe's MIT grant does not relicense those components.
 NuGet libraries and the bundled .NET runtime have their own notices; retain their
-full license/third-party notices too. The build receipt remains
-`distributionApproved=false`: successful publishing and the retained WinPlay
-archive alone are not a complete corresponding-source/license release package.
+full license/third-party notices too. The application build receipt starts with
+`distributionApproved=false`. The Store gate sets it to true only after
+verifying the source tag and release, clean source tree, build-receipt executable
+hashes, native provenance, license files, and unpacked MSIX. Successful
+publishing and the retained WinPlay archive alone are not sufficient.
+
+GPL-3.0-or-later §5(a) modification notice: the pinned WinPlay source is
+modified by the MirrorMe project as of 2026-10-19. `winplay.patch` records the
+changes to primary-display capture, cursor composition, packet handling,
+encryption initialization, and cancellation/error cleanup. The upstream
+copyright and license notices remain with the source.

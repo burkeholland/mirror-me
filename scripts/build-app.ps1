@@ -3,7 +3,8 @@ param(
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]*\.exe$')]
     [string]$OutputName = "MirrorMe.exe",
     [string]$ToolchainDirectory = "C:\Strawberry\c\bin",
-    [switch]$SkipNativeBuild
+    [switch]$SkipNativeBuild,
+    [switch]$NativeOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,8 @@ $root = Split-Path -Parent $PSScriptRoot
 $oldPath = $env:PATH
 $oldCgo = $env:CGO_ENABLED
 $oldBinary = $env:MIRRORME_NATIVE_BINARY
+$oldGoOs = $env:GOOS
+$oldGoArch = $env:GOARCH
 
 function Invoke-Checked([string]$Program, [string[]]$Arguments) {
     & $Program @Arguments
@@ -20,8 +23,29 @@ function Invoke-Checked([string]$Program, [string[]]$Arguments) {
 
 Push-Location $root
 try {
+    # A rebuild from the source ZIP runs outside Git. It records no commit, so it can never be Store-approved.
+    $sourceCommit = ''
+    $sourceTreeChanges = @('not a Git checkout')
+    $gitRoot = & git rev-parse --show-toplevel 2>$null
+    if ($LASTEXITCODE -eq 0 -and $gitRoot -and
+        [IO.Path]::GetFullPath([string]$gitRoot).TrimEnd('\') -eq [IO.Path]::GetFullPath($root).TrimEnd('\')) {
+        $sourceCommit = (& git rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $sourceCommit) {
+            throw "Could not identify the application source commit."
+        }
+        $sourceTreeStatus = @(& git status --porcelain --untracked-files=normal)
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not inspect the application source tree."
+        }
+        $sourceTreeChanges = @($sourceTreeStatus | Where-Object {
+            $_ -notmatch '^\?\? build[\\/]'
+        })
+    }
     $env:PATH = "$ToolchainDirectory;$env:ProgramFiles\Go\bin;$env:PATH"
     $env:CGO_ENABLED = "1"
+    # MirrorMe ships as x64, including when it is built on an ARM64 Windows host.
+    $env:GOOS = "windows"
+    $env:GOARCH = "amd64"
     foreach ($tool in @("go", "node", "npm", "gcc", "objdump", "git", "cmake", "ninja", "python", "tar", "gmake")) {
         if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
             throw "Required build tool '$tool' is missing. Install the documented Windows build prerequisites."
@@ -41,13 +65,14 @@ try {
             Invoke-Checked "git" @("clone", "--quiet", "--no-checkout", "--filter=blob:none", $lock.protocol.repository, $vendor)
             Invoke-Checked "git" @("-C", $vendor, "checkout", "--quiet", "--detach", $lock.protocol.commit)
         }
-        & (Join-Path $PSScriptRoot "build-audio-codecs.ps1")
+        & (Join-Path $PSScriptRoot "build-audio-codecs.ps1") -ToolchainBin $ToolchainDirectory
         & (Join-Path $PSScriptRoot "build-native.ps1") -ToolchainDirectory $ToolchainDirectory
     }
     $manifestPath = Join-Path $root "build\native\link-manifest.json"
     if (-not (Test-Path -LiteralPath $manifestPath)) {
         throw "Build the native libraries before using -SkipNativeBuild."
     }
+    if ($NativeOnly) { return }
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     if (-not $manifest.production -or
         (Get-FileHash -LiteralPath $manifest.mergedArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $manifest.mergedArchiveSha256) {
@@ -58,7 +83,8 @@ try {
     Invoke-Checked "npm" @("--prefix", "frontend", "run", "build")
     # Force relinking because Go does not track external static archive changes.
     # Do not clean build/bin: it may also contain the user's previous build.
-    Invoke-Checked $wails.Source @("build", "-f", "-s", "-m", "-nosyncgomod",
+    # The frontend is already bundled, and regenerating bindings would rewrite tracked sources.
+    Invoke-Checked $wails.Source @("build", "-f", "-s", "-m", "-nosyncgomod", "-skipbindings",
         "-platform", "windows/amd64", "-o", $OutputName,
         "-webview2", "error", "-nocolour")
     if ((Get-FileHash -LiteralPath $manifest.mergedArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $manifest.mergedArchiveSha256) {
@@ -74,6 +100,8 @@ try {
     $version = (Get-Item -LiteralPath $env:MIRRORME_NATIVE_BINARY).VersionInfo
     [ordered]@{
         version = "{0}.{1}.{2}" -f $version.ProductMajorPart, $version.ProductMinorPart, $version.ProductBuildPart
+        sourceCommit = $sourceCommit
+        sourceTreeClean = ($sourceTreeChanges.Count -eq 0)
         backend = "native"
         executable = $OutputName
         applicationSha256 = (Get-FileHash -LiteralPath $env:MIRRORME_NATIVE_BINARY -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -92,4 +120,6 @@ try {
     $env:PATH = $oldPath
     $env:CGO_ENABLED = $oldCgo
     $env:MIRRORME_NATIVE_BINARY = $oldBinary
+    $env:GOOS = $oldGoOs
+    $env:GOARCH = $oldGoArch
 }

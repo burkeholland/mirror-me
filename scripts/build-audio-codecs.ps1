@@ -22,7 +22,12 @@ $make = Join-Path $ToolchainBin 'gmake.exe'
 $objdump = Join-Path $ToolchainBin 'objdump.exe'
 $gitRoot = Split-Path (Split-Path $Bash -Parent) -Parent
 $gitUsr = Join-Path $gitRoot 'usr\bin'
-$tar = Join-Path $gitUsr 'tar.exe'
+$windowsTar = Join-Path $env:SystemRoot 'System32\tar.exe'
+$tar = if (Test-Path -LiteralPath $windowsTar -PathType Leaf) {
+    $windowsTar
+} else {
+    Join-Path $gitUsr 'tar.exe'
+}
 $git = Join-Path $gitRoot 'cmd\git.exe'
 foreach ($tool in @($Bash, $gcc, $gxx, $make, $objdump, $tar, $git)) {
     if (-not (Test-Path -LiteralPath $tool -PathType Leaf)) { throw "Missing build tool: $tool" }
@@ -65,7 +70,16 @@ try {
     $env:TMPDIR = $scratchPosix
     if (-not (Test-Path $archive)) {
         Write-Host "Downloading official FFmpeg $($dependency.version) source..."
-        Invoke-WebRequest -Uri $dependency.sourceUrl -OutFile $archive
+        $partial = "$archive.partial"
+        try {
+            Invoke-WebRequest -Uri $dependency.sourceUrl -OutFile $partial -TimeoutSec 180 -MaximumRetryCount 3 -RetryIntervalSec 5
+            if ((Get-FileHash $partial -Algorithm SHA256).Hash.ToLowerInvariant() -ne $dependency.sourceSha256) {
+                throw 'FFmpeg source SHA-256 mismatch; refusing to cache the download.'
+            }
+            Move-Item -LiteralPath $partial -Destination $archive
+        } finally {
+            if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Force }
+        }
     }
     $archiveHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($archiveHash -ne $dependency.sourceSha256) { throw 'FFmpeg source SHA-256 mismatch; refusing to extract or build.' }
@@ -86,7 +100,11 @@ try {
             if (Test-Path $directory) { Remove-Item -Recurse -Force $directory }
         }
         New-Item -ItemType Directory -Force $objects | Out-Null
-        & $tar -xJf (Posix-Path $archive) -C (Posix-Path $BuildRoot)
+        if ($tar -eq $windowsTar) {
+            & $tar -xJf $archive -C $BuildRoot
+        } else {
+            & $tar -xJf (Posix-Path $archive) -C (Posix-Path $BuildRoot)
+        }
         Assert-Exit 'FFmpeg extraction'
         & $git -C $source apply --ignore-space-change --check $strictPatch
         Assert-Exit 'FFmpeg strict-packet patch check'

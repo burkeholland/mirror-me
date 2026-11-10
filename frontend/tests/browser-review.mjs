@@ -243,6 +243,28 @@ try {
   await open('route=about&backend=native');
   await check('native-receiver-help');
   assert.equal(await evaluate("document.body.textContent.includes('GStreamer')"), false);
+  for (const theme of ['light', 'dark']) {
+    await open(`route=about&theme=${theme}&version=0.2.8`);
+    await check(`about-${theme}`);
+    const aboutLinks = await evaluate(`(() => {
+      const credits = document.querySelector('[data-disclosure="credits"]');
+      credits.open = true;
+      credits.scrollIntoView({ block: 'center' });
+      return {
+        license: document.querySelector('#about-license')?.href,
+        source: document.querySelector('#about-source')?.href,
+        notice: credits.innerText,
+      };
+    })()`);
+    assert.equal(aboutLinks.license, 'https://www.gnu.org/licenses/gpl-3.0.txt');
+    assert.equal(aboutLinks.source, 'https://github.com/burkeholland/mirror-me/releases/tag/v0.2.8-preview.1');
+    assert.match(aboutLinks.notice, /Copyright © 2026 Burke Holland/);
+    assert.match(aboutLinks.notice, /Provided as is, without warranty of any kind/);
+    assert.match(aboutLinks.notice, /redistribution and modification are allowed/);
+    assert.match(aboutLinks.notice, /MirrorMe is not affiliated with or endorsed by Apple Inc\./);
+    await check(`about-license-expanded-${theme}`);
+    await screenshot(`about-license-${theme}`);
+  }
   for (const [name, query] of [
     ['welcome', 'onboarding=1'],
     ['setup-ready', 'onboarding=1&step=2'],
@@ -342,7 +364,7 @@ try {
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }, { name: 'prefers-color-scheme', value: 'dark' }] });
   await open('state=connecting&theme=system');
   assert.equal(await evaluate('document.documentElement.dataset.mode'), 'dark');
-  assert.equal(await evaluate("getComputedStyle(document.querySelector('.spin')).animationName"), 'none');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.spin')).animationName"), 'spinner-rotate');
   await check('reduced-motion-system-theme');
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'forced-colors', value: 'active' }] });
   await open('route=settings');

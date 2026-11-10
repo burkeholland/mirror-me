@@ -62,7 +62,8 @@ function Get-Pinned([string]$file, [string]$url, [string]$expected) {
     $destination = Join-Path $downloads $file
     $partial = "$destination.partial"
     try {
-        Invoke-WebRequest -Uri $url -OutFile $partial
+        # SourceForge serves an HTML interstitial to browser-like user agents.
+        Invoke-WebRequest -Uri $url -OutFile $partial -UserAgent 'curl/8.0'
         Assert-Hash $partial $expected
         Move-Item -LiteralPath $partial -Destination $destination -Force
     } finally {
@@ -179,6 +180,11 @@ try {
     if ($head -ne $protocol.commit -or $dirty) { throw 'Pinned protocol checkout is not pristine.' }
     $protocolArchive = Get-Pinned $protocol.sourceFile $protocol.sourceUrl $protocol.sourceSha256
     Copy-Verified $protocolArchive (Join-Path $staging "protocol\$($protocol.sourceFile)")
+    $protocolBundle = Join-Path $staging 'protocol.git.bundle'
+    & $git -C $vendor bundle create $protocolBundle --all
+    Assert-Exit 'Creating pinned protocol Git bundle'
+    & $git bundle verify $protocolBundle
+    Assert-Exit 'Verifying pinned protocol Git bundle'
     $members = @($protocol.licenseMembers | ForEach-Object { "$($protocol.sourceRoot)/$_" })
     Extract-Selected $protocolArchive (Join-Path $staging 'licenses\protocol') $members 1
     Snapshot-Tree (Join-Path $repo 'build\native\protocol') (Join-Path $staging 'protocol\patched')
@@ -244,6 +250,15 @@ try {
     $versionInfo = Join-Path $toolchainRoot 'version_info.txt'
     Assert-Hash $versionInfo $runtime.installedVersionInfoSha256
     Copy-Verified $versionInfo (Join-Path $staging 'compiler-runtime\installed-version_info.txt')
+    # Only the vendor's configuration lines are kept; the rest of this output names local paths.
+    $configuration = @(& $gcc -v 2>&1 | ForEach-Object { [string]$_ } |
+        Where-Object { $_ -match '^(Target|Configured with|Thread model|gcc version)\b' })
+    Assert-Exit 'Compiler configuration identification'
+    if (-not @($configuration | Where-Object { $_ -match '^Configured with:' }).Count) {
+        throw 'Compiler configuration was not reported.'
+    }
+    [IO.File]::WriteAllLines((Join-Path $staging 'compiler-runtime\gcc-configuration.txt'), $configuration,
+        [Text.UTF8Encoding]::new($false))
     Copy-Verified (Join-Path $runtimeWork 'mingw64\version_info.txt') (Join-Path $staging 'compiler-runtime\vendor-version_info.txt')
     foreach ($entry in @(
         @('include\c++\13.2.0\thread', 'libstdcxx-thread-header.txt'),
@@ -274,9 +289,19 @@ try {
     $currentLink = Get-Content $nativeLinkPath -Raw | ConvertFrom-Json
     if ($currentLink.mergedArchiveSha256 -ne $initialMergedHash) { throw 'Native build changed during collection; retry.' }
 
+    $sourceCommit = (& $git -C $repo rev-parse HEAD).Trim()
+    Assert-Exit 'Application source commit identification'
     $report = [ordered]@{
         schemaVersion = 1
         collectedAtUtc = [DateTime]::UtcNow.ToString('o')
+        applicationSourceCommit = $sourceCommit
+        nativeBuildSourceCommit = [string]$nativeLink.sourceCommit
+        nativeBuildSourceTreeClean = [bool]$nativeLink.sourceTreeClean
+        # Only a tested Release build with the pinned compiler and audio SDK matches what this kit describes.
+        nativeBuildChecked = [bool]($nativeLink.configuration -eq 'Release' -and $nativeLink.testsRun -and
+            $nativeLink.compilerVersion -eq $runtime.compilerVersion -and
+            [IO.Path]::GetFullPath([string]$nativeLink.audioSdk) -eq
+                [IO.Path]::GetFullPath((Join-Path $repo 'build\native-audio\install')))
         pinManifestSha256 = Hash $pinPath
         nativeMergedArchiveSha256 = $initialMergedHash
         thirdPartyLibrarySourceInputsVerified = $true
@@ -285,14 +310,46 @@ try {
         finalApplicationDistributionApproved = $false
         observations = @($observations.ToArray())
         remainingChecks = @(
-            'MSYS2 historical binaries were not byte-rebuilt; BUILDINFO records GCC 15.2/MinGW 13 environments, not the final GCC 13.2/MinGW 11 toolchain. Exact source/recipe correspondence and package archive equality are verified.',
-            'Current local native source/build inputs are snapshotted. Before distributing, freeze the final application source revision, rebuild from those final inputs, and bind executable hash to its complete corresponding-source package.',
-            'This native kit does not contain all Go/frontend/application dependencies or installation information. The application distributor must supply those and applicable GPL/LGPL notices/rights.',
+            'MSYS2 historical binaries were not byte-rebuilt; BUILDINFO records GCC 15.2/MinGW 13 environments, not the final GCC 13.2/MinGW 11 toolchain. Exact source/recipe correspondence and package archive equality are verified. native/dependency-rebuild-receipt.json records a separate verification rebuild from the retained recipes.',
+            'WinLibs itself was not rebuilt. Its upstream GCC and MinGW-w64 sources and published recipes are retained and identified by version, configuration and version_info text, not by a byte-for-byte rebuild.',
+            'Current local native source/build inputs are snapshotted. scripts/release-store-build.ps1 freezes the application revision and links the native archive this report records.',
+            'This native kit does not contain the Go/frontend/application dependencies or installation information. The source release adds them.',
             'Runtime exception applies to an eligible-compiled final combination. Do not distribute standalone compiler/runtime binary SDKs or rely on non-GPL-compatible GCC intermediate-code transformations without separate review.',
             'Patent/trademark/device-interoperability questions are separate; no publication or physical-device compatibility is certified.'
         )
     }
     $report | ConvertTo-Json -Depth 12 | Set-Content (Join-Path $staging 'collection-report.json') -Encoding utf8
+    # Generated build evidence records absolute paths. Keep the evidence, not this machine's layout.
+    $repoPath = [IO.Path]::GetFullPath($repo).TrimEnd('\')
+    $profilePath = [IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\')
+    $msysPath = { param($path) '/' + $path.Substring(0, 1).ToLowerInvariant() + $path.Substring(2).Replace('\', '/') }
+    $replacements = @(
+        @($repoPath, '<source-root>'), @($profilePath, '<user-profile>')
+    ) | ForEach-Object {
+        $path, $label = $_
+        @($path, $path.Replace('\', '/'), $path.Replace('\', '\\'), (& $msysPath $path),
+            $path.Replace('\', '/').Replace(':', '$:')) |
+            ForEach-Object { [pscustomobject]@{ path = $_; label = $label } }
+    }
+    $profileSpelling = '(?i)(?:[A-Za-z]\$?:)?[\\/]+Users[\\/]+' + [regex]::Escape($env:USERNAME) + '(?![A-Za-z0-9_-])'
+    # CMake also records this PC's name as the CTest SITE.
+    $evidenceRoot = Join-Path $staging 'build-evidence'
+    $machineName = '(?i)(?<![A-Za-z0-9_-])' + [regex]::Escape([string]$env:COMPUTERNAME) + '(?![A-Za-z0-9_-])'
+    foreach ($file in Get-ChildItem -LiteralPath $staging -Recurse -File -Force) {
+        if ($file.Extension -notin @('.json', '.txt', '.sh', '.ninja', '.mak', '.h', '.pc')) { continue }
+        $text = [IO.File]::ReadAllText($file.FullName)
+        $updated = $text
+        foreach ($replacement in $replacements) {
+            $updated = $updated.Replace($replacement.path, $replacement.label, [StringComparison]::OrdinalIgnoreCase)
+        }
+        $updated = [regex]::Replace($updated, $profileSpelling, '<user-profile>')
+        if ($env:COMPUTERNAME -and $file.FullName.StartsWith($evidenceRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            $updated = [regex]::Replace($updated, $machineName, '<computer-name>')
+        }
+        if ($updated -cne $text) {
+            [IO.File]::WriteAllText($file.FullName, $updated, [Text.UTF8Encoding]::new($false))
+        }
+    }
     $inventory = @(Get-ChildItem -LiteralPath $staging -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
         [ordered]@{
             path = [IO.Path]::GetRelativePath($staging, $_.FullName).Replace('\', '/')

@@ -93,7 +93,7 @@ function Restore-SourceInput($inputFile, [string]$directory) {
 
 $priorPath = $env:PATH
 try {
-    if ($ForDistribution -and (-not $lock.distribution.ready -or
+    if ($ForDistribution -and (@($lock.distribution.remainingGaps).Count -or
         -not $lock.toolchain.sourceProvenanceComplete -or $ProtocolOnly -or $SkipTests)) {
         throw "Distribution is blocked. See native\dependencies.json distribution.remainingGaps; production=true means real implementation, NOT permission to publish."
     }
@@ -343,11 +343,28 @@ try {
         cmakeCache = (File-Receipt (Join-Path $cmakeBuild "CMakeCache.txt"))
     }
     $provenance | ConvertTo-Json -Depth 8 | Set-Content $provenancePath -Encoding UTF8
-    if ($ForDistribution -and -not $provenance.distributionReady) {
+    if ($ForDistribution -and @($remainingGaps).Count) {
         throw "Build succeeded for development, but corresponding-source publication remains blocked."
+    }
+    # Records what this archive was built from, so a release can refuse one from another commit.
+    $sourceCommit = ''
+    $sourceTreeClean = $false
+    $gitRoot = & git -C $root rev-parse --show-toplevel 2>$null
+    if ($LASTEXITCODE -eq 0 -and $gitRoot -and
+        [IO.Path]::GetFullPath([string]$gitRoot).TrimEnd('\') -eq [IO.Path]::GetFullPath($root).TrimEnd('\')) {
+        $sourceCommit = (& git -C $root rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0) { throw "Could not identify the native source commit." }
+        $sourceTreeStatus = @(& git -C $root status --porcelain --untracked-files=normal)
+        if ($LASTEXITCODE -ne 0) { throw "Could not inspect the native source tree." }
+        $sourceTreeClean = @($sourceTreeStatus | Where-Object { $_ -notmatch '^\?\? build[\\/]' }).Count -eq 0
     }
     $manifest = [ordered]@{
         protocolCommit = $lock.protocol.commit
+        sourceCommit = $sourceCommit
+        sourceTreeClean = $sourceTreeClean
+        configuration = $Configuration
+        testsRun = (-not $SkipTests)
+        compilerVersion = (& $gcc -dumpfullversion).Trim()
         production = (-not $ProtocolOnly)
         distributionReady = $provenance.distributionReady
         sourceProvenance = (File-Receipt $provenancePath)
@@ -369,5 +386,5 @@ try {
     $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath -Encoding UTF8
     Copy-Item (Join-Path $native "dependencies.json") (Join-Path $build "dependencies.json") -Force
     Write-Host "Static native build complete; production=$(-not $ProtocolOnly); distributionReady=false. No old engine files were modified."
-    Write-Warning "Do not publish this development build. See build\native\source-provenance.json for remaining source/rebuild gaps."
+    Write-Warning "A native build is not release approval. Only scripts\release-store-build.ps1 approves a Store package; see build\native\source-provenance.json for any open source gaps."
 } finally { $env:PATH = $priorPath }

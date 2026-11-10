@@ -63,9 +63,11 @@ h1 { font-size: clamp(2rem, 3.5vw, 3rem); line-height: 1.15; font-weight: 600; l
 .step-number { color: var(--accent-text); font: .8125rem var(--font-mono); padding-top: var(--space-1); }
 .setup-steps h3 { font-size: 1rem; font-weight: 600; margin: 0 0 var(--space-2); }
 .setup-steps p { font-size: .875rem; line-height: 1.85; color: var(--text-muted); margin: 0; }
-.site-footer { border-top: var(--border-thin) solid var(--border); display: flex; align-items: center; gap: var(--space-5); padding: var(--space-5) 0 var(--space-6); font-size: .75rem; color: var(--text-muted); }
+.site-footer { border-top: var(--border-thin) solid var(--border); display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-5); padding: var(--space-5) 0 var(--space-6); font-size: .75rem; color: var(--text-muted); }
 .site-footer .brand { color: var(--text); font-size: .9375rem; }
 .site-footer > div { margin-left: auto; display: flex; gap: var(--space-5); }
+.site-footer > .trademark-notice { flex-basis: 100%; display: block; margin-left: 0; font-size: .6875rem; line-height: 1.55; }
+.trademark-notice p { margin: 0; }
 .site-footer a { text-decoration: none; }
 .site-footer a:hover { color: var(--accent-text); }
 .skip-link { position: fixed; top: var(--space-2); left: var(--space-2); z-index: var(--z-toast); padding: var(--space-3); background: var(--surface); transform: translateY(-150%); }

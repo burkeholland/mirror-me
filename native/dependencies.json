@@ -77,19 +77,19 @@
     }
   ],
   "toolchain": {
-    "tested": "Strawberry Perl GCC 13.2.0 x86_64-w64-mingw32 UCRT, CMake, Ninja",
+    "tested": "WinLibs GCC 13.2.0 x86_64-w64-mingw32 UCRT r8 (also shipped by Strawberry Perl), CMake, Ninja",
     "runtime": "static libstdc++, libgcc, winpthread",
     "minimumWindows": "Windows 10 with native DNS-SD service registration APIs",
-    "sourceProvenanceComplete": false,
-    "sourceProvenanceGap": "Installed Strawberry libstdc++, libgcc, libgcc_eh and winpthread archives are hashed per build, but the exact distributor source/patch bundles and runtime notices have not yet been retained and matched."
+    "sourceProvenanceComplete": true,
+    "sourceProvenance": "The four static runtime archives match the pinned WinLibs archive byte-for-byte. GCC 13.2.0 and MinGW-w64 11.0.1 sources, the WinLibs recipes and the runtime notices are retained and included in each source release. See native/NATIVE-SOURCE-NOTICES.txt for what this does not prove."
   },
   "distribution": {
     "ready": false,
-    "policy": "Development builds only until corresponding sources, notices, and rebuild inputs for every statically linked library are retained and independently verified.",
-    "remainingGaps": [
-      "Exact Strawberry GCC runtime and winpthread distributor sources/patches/notices are not retained and matched.",
-      "OpenSSL/libplist binaries are still the pinned MSYS2 SDK archives; the matching source recipes/patches are retained, but their source rebuild has not been executed in this project.",
-      "A complete corresponding-source release bundle, including native application source, dependency archives, patches, build configuration, and toolchain inputs, has not yet been assembled and verified."
+    "policy": "This file stays false. build-msix.ps1 -StoreSubmission records readiness in the generated build/native/dependencies.json and in its receipts, only after the source tag, source release, clean source tree, native archive and MSIX checks pass.",
+    "remainingGaps": [],
+    "knownLimitations": [
+      "WinLibs publishes no per-build source bundle and records no recipe revision per release, so the retained recipes are identified by content. WinLibs itself has not been rebuilt.",
+      "OpenSSL and libplist binaries are the pinned MSYS2 archives. native/dependency-rebuild-receipt.json records a verification rebuild from their retained recipes; it uses a newer compiler, so it does not reproduce the pinned archives byte-for-byte."
     ]
   }
 }

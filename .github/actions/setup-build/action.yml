@@ -1,0 +1,22 @@
+name: Set up the MirrorMe build tools
+description: Install mature pinned tools and locked dependencies without reusing build output.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0, 2026-07-16
+      with:
+        go-version: '1.26.8'
+        cache: false
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0, 2026-10-08
+      with:
+        node-version: '26.13.0'
+        package-manager-cache: false
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0, 2026-07-16
+      with:
+        dotnet-version: '8.0.426'
+    - name: Check dependency ages before installing anything from npm
+      shell: pwsh
+      run: node .\scripts\ci\check-dependency-age.mjs
+    - name: Install the pinned compiler, Wails and frontend packages
+      shell: pwsh
+      run: .\scripts\ci\setup-toolchain.ps1

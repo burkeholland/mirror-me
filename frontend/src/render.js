@@ -475,6 +475,10 @@ function renderAbout() {
     ['AirPlay protocol', 'https://github.com/leapbtw/libuxplay'], ['FFmpeg', 'https://ffmpeg.org'],
     ['OpenSSL', 'https://openssl.org'], ['libplist', 'https://github.com/libimobiledevice/libplist'],
   ];
+  const version = /^\d+\.\d+\.\d+$/.test(state.version || '') ? state.version : null;
+  const sourceUrl = version
+    ? `https://github.com/burkeholland/mirror-me/releases/tag/v${version}-preview.1`
+    : 'https://github.com/burkeholland/mirror-me';
   return `<div class="page help-page">${heading('Help &amp; about')}${errorNotice()}
     <section class="help-intro"><div class="about-mark" aria-hidden="true">${brandMark}</div>
       <div><h2>MirrorMe</h2><p>iPhone screen mirroring, made for Windows.</p><span class="version-label">Version ${escHtml(state.version || 'Development')}</span></div>
@@ -493,7 +497,12 @@ function renderAbout() {
         ...receiverCredits, ['Wails', 'https://wails.io'],
         ['Postrboard', 'https://github.com/burkeholland/postrboard-design'], ['Lucide', 'https://lucide.dev'],
       ].map(([label, url]) => `<a href="${url}" id="credit-${label.toLowerCase().replaceAll(' ', '-')}" data-action="open-link" data-url="${url}">${label}${icon('arrow-up-right')}</a>`).join('')}</div>
-      <p class="settings-note">License information is included with the application. MirrorMe is not affiliated with Apple.</p>`)}
+      <p class="settings-note">Copyright &copy; 2026 Burke Holland. Provided as is, without warranty of any kind. The combined app is distributed under GNU GPL version 3 or later; redistribution and modification are allowed under that license.</p>
+      <p class="settings-note">MirrorMe is not affiliated with or endorsed by Apple Inc.</p>
+      <div class="credit-links">
+        <a href="https://www.gnu.org/licenses/gpl-3.0.txt" id="about-license" data-action="open-link" data-url="https://www.gnu.org/licenses/gpl-3.0.txt">View the GPLv3 license${icon('arrow-up-right')}</a>
+        <a href="${sourceUrl}" id="about-source" data-action="open-link" data-url="${sourceUrl}">Source for ${escHtml(version || 'this version')}${icon('arrow-up-right')}</a>
+      </div>`)}
     <footer class="about-footer"><p>Quit stops the receiver and closes MirrorMe.</p>${button('quit', 'Quit MirrorMe')}</footer>
   </div>`;
 }
