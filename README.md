@@ -132,7 +132,7 @@ To build from source you'll also need:
 
 ### GitHub-hosted QA builds
 
-Pull requests from this repository run `.github/workflows/qa.yml` on a clean
+Pull requests from this repository and pushes to `main` run `.github/workflows/qa.yml` on a clean
 Windows x64 hosted runner. No local npm install, native build or security-policy
 change is required. The bootstrap uses pinned tools and `npm ci`, rejects locked
 npm versions published less than seven days ago, and preserves both lockfiles.
@@ -155,7 +155,8 @@ publishing. QA does not publish tags, releases or submit to Partner Center.
 
 `.github/workflows/release.yml` is a separate, manually dispatched, main-only
 source-first Store build. Only its release job has repository write permission;
-the existing fail-closed release gates still apply. Do not dispatch it while
+it requires successful QA for the exact `main` commit before publishing source.
+The existing fail-closed release gates still apply. Do not dispatch it while
 the iPhone/release hold is in effect.
 
 ### Local source builds
