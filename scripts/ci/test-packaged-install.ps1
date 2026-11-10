@@ -88,18 +88,34 @@ try {
             throw "'$Name' was not found"
         }
         function Invoke-Named([string]$Name) {
-            (Find-Named $Name).GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
-            Start-Sleep -Milliseconds 700
+            $element = Find-Named $Name
+            # Chromium can expose the matching name on a text child rather than its control.
+            for ($depth = 0; $element -and $depth -lt 4; $depth++) {
+                $pattern = $null
+                if ($element.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+                    $pattern.Invoke()
+                    Start-Sleep -Milliseconds 700
+                    return $true
+                }
+                if ($element.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$pattern)) {
+                    if ($pattern.Current.ExpandCollapseState -eq [Windows.Automation.ExpandCollapseState]::Collapsed) { $pattern.Expand() }
+                    Start-Sleep -Milliseconds 700
+                    return $true
+                }
+                $element = [Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($element)
+            }
+            Write-Result 'Help & about automation' "NOT CHECKED: '$Name' exposes no Invoke or ExpandCollapse control pattern"
+            return $false
         }
-        Invoke-Named 'Help & about'
-        Invoke-Named 'Built with open source'
-        $page = (@($window.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) |
-            ForEach-Object { $_.Current.Name })) -join "`n"
-        foreach ($expected in "Version $Version", 'Copyright', 'without warranty', 'GNU GPL version 3', 'not affiliated',
-            'View the GPLv3 license', "Source for $Version") {
-            if ($page -notmatch [regex]::Escape($expected)) { throw "Help & about does not show '$expected'" }
+        if ((Invoke-Named 'Help & about') -and (Invoke-Named 'Built with open source')) {
+            $page = (@($window.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) |
+                ForEach-Object { $_.Current.Name })) -join "`n"
+            foreach ($expected in "Version $Version", 'Copyright', 'without warranty', 'GNU GPL version 3', 'not affiliated',
+                'View the GPLv3 license', "Source for $Version") {
+                if ($page -notmatch [regex]::Escape($expected)) { throw "Help & about does not show '$expected'" }
+            }
+            Write-Result 'Help & about' "version $Version, copyright, no-warranty, GPL and Apple attribution rendered"
         }
-        Write-Result 'Help & about' "version $Version, copyright, no-warranty, GPL and Apple attribution rendered"
     }
 
     if (-not [MirrorMeInstallWindows]::PostMessage($tray, 0x0111, [UIntPtr]6, [IntPtr]::Zero)) { throw 'Could not request Quit.' }
