@@ -51,6 +51,7 @@ function Invoke-Table([string]$Label) {
     $row = "| $Label | $(Format-Counts $file) | $(Format-Counts $pipe) | $(Format-Counts $viaCtest) |"
     Write-Host $row
     Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $row
+    Add-Content -LiteralPath "$env:RUNNER_TEMP\qa-checks.md" -Value "Native repeatability $row"
     return @($file.Keys + $pipe.Keys | Where-Object { $_ -ne '0x0' }).Count +
         @($viaCtest.Keys | Where-Object { $_ -ne 'pass' }).Count
 }

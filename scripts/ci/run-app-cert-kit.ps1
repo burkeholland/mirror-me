@@ -8,6 +8,7 @@ Set-StrictMode -Version Latest
 function Write-Result([string]$Result) {
     Write-Host "App Certification Kit: $Result"
     Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "### App Certification Kit`n`n$Result"
+    Add-Content -LiteralPath "$env:RUNNER_TEMP\qa-checks.md" -Value "App Certification Kit: $Result"
 }
 $kit = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\App Certification Kit\appcert.exe'
 if (-not (Test-Path -LiteralPath $kit -PathType Leaf)) {

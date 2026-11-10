@@ -8,6 +8,7 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hoste
 function Write-Result([string]$Result) {
     Write-Host "Microsoft Defender: $Result"
     Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "### Microsoft Defender`n`n$Result"
+    Add-Content -LiteralPath "$env:RUNNER_TEMP\qa-checks.md" -Value "Microsoft Defender: $Result"
 }
 # Hosted images disable Defender. Never call a disabled scan a clean antivirus result.
 try {

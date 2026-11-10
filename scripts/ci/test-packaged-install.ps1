@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 function Write-Result([string]$Check, [string]$Result) {
     Write-Host "$Check`: $Result"
     Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "| $Check | $Result |"
+    Add-Content -LiteralPath "$env:RUNNER_TEMP\qa-checks.md" -Value "| MSIX: $Check | $Result |"
 }
 Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "### Real MSIX install`n`n| Check | Result |`n|---|---|"
 Add-Type @'
