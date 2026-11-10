@@ -61,6 +61,8 @@ try {
         if (-not $app) { Start-Sleep -Milliseconds 500 }
     }
     if (-not $app) { throw 'The installed app did not open a window within 60 seconds.' }
+    # Get-Process is not the launcher; retain its handle before Quit so ExitCode remains available.
+    $null = $app.Handle
     $tray = [IntPtr]::Zero
     $deadline = (Get-Date).AddSeconds(30)
     while ($tray -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline) {

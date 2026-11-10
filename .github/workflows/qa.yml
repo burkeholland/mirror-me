@@ -66,20 +66,6 @@ jobs:
             Remove-Item -LiteralPath $env:MM_QA_PFX -Force
           }
           .\scripts\ci\write-qa-record.ps1
-      - name: Install the MSIX, launch, read Help & about and quit
-        run: |
-          $version = (Get-Content -LiteralPath wails.json -Raw | ConvertFrom-Json).info.productVersion
-          .\scripts\ci\test-packaged-install.ps1 -Package "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.msix" -Certificate "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.cer" -Version $version
-      - name: App Certification Kit
-        run: .\scripts\ci\run-app-cert-kit.ps1 -Package "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.msix"
-      - name: Microsoft Defender availability and scan
-        run: |
-          $version = (Get-Content -LiteralPath wails.json -Raw | ConvertFrom-Json).info.productVersion
-          .\scripts\ci\defender-scan.ps1 -Paths @(
-            (Resolve-Path build\bin\MirrorMe.exe).Path,
-            (Resolve-Path build\bin\sender\MirrorMe.Sender.exe).Path,
-            (Resolve-Path "build\msix\$version\verification").Path)
-
       - name: Collect the portable build
         run: |
           $portable = "$env:RUNNER_TEMP\qa-portable"
@@ -99,6 +85,20 @@ jobs:
           path: ${{ runner.temp }}/qa-msix
           if-no-files-found: error
           retention-days: 14
+      - name: Install the MSIX, launch, read Help & about and quit
+        run: |
+          $version = (Get-Content -LiteralPath wails.json -Raw | ConvertFrom-Json).info.productVersion
+          .\scripts\ci\test-packaged-install.ps1 -Package "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.msix" -Certificate "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.cer" -Version $version
+      - name: App Certification Kit
+        run: .\scripts\ci\run-app-cert-kit.ps1 -Package "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.msix"
+      - name: Microsoft Defender availability and scan
+        run: |
+          $version = (Get-Content -LiteralPath wails.json -Raw | ConvertFrom-Json).info.productVersion
+          .\scripts\ci\defender-scan.ps1 -Paths @(
+            (Resolve-Path build\bin\MirrorMe.exe).Path,
+            (Resolve-Path build\bin\sender\MirrorMe.Sender.exe).Path,
+            (Resolve-Path "build\msix\$version\verification").Path)
+
       - name: Rebuild retained native dependency recipes and run every test
         run: |
           .\scripts\ci\setup-rebuild-tools.ps1
