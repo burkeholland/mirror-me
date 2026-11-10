@@ -194,6 +194,8 @@ function Test-KnownOpenSslTestPrivateKeyFixture([string]$Path) {
         'src/crypto/rsa/rsa_test.go',
         'src/crypto/tls/certificates_test.go',
         'src/crypto/tls/example_test.go',
+        'src/crypto/tls/handshake_server_test.go',
+        'src/crypto/tls/handshake_test.go',
         'src/crypto/tls/testdata/example-key.pem',
         'src/crypto/tls/tls_test.go',
         'src/crypto/x509/pem_decrypt_test.go',
