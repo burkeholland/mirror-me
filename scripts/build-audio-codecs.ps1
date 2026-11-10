@@ -70,7 +70,16 @@ try {
     $env:TMPDIR = $scratchPosix
     if (-not (Test-Path $archive)) {
         Write-Host "Downloading official FFmpeg $($dependency.version) source..."
-        Invoke-WebRequest -Uri $dependency.sourceUrl -OutFile $archive
+        $partial = "$archive.partial"
+        try {
+            Invoke-WebRequest -Uri $dependency.sourceUrl -OutFile $partial -TimeoutSec 180 -MaximumRetryCount 3 -RetryIntervalSec 5
+            if ((Get-FileHash $partial -Algorithm SHA256).Hash.ToLowerInvariant() -ne $dependency.sourceSha256) {
+                throw 'FFmpeg source SHA-256 mismatch; refusing to cache the download.'
+            }
+            Move-Item -LiteralPath $partial -Destination $archive
+        } finally {
+            if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Force }
+        }
     }
     $archiveHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($archiveHash -ne $dependency.sourceSha256) { throw 'FFmpeg source SHA-256 mismatch; refusing to extract or build.' }
