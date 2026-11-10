@@ -54,6 +54,7 @@ try {
     # A retried release keeps the native archive whose hash it already published.
     if (-not (Test-ReleasePublished $tag)) {
         & (Join-Path $PSScriptRoot 'build-app.ps1') -ToolchainDirectory $ToolchainDirectory -NativeOnly
+        & (Join-Path $PSScriptRoot 'build-audio-codecs.ps1') -ToolchainBin $ToolchainDirectory -Test
         Assert-CleanSource 'after the native build'
     }
     & (Join-Path $PSScriptRoot 'publish-source-release.ps1') -ApplicationVersion $version `
