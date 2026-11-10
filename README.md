@@ -130,6 +130,36 @@ To build from source you'll also need:
 
 ## Getting started
 
+### GitHub-hosted QA builds
+
+Pull requests from this repository run `.github/workflows/qa.yml` on a clean
+Windows x64 hosted runner. No local npm install, native build or security-policy
+change is required. The bootstrap uses pinned tools and `npm ci`, rejects locked
+npm versions published less than seven days ago, and preserves both lockfiles.
+
+The run checks native, audio, Go, sender, frontend and website behavior, launch/Quit,
+then builds a development-identity MSIX with a throwaway runner-local certificate.
+Download `mirrorme-qa-msix` from the completed run and extract it on a Windows 11 PC
+of your choice. Verify the SHA-256 against `build-record.json`, trust only that
+run's `MirrorMe-QA.cer` in **Local Machine > Trusted People**, then open
+`MirrorMe-QA.msix`. The private signing key is never uploaded. Remove the test app
+and certificate when finished. Do not install a QA certificate on a managed PC
+without its administrator's approval.
+
+Real MSIX installation, Help & about, App Certification Kit and Defender checks
+report their actual outcome in the run summary. A check unavailable on a hosted
+desktop is not a pass. Hosted Windows images disable Defender by default; green
+builds are not antivirus clearance and do not resolve a local quarantine.
+Physical iPhone compatibility remains a separate human check before merging or
+publishing. QA does not publish tags, releases or submit to Partner Center.
+
+`.github/workflows/release.yml` is a separate, manually dispatched, main-only
+source-first Store build. Only its release job has repository write permission;
+the existing fail-closed release gates still apply. Do not dispatch it while
+the iPhone/release hold is in effect.
+
+### Local source builds
+
 ```powershell
 # Install the Wails CLI (one time)
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0

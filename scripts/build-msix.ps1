@@ -181,9 +181,9 @@ try {
         $rebuildReceipt = Get-Content -LiteralPath (Join-Path $root "native\dependency-rebuild-receipt.json") -Raw |
             ConvertFrom-Json
         $rebuildTests = $rebuildReceipt.nativeTestsAgainstRebuiltLibraries
-        # protocol_receive_bounds also crashes at exit on the pinned archives, so it cannot judge the rebuilt ones.
-        $unexpectedFailures = @($rebuildTests.failed | Where-Object { $_ -ne 'protocol_receive_bounds' })
-        if (-not $rebuildReceipt.recipesExecuted -or $unexpectedFailures.Count -or @($rebuildTests.passed).Count -lt 3) {
+        $requiredTests = @('protocol_receive_bounds', 'protocol_media_invariants', 'media_flicker', 'protocol_lifecycle')
+        $missingTests = @($requiredTests | Where-Object { $_ -notin @($rebuildTests.passed) })
+        if (-not $rebuildReceipt.recipesExecuted -or @($rebuildTests.failed).Count -or $missingTests.Count) {
             throw "native\dependency-rebuild-receipt.json does not record a usable verification rebuild."
         }
         foreach ($package in $nativeDependencies.packages) {

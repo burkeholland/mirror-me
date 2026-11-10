@@ -1,0 +1,54 @@
+name: Store release
+
+# Explicit main-only source publication. No Partner Center login or submission.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: store-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2025
+    timeout-minutes: 300
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-build
+      # Public catalog identity; the existing source-first gates remain mandatory.
+      - name: Publish the source release and build the Store MSIX
+        run: >-
+          .\scripts\release-store-build.ps1
+          -IdentityName 'BurkeHolland.MirrorMePhoneDisplay'
+          -Publisher 'CN=56DAF303-E719-4792-82B7-B59D3194B422'
+          -PublisherDisplayName 'Burke Holland'
+          -ProductDisplayName 'Mirror Me Phone Display'
+          -ToolchainDirectory $env:MM_TOOLCHAIN
+      - name: Collect the Store package
+        run: |
+          $version = (Get-Content -LiteralPath wails.json -Raw | ConvertFrom-Json).info.productVersion
+          $store = "$env:RUNNER_TEMP\store-package"
+          New-Item -ItemType Directory -Force -Path $store | Out-Null
+          Copy-Item -LiteralPath "build\msix\MirrorMe-$version-windows-x64.msix", "build\msix\MirrorMe-$version-windows-x64.msix.json" -Destination $store
+      - name: Check the package for secrets and runner details
+        run: python .\scripts\ci\scan-artifacts.py "$env:RUNNER_TEMP\store-package"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mirrorme-store-msix
+          path: ${{ runner.temp }}/store-package
+          if-no-files-found: error
+          retention-days: 30

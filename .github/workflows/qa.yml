@@ -1,0 +1,122 @@
+name: QA
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  x64:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-2025
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: ./.github/actions/setup-build
+      - name: Record hosted rebuild tools
+        run: |
+          $env:MSYSTEM = 'UCRT64'
+          & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Q; command -v makepkg-mingw gcc autoconf automake perl pkg-config'
+          if ($LASTEXITCODE) { Write-Warning 'Additional retained-recipe tools may be needed.' }
+
+      - name: Build the app and run every native test
+        run: .\scripts\build-app.ps1 -ToolchainDirectory $env:MM_TOOLCHAIN
+      - name: Repeat the receive bounds test under both PATHs
+        run: .\scripts\ci\repeat-native-test.ps1
+      - name: Audio decoder tests
+        run: .\scripts\build-audio-codecs.ps1 -Test -ToolchainBin $env:MM_TOOLCHAIN
+      - name: Go tests
+        run: |
+          $env:PATH = "$env:MM_TOOLCHAIN;$env:PATH"
+          $env:CGO_ENABLED = '1'
+          go test . -count=1
+          if ($LASTEXITCODE) { throw 'Go tests failed.' }
+      - name: Frontend tests
+        run: |
+          npm --prefix frontend test
+          if ($LASTEXITCODE) { throw 'Frontend tests failed.' }
+          npm --prefix frontend run test:ui
+          if ($LASTEXITCODE) { throw 'Frontend browser tests failed.' }
+      - name: Website tests
+        run: |
+          npm --prefix frontend run build:site-preview
+          if ($LASTEXITCODE) { throw 'Website build failed.' }
+          node --test .\site\tests\demo.test.mjs
+          if ($LASTEXITCODE) { throw 'Website tests failed.' }
+          node .\site\tests\browser-review.mjs
+          if ($LASTEXITCODE) { throw 'Website browser tests failed.' }
+      - name: Sender tests
+        run: node --test .\sender\tests\worker.test.mjs
+      - name: App launch and quit from the build folder
+        run: .\scripts\test-app-lifecycle.ps1 -Executable build\bin\MirrorMe.exe -TestDirectory "$env:RUNNER_TEMP\lifecycle" -Cycles 2
+
+      - name: Create a throwaway QA certificate
+        run: .\scripts\ci\new-qa-certificate.ps1 -OutputDirectory "$env:RUNNER_TEMP\qa-msix"
+      - name: Build the signed QA MSIX
+        run: |
+          try {
+            .\scripts\build-msix.ps1 -ToolchainDirectory $env:MM_TOOLCHAIN -CertificatePath $env:MM_QA_PFX -OutputPath "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.msix"
+          } finally {
+            Remove-Item -LiteralPath $env:MM_QA_PFX -Force
+          }
+          .\scripts\ci\write-qa-record.ps1
+      - name: Install the MSIX, launch, read Help & about and quit
+        run: |
+          $version = (Get-Content -LiteralPath wails.json -Raw | ConvertFrom-Json).info.productVersion
+          .\scripts\ci\test-packaged-install.ps1 -Package "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.msix" -Certificate "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.cer" -Version $version
+      - name: App Certification Kit
+        run: .\scripts\ci\run-app-cert-kit.ps1 -Package "$env:RUNNER_TEMP\qa-msix\MirrorMe-QA.msix"
+      - name: Microsoft Defender availability and scan
+        run: |
+          $version = (Get-Content -LiteralPath wails.json -Raw | ConvertFrom-Json).info.productVersion
+          .\scripts\ci\defender-scan.ps1 -Paths @(
+            (Resolve-Path build\bin\MirrorMe.exe).Path,
+            (Resolve-Path build\bin\sender\MirrorMe.Sender.exe).Path,
+            (Resolve-Path "build\msix\$version\verification").Path)
+
+      - name: Collect the portable build
+        run: |
+          $portable = "$env:RUNNER_TEMP\qa-portable"
+          New-Item -ItemType Directory -Force -Path $portable | Out-Null
+          Copy-Item -Path build\bin\* -Destination $portable -Recurse
+      - name: Check artifacts for secrets and runner details
+        run: python .\scripts\ci\scan-artifacts.py "$env:RUNNER_TEMP\qa-portable" "$env:RUNNER_TEMP\qa-msix"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mirrorme-qa-portable
+          path: ${{ runner.temp }}/qa-portable
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mirrorme-qa-msix
+          path: ${{ runner.temp }}/qa-msix
+          if-no-files-found: error
+          retention-days: 14
+      - name: Collect verification reports
+        if: always()
+        run: |
+          $reports = "$env:RUNNER_TEMP\qa-reports"
+          New-Item -ItemType Directory -Force -Path $reports | Out-Null
+          Set-Content -LiteralPath "$reports\run.txt" -Value "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          foreach ($file in @("$env:RUNNER_TEMP\app-cert-report.xml", 'build\native\cmake\Testing\Temporary\LastTestsFailed.log')) {
+            if (Test-Path -LiteralPath $file) { Copy-Item -LiteralPath $file -Destination $reports }
+          }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mirrorme-qa-reports
+          path: ${{ runner.temp }}/qa-reports
+          if-no-files-found: error
+          retention-days: 14

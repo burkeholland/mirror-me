@@ -8,6 +8,7 @@ param(
     [string]$MsysRoot = '',
     [string]$ToolchainDirectory = 'C:\Strawberry\c\bin',
     [ValidateRange(1, 64)][int]$Jobs = [Math]::Min(8, [Environment]::ProcessorCount),
+    [string]$ReceiptPath = '',
     # Reruns only the tests against packages an earlier run already built.
     [switch]$ReusePackages
 )
@@ -18,7 +19,7 @@ $root = Split-Path -Parent $PSScriptRoot
 if (-not $MsysRoot) { $MsysRoot = Join-Path $root 'build\toolchain\msys64' }
 $work = Join-Path $root 'build\ndr'
 $sdk = Join-Path $work 'sdk\ucrt64'
-$receiptPath = Join-Path $root 'native\dependency-rebuild-receipt.json'
+if (-not $ReceiptPath) { $ReceiptPath = Join-Path $root 'native\dependency-rebuild-receipt.json' }
 $bash = Join-Path $MsysRoot 'usr\bin\bash.exe'
 $lock = Get-Content -LiteralPath (Join-Path $root 'native\dependencies.json') -Raw | ConvertFrom-Json
 $pins = Get-Content -LiteralPath (Join-Path $root 'native\source-dependencies.json') -Raw | ConvertFrom-Json
@@ -140,6 +141,7 @@ try {
     Invoke-Checked 'cmake' @('--build', $binary, '--parallel', "$Jobs")
     $ctestLog = Join-Path $work 'ctest.log'
     & ctest --test-dir $binary --output-on-failure *> $ctestLog
+    $testExitCode = $LASTEXITCODE
     $ctestLines = @(Get-Content -LiteralPath $ctestLog)
     $outcomes = @($ctestLines | ForEach-Object {
         $match = [regex]::Match($_, 'Test\s+#\d+:\s+(\S+)\s+\.+\s*(Passed|\S.*)$')
@@ -163,6 +165,9 @@ try {
         upstreamCheckPhaseRun = $false
         rebuildEnvironment = @($environmentLines)
         hostArchitecture = [string][Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+        sourceCommit = (& git -C $root rev-parse HEAD).Trim()
+        protocolPatchSha256 = (Get-Hash (Join-Path $root 'native\patches\prepare-protocol.py'))
+        runUrl = $(if ($env:GITHUB_ACTIONS -eq 'true') { "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" } else { '' })
         packages = @($results.ToArray())
         nativeTestsAgainstRebuiltLibraries = [ordered]@{
             compilerVersion = (& $gcc -dumpfullversion).Trim()
@@ -178,6 +183,10 @@ try {
         Write-Host "$($result.name) $($result.version): rebuilt $($result.archiveMember), byte-identical to pinned: $($result.byteIdenticalToPinned)"
     }
     Write-Host ([string]$summary).Trim()
+    $requiredTests = @('protocol_receive_bounds', 'protocol_media_invariants', 'media_flicker', 'protocol_lifecycle')
+    if ($testExitCode -ne 0 -or $failedSuites.Count -or @($requiredTests | Where-Object { $_ -notin $suites }).Count) {
+        throw 'Not every native test passed against the rebuilt libraries; the receipt records failures and cannot approve a Store build.'
+    }
 } finally {
     $env:PATH = $oldPath
     foreach ($name in $oldEnvironment.Keys) {
