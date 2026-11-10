@@ -53,10 +53,6 @@ jobs:
           if ($LASTEXITCODE) { throw 'Website browser tests failed.' }
       - name: Sender tests
         run: node --test .\sender\tests\worker.test.mjs
-      - name: Rebuild retained native dependency recipes and run every test
-        run: |
-          .\scripts\ci\setup-rebuild-tools.ps1
-          .\scripts\verify-native-dependency-rebuild.ps1 -MsysRoot 'C:\msys64' -ToolchainDirectory $env:MM_TOOLCHAIN -ReceiptPath "$env:RUNNER_TEMP\dependency-rebuild-receipt.json"
       - name: App launch and quit from the build folder
         run: .\scripts\test-app-lifecycle.ps1 -Executable build\bin\MirrorMe.exe -TestDirectory "$env:RUNNER_TEMP\lifecycle" -Cycles 2
 
@@ -103,6 +99,10 @@ jobs:
           path: ${{ runner.temp }}/qa-msix
           if-no-files-found: error
           retention-days: 14
+      - name: Rebuild retained native dependency recipes and run every test
+        run: |
+          .\scripts\ci\setup-rebuild-tools.ps1
+          .\scripts\verify-native-dependency-rebuild.ps1 -MsysRoot 'C:\msys64' -ToolchainDirectory $env:MM_TOOLCHAIN -ReceiptPath "$env:RUNNER_TEMP\dependency-rebuild-receipt.json"
       - name: Collect verification reports
         if: always()
         run: |

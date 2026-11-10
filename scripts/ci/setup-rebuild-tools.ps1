@@ -9,12 +9,13 @@ $env:MSYSTEM = 'UCRT64'
 $env:CHERE_INVOKING = '1'
 $cache = Join-Path $env:RUNNER_TEMP 'recipe-tool-packages'
 New-Item -ItemType Directory -Force -Path $cache | Out-Null
-$unixCache = (& $bash -lc "cygpath -u '$cache'").Trim()
-if ($LASTEXITCODE) { throw 'Could not resolve the recipe tool cache.' }
+if ($cache -notmatch '^[A-Za-z]:\\') { throw 'The recipe tool cache requires a local drive path.' }
+$unixCache = '/' + $cache.Substring(0, 1).ToLowerInvariant() + $cache.Substring(2).Replace('\', '/')
 # Use the image's existing repository snapshot, not a rolling update.
 & $bash -lc "pacman -Sw --needed --noconfirm --cachedir '$unixCache' base-devel mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-autotools mingw-w64-ucrt-x86_64-cython"
 if ($LASTEXITCODE) { throw 'Could not download the recipe tools from the hosted image snapshot.' }
 $packages = @(Get-ChildItem -LiteralPath $cache -File | Where-Object { $_.Name -match '\.pkg\.tar\.(zst|xz)$' })
+if (-not $packages.Count) { throw 'The recipe tool download produced no packages.' }
 $cutoff = [DateTimeOffset]::UtcNow.AddDays(-7).ToUnixTimeSeconds()
 $records = foreach ($package in $packages) {
     $info = @(& tar -xOf $package.FullName .PKGINFO)
@@ -35,5 +36,5 @@ if ($packages.Count) {
     & $bash -lc "pacman -U --noconfirm $archives"
     if ($LASTEXITCODE) { throw 'Could not install the verified recipe tools.' }
 }
-& $bash -lc 'command -v makepkg-mingw gcc autoconf automake perl pkg-config; gcc --version | head -1'
+& $bash -lc 'set -euo pipefail; command -v makepkg-mingw gcc autoconf automake perl pkg-config; gcc --version | head -1'
 if ($LASTEXITCODE) { throw 'Recipe toolchain is incomplete.' }
