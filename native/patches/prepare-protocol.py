@@ -16,6 +16,22 @@ def change(file, before, after, count=1):
     path.write_text(text.replace(before, after), encoding="utf-8", newline="\n")
 
 
+change("mirror_buffer.c", " * modified by fduncanh 2022",
+       " * modified by fduncanh 2022\n"
+       " * MirrorMe modification, 2026-11-09: bound cached AES-CTR reads/writes\n"
+       " * to the current input and retain unused bytes for following packets.")
+change("mirror_buffer.c",
+       "        for (int i = 0; i < mirror_buffer->nextDecryptCount; i++) {",
+       "        int cachedlen = inputLen < mirror_buffer->nextDecryptCount ?\n"
+       "            inputLen : mirror_buffer->nextDecryptCount;\n"
+       "        for (int i = 0; i < cachedlen; i++) {")
+change("mirror_buffer.c", "    }\n    // Handling encrypted bytes",
+       "        if (inputLen < mirror_buffer->nextDecryptCount) {\n"
+       "            mirror_buffer->nextDecryptCount -= inputLen;\n"
+       "            return;\n"
+       "        }\n"
+       "    }\n    // Handling encrypted bytes")
+
 # Identity creation/storage belongs to the host's checked Windows private file
 # implementation; low-level signing and crypto remain the licensed protocol.
 path = root / "lib" / "crypto.c"
