@@ -183,7 +183,8 @@ try {
         $rebuildTests = $rebuildReceipt.nativeTestsAgainstRebuiltLibraries
         $requiredTests = @('protocol_receive_bounds', 'protocol_media_invariants', 'media_flicker', 'protocol_lifecycle')
         $missingTests = @($requiredTests | Where-Object { $_ -notin @($rebuildTests.passed) })
-        if (-not $rebuildReceipt.recipesExecuted -or @($rebuildTests.failed).Count -or $missingTests.Count) {
+        if (-not $rebuildReceipt.recipesExecuted -or @($rebuildTests.failed).Count -or $missingTests.Count -or
+            $rebuildReceipt.protocolPatchSha256 -ne (Get-FileHash -LiteralPath 'native\patches\prepare-protocol.py' -Algorithm SHA256).Hash.ToLowerInvariant()) {
             throw "native\dependency-rebuild-receipt.json does not record a usable verification rebuild."
         }
         foreach ($package in $nativeDependencies.packages) {

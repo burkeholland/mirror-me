@@ -85,7 +85,7 @@ try {
             if ($LASTEXITCODE -ne 0 -or -not $unixRecipe) { throw 'Could not convert the recipe path.' }
             $log = Join-Path $work "$($package.name).log"
             # --skippgpcheck: makepkg still verifies each source against the PKGBUILD's SHA-256.
-            Invoke-Msys "cd '$unixRecipe' && makepkg-mingw --syncdeps --noconfirm --cleanbuild --force --nocheck --skippgpcheck" $log
+            Invoke-Msys "cd '$unixRecipe' && makepkg-mingw --noconfirm --cleanbuild --force --nocheck --skippgpcheck" $log
         }
         $built = @(Get-ChildItem -LiteralPath $recipe -Filter 'mingw-w64-ucrt-x86_64-*.pkg.tar.zst' -File |
             Where-Object { $_.Name -notmatch '-debug-' })

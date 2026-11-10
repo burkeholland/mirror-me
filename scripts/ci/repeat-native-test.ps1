@@ -51,8 +51,8 @@ function Invoke-Table([string]$Label) {
     $row = "| $Label | $(Format-Counts $file) | $(Format-Counts $pipe) | $(Format-Counts $viaCtest) |"
     Write-Host $row
     Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $row
-    return (@($file.Keys + $pipe.Keys) | Where-Object { $_ -ne '0x0' }).Count +
-        (@($viaCtest.Keys) | Where-Object { $_ -ne 'pass' }).Count
+    return @($file.Keys + $pipe.Keys | Where-Object { $_ -ne '0x0' }).Count +
+        @($viaCtest.Keys | Where-Object { $_ -ne 'pass' }).Count
 }
 Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value @"
 ### Native receive bounds repeatability ($Runs runs per mode)

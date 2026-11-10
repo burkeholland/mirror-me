@@ -24,11 +24,6 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: ./.github/actions/setup-build
-      - name: Record hosted rebuild tools
-        run: |
-          $env:MSYSTEM = 'UCRT64'
-          & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Q; command -v makepkg-mingw gcc autoconf automake perl pkg-config'
-          if ($LASTEXITCODE) { Write-Warning 'Additional retained-recipe tools may be needed.' }
 
       - name: Build the app and run every native test
         run: .\scripts\build-app.ps1 -ToolchainDirectory $env:MM_TOOLCHAIN
@@ -58,6 +53,10 @@ jobs:
           if ($LASTEXITCODE) { throw 'Website browser tests failed.' }
       - name: Sender tests
         run: node --test .\sender\tests\worker.test.mjs
+      - name: Rebuild retained native dependency recipes and run every test
+        run: |
+          .\scripts\ci\setup-rebuild-tools.ps1
+          .\scripts\verify-native-dependency-rebuild.ps1 -MsysRoot 'C:\msys64' -ToolchainDirectory $env:MM_TOOLCHAIN -ReceiptPath "$env:RUNNER_TEMP\dependency-rebuild-receipt.json"
       - name: App launch and quit from the build folder
         run: .\scripts\test-app-lifecycle.ps1 -Executable build\bin\MirrorMe.exe -TestDirectory "$env:RUNNER_TEMP\lifecycle" -Cycles 2
 
@@ -110,7 +109,7 @@ jobs:
           $reports = "$env:RUNNER_TEMP\qa-reports"
           New-Item -ItemType Directory -Force -Path $reports | Out-Null
           Set-Content -LiteralPath "$reports\run.txt" -Value "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
-          foreach ($file in @("$env:RUNNER_TEMP\app-cert-report.xml", 'build\native\cmake\Testing\Temporary\LastTestsFailed.log')) {
+          foreach ($file in @("$env:RUNNER_TEMP\app-cert-report.xml", "$env:RUNNER_TEMP\dependency-rebuild-receipt.json", "$env:RUNNER_TEMP\recipe-tool-record.json", 'build\native\cmake\Testing\Temporary\LastTestsFailed.log')) {
             if (Test-Path -LiteralPath $file) { Copy-Item -LiteralPath $file -Destination $reports }
           }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
