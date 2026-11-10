@@ -301,6 +301,13 @@ timeouts remain short and ordinary fragmentation within the deadline is allowed.
 Repeated codec configuration replaces/frees its old SPS/PPS buffer; allocation
 failures and invalid packets exit through normal session cleanup.
 
+The 2026-11-09 MirrorMe change to libuxplay's mirror_buffer.c bounds cached
+AES-CTR reads/writes to the current packet. Unused cached bytes are retained
+without advancing the cipher until later input consumes them. Key derivation,
+full-block processing, FairPlay and AAC are unchanged. The checked preparation
+script adds this dated notice to the modified source; the upstream commit and
+archive pins stay unchanged and existing source receipts capture the patch.
+
 native\tests\protocol_receive_bounds.cpp links the real low-level library and
 intercepts malloc/calloc/realloc in THAT TEST ONLY. It checks allocation sizes,
 header-only rejection before body allocation, exact supported maxima, overflow,
@@ -308,6 +315,11 @@ fragmentation and cumulative chunk limits. Real loopback TCP mirror probes cover
 oversized/unsigned lengths, truncated EOF, stalled partial packets, valid
 fragmented heartbeats and stop under continuous partial header/payload traffic.
 No production allocator is replaced and no encrypted-device success is implied.
+Cipher probes put exact-sized input/output buffers immediately before inaccessible
+guard pages, exercise short/empty/aligned fragments both in place and separately,
+and compare every output byte with an independent continuous AES-CTR reference.
+Loopback encrypted video additionally checks decoded packet bytes and payload
+fragmentation across a receive timeout.
 The host lifecycle test additionally sends malformed/truncated RTSP over actual
 sockets, checks the listener remains usable, and stops with an unfinished body.
 
