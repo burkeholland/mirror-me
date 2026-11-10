@@ -2,6 +2,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
@@ -12,6 +13,7 @@ extern "C" {
 #include "http_request.h"
 #include "raop_rtp_mirror.h"
 #include "mirror_buffer.h"
+#include "crypto.h"
 }
 
 static std::atomic<size_t> largest_allocation{0};
@@ -118,6 +120,84 @@ extern "C" evp_pkey_st *mm_protocol_load_identity(const char *) {
     return nullptr;
 }
 static void discard_log(void *, int, const char *) {}
+struct GuardedBytes {
+    unsigned char *allocation = nullptr;
+    unsigned char *data = nullptr;
+    explicit GuardedBytes(size_t bytes) {
+        SYSTEM_INFO info{};
+        GetSystemInfo(&info);
+        const size_t page = info.dwPageSize;
+        require(bytes < page, "guarded cipher buffer fits a page");
+        allocation = static_cast<unsigned char *>(VirtualAlloc(nullptr, 3 * page, MEM_RESERVE, PAGE_NOACCESS));
+        require(allocation != nullptr, "reserve guarded cipher buffer");
+        auto *committed = static_cast<unsigned char *>(VirtualAlloc(allocation + page, page, MEM_COMMIT, PAGE_READWRITE));
+        require(committed != nullptr, "commit guarded cipher buffer");
+        std::memset(committed, 0xa5, page);
+        data = committed + page - bytes;
+    }
+    ~GuardedBytes() { VirtualFree(allocation, 0, MEM_RELEASE); }
+    GuardedBytes(const GuardedBytes &) = delete;
+    GuardedBytes &operator=(const GuardedBytes &) = delete;
+    void check_prefix() const {
+        require(data[-1] == 0xa5, "cipher buffer prefix remains intact");
+    }
+};
+
+static void mirror_cipher_boundaries() {
+    auto *logger = logger_init();
+    require(logger != nullptr, "cipher logger fixture");
+    logger_set_callback(logger, discard_log, nullptr);
+    const unsigned char key[16]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    const uint64_t stream = 42;
+    unsigned char video_key[64]{}, video_iv[64]{};
+    std::snprintf(reinterpret_cast<char *>(video_key), sizeof(video_key), "AirPlayStreamKey%llu",
+                  static_cast<unsigned long long>(stream));
+    std::snprintf(reinterpret_cast<char *>(video_iv), sizeof(video_iv), "AirPlayStreamIV%llu",
+                  static_cast<unsigned long long>(stream));
+    auto *hash = sha_init();
+    require(hash != nullptr, "reference stream hash");
+    sha_update(hash, video_key, static_cast<int>(std::strlen(reinterpret_cast<char *>(video_key))));
+    sha_update(hash, key, sizeof(key));
+    sha_final(hash, video_key, nullptr);
+    sha_reset(hash);
+    sha_update(hash, video_iv, static_cast<int>(std::strlen(reinterpret_cast<char *>(video_iv))));
+    sha_update(hash, key, sizeof(key));
+    sha_final(hash, video_iv, nullptr);
+    sha_destroy(hash);
+    std::array<unsigned char, 256> plain{}, encrypted{};
+    for (size_t i = 0; i < plain.size(); ++i) plain[i] = static_cast<unsigned char>(i * 37 + 11);
+    auto *reference = aes_ctr_init(video_key, video_iv);
+    require(reference != nullptr, "continuous reference cipher");
+    aes_ctr_encrypt(reference, plain.data(), encrypted.data(), static_cast<int>(plain.size()));
+    aes_ctr_destroy(reference);
+    for (size_t first = 1; first <= 16; ++first) {
+        for (size_t next = 0; next <= 17; ++next) {
+            for (bool in_place : {false, true}) {
+                auto *decoder = mirror_buffer_init(logger, key);
+                require(decoder != nullptr, "fragmented cipher fixture");
+                mirror_buffer_init_aes(decoder, &stream);
+                size_t offset = 0;
+                const size_t lengths[]{first, next, 0, 1, 1, 1, 16, 31, plain.size() - first - next - 50};
+                for (size_t bytes : lengths) {
+                    GuardedBytes input(bytes), output(bytes);
+                    if (bytes) std::memcpy(input.data, encrypted.data() + offset, bytes);
+                    auto *result = in_place ? input.data : output.data;
+                    mirror_buffer_decrypt(decoder, input.data, result, static_cast<int>(bytes));
+                    require(!bytes || std::memcmp(result, plain.data() + offset, bytes) == 0,
+                            "fragmented mirror cipher matches continuous CTR reference");
+                    input.check_prefix();
+                    output.check_prefix();
+                    offset += bytes;
+                }
+                require(offset == plain.size(), "complete cipher stream checked");
+                mirror_buffer_destroy(decoder);
+            }
+        }
+    }
+    logger_destroy(logger);
+    std::puts("PASS: guarded mirror cipher buffers and continuous CTR equivalence");
+}
+
 struct Mirror {
     MirrorEvents events;
     logger_t *logger = logger_init();
@@ -134,7 +214,12 @@ struct Mirror {
         callbacks.video_pause = [](void *context) { ++static_cast<MirrorEvents *>(context)->paused; };
         callbacks.video_resume = [](void *context) { ++static_cast<MirrorEvents *>(context)->resumed; };
         callbacks.video_set_codec = [](void *, video_codec_t) { return 0; };
-        callbacks.video_process = [](void *context, raop_ntp_t *, video_decode_struct *) {
+        callbacks.video_process = [](void *context, raop_ntp_t *, video_decode_struct *video) {
+            const unsigned char frame[]{0, 0, 0, 1, 0x65};
+            const unsigned char configured[]{0, 0, 0, 1, 0x67, 1, 0, 0, 0, 1, 0x68, 0, 0, 0, 1, 0x65};
+            require((video->data_len == static_cast<int>(sizeof(frame)) && !std::memcmp(video->data, frame, sizeof(frame))) ||
+                    (video->data_len == static_cast<int>(sizeof(configured)) && !std::memcmp(video->data, configured, sizeof(configured))),
+                    "encrypted mirror frame bytes preserve stream continuity");
             ++static_cast<MirrorEvents *>(context)->frames;
         };
         timing_protocol_t timing = TP_NONE;
@@ -183,12 +268,18 @@ struct Mirror {
         packet[6] = flags;
         send_bytes(packet, sizeof(packet));
     }
-    void frame() {
+    void frame(bool fragmented = false) {
         unsigned char plain[]{0, 0, 0, 1, 0x65};
         unsigned char encrypted[sizeof(plain)]{};
         mirror_buffer_decrypt(encoder, plain, encrypted, sizeof(plain));
         header(sizeof(encrypted));
-        send_bytes(encrypted, sizeof(encrypted));
+        if (fragmented) {
+            send_bytes(encrypted, 2);
+            Sleep(100);
+            send_bytes(encrypted + 2, sizeof(encrypted) - 2);
+        } else {
+            send_bytes(encrypted, sizeof(encrypted));
+        }
     }
     void expect_exit(DWORD timeout) {
         require(WaitForSingleObject(events.exited, timeout) == WAIT_OBJECT_0, "malformed/truncated mirror traffic rejected before deadline");
@@ -203,7 +294,7 @@ static void mirror_pause_resume() {
     const unsigned char codec[]{1, 0x42, 0, 0x1f, 0xff, 0xe1, 0, 2, 0x67, 1, 1, 0, 1, 0x68};
     mirror.header(sizeof(codec), 1, 0x16);
     mirror.send_bytes(codec, sizeof(codec));
-    mirror.frame();
+    mirror.frame(true);
     mirror.header(0, 1, 0x56);
     mirror.header(0, 1, 0x56);
     mirror.header(0, 1, 0x16);
@@ -290,6 +381,7 @@ int main() {
     require(WSAStartup(MAKEWORD(2, 2), &winsock) == 0, "Winsock startup");
     http_boundaries();
     mirror_boundaries();
+    mirror_cipher_boundaries();
     mirror_pause_resume();
     WSACleanup();
     return 0;
