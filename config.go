@@ -46,6 +46,8 @@ type Config struct {
 	AlwaysOnTop        bool   `json:"alwaysOnTop"`
 	Theme              string `json:"theme"`
 	FirstRun           bool   `json:"firstRun"`
+	ScreenshotsFolder  string `json:"screenshotsFolder"`
+	VideosFolder       string `json:"videosFolder"`
 
 	// Troubleshooting: opt-in, structured app/receiver lifecycle logging.
 	// See verbose_log.go. Off by default; never captures packet-level data.

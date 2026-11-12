@@ -379,7 +379,7 @@ function renderSettings() {
       </fieldset>
     </section>`).join('')}
     <div class="save-bar" data-save-bar ${hasDraftChanges() || state.saving ? '' : 'hidden'} aria-label="Unsaved settings">
-      <div><strong data-save-status>${state.saving ? 'Saving changes...' : 'Unsaved changes'}</strong><p>Connection changes restart the receiver.</p></div>
+      <div><strong data-save-status>${state.saving ? 'Saving changes...' : 'Unsaved changes'}</strong><p>Connection and capture-folder changes restart receiving.</p></div>
       <div class="button-row">${button('revert-settings', 'Revert', { disabled: state.saving })}
         ${button('save-settings', state.saving ? 'Saving...' : 'Save changes', { primary: true, disabled: state.saving, attrs: 'title="Save changes (Ctrl+S)"' })}</div>
     </div>
@@ -412,6 +412,17 @@ function selectRow(field, label, description, options, value) {
     <select class="input select" id="field-${field}" data-field="${field}" aria-describedby="hint-${field}">
       ${options.map(([key, text]) => `<option value="${escAttr(key)}" ${String(value) === String(key) ? 'selected' : ''}>${escHtml(text)}</option>`).join('')}
     </select></div></div>`;
+}
+
+function captureFolderRow(field, label, description, value, defaultLabel) {
+  return `<div class="capture-folder-row">
+    <div class="setting-copy"><span class="setting-label">${label}</span><p>${description}</p>
+      <p class="settings-path">${value ? escHtml(value) : escHtml(defaultLabel)}</p></div>
+    <div class="button-row capture-folder-actions">
+      ${button('choose-capture-folder', 'Choose folder', { small: true, attrs: `data-field="${field}"` })}
+      ${value ? button('reset-capture-folder', 'Use default', { quiet: true, small: true, attrs: `data-field="${field}"` }) : ''}
+    </div>
+  </div>`;
 }
 
 function connectionSettings() {
@@ -448,6 +459,9 @@ function appSettings() {
       + toggleRow('startMinimized', 'Open in the system tray', 'Keep the control window out of the way.', settings.startMinimized))}
     ${disclosure('windows-startup', 'Windows startup',
       toggleRow('launchAtStartup', 'Launch when I sign in', 'Start MirrorMe in the tray when you sign in to Windows.', settings.launchAtStartup), 'settings-disclosure')}
+    ${settingsGroup('Capture folders',
+      captureFolderRow('screenshotsFolder', 'Screenshots', 'Choose where mirrored-screen PNGs are saved.', settings.screenshotsFolder, 'Default: Pictures\\MirrorMe')
+      + captureFolderRow('videosFolder', 'Video recordings', 'Choose where mirrored-screen MP4s are saved.', settings.videosFolder, 'Default: Videos\\MirrorMe'))}
     ${settingsGroup('Troubleshooting', toggleRow('verboseLogging', 'Verbose logging',
       'Save receiver events and quality settings to local files. No screen content, pairing codes or packet data.', settings.verboseLogging))}
     <p data-log-warning role="alert" class="field-error" ${state.logWarning ? '' : 'hidden'}>${escHtml(state.logWarning)}</p>

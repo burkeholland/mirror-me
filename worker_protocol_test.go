@@ -52,13 +52,16 @@ func TestWorkerOptionsKeepAllReceiverSettingsAndZeroPIN(t *testing.T) {
 	config.AudioEnabled, config.HardwareDecode = false, false
 	config.H265, config.PreferNewestConnection = true, false
 	config.IdleTimeoutSeconds = 0
+	config.ScreenshotsFolder = filepath.Join(t.TempDir(), "screenshots")
+	config.VideosFolder = filepath.Join(t.TempDir(), "videos")
 	options, err := makeWorkerOptions(config, "02:12:34:56:78:90", filepath.Join(t.TempDir(), "key"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !options.RequirePin || options.Pin != 0 || options.Width != 3840 || options.Height != 2160 ||
 		options.MaxFPS != 60 || options.AudioEnabled || options.HardwareDecode || !options.AllowH265 ||
-		options.PreferNewest || options.IdleTimeoutSeconds != 0 {
+		options.PreferNewest || options.IdleTimeoutSeconds != 0 ||
+		options.ScreenshotsFolder != config.ScreenshotsFolder || options.VideosFolder != config.VideosFolder {
 		t.Fatalf("receiver settings changed in transit: %+v", options)
 	}
 }
@@ -72,6 +75,8 @@ func TestWorkerOptionsRejectInvalidInput(t *testing.T) {
 		func(o *workerOptions) { o.Name = strings.Repeat("\u754c", 17) },
 		func(o *workerOptions) { o.DeviceID = "not-a-device" },
 		func(o *workerOptions) { o.KeyPath = "relative.key" },
+		func(o *workerOptions) { o.ScreenshotsFolder = "relative\\screenshots" },
+		func(o *workerOptions) { o.VideosFolder = strings.Repeat("x", maxCaptureFolderBytes+1) },
 		func(o *workerOptions) { o.MaxFPS = 0xffffffff },
 		func(o *workerOptions) { o.MaxFPS = 0 },
 		func(o *workerOptions) { o.IdleTimeoutSeconds = 0xffffffff },

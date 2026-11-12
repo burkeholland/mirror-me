@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -161,5 +162,22 @@ func TestNormalizeConfigThemeIsCaseInsensitive(t *testing.T) {
 	}
 	if got.Theme != "dark" {
 		t.Errorf("Theme = %q, want %q", got.Theme, "dark")
+	}
+}
+
+func TestNormalizeConfigCaptureFolders(t *testing.T) {
+	fallback := DefaultConfig()
+	next := fallback
+	next.ScreenshotsFolder = filepath.Join("C:\\Captures", "Screenshots")
+	next.VideosFolder = "relative\\videos"
+	got, err := NormalizeConfig(next, fallback)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ScreenshotsFolder != filepath.Clean(next.ScreenshotsFolder) {
+		t.Errorf("ScreenshotsFolder = %q, want cleaned configured path", got.ScreenshotsFolder)
+	}
+	if got.VideosFolder != "" {
+		t.Errorf("invalid VideosFolder = %q, want default", got.VideosFolder)
 	}
 }

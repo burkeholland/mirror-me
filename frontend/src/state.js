@@ -2,6 +2,7 @@ import {
   GetSettings, SaveSettings, RegeneratePinCode, GetStatus, StartMirroring,
   StopMirroring, ShowMirroredScreen, GetVersion,
   GetSettingsFolder, OpenSettingsFolder, GetLogsFolder, OpenLogsFolder, OpenExternalURL, Quit,
+  ChooseScreenshotsFolder, ChooseVideosFolder,
   GetCastStatus, DiscoverCastTargets, StartDesktopCast, SubmitCastPIN, StopDesktopCast, ForgetCastTarget,
 } from '../wailsjs/go/main/App';
 import {
@@ -332,6 +333,21 @@ export async function saveDraft(render) {
     state.saving = false;
     render();
   }
+}
+
+export async function chooseCaptureFolder(field, render) {
+  if (state.saving || !state.draft) return;
+  try {
+    const choose = field === 'screenshotsFolder' ? ChooseScreenshotsFolder : ChooseVideosFolder;
+    const folder = await choose();
+    if (folder) setDraftField(field, folder, render);
+  } catch (error) {
+    setError(error, render);
+  }
+}
+
+export function resetCaptureFolder(field, render) {
+  setDraftField(field, '', render);
 }
 
 export async function finishNavigation(save, render) {

@@ -2,6 +2,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <windowsx.h>
+#include <commctrl.h>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mftransform.h>
@@ -30,6 +32,8 @@
 #include <vector>
 #include "include/media.h"
 #include "include/audio_decode.h"
+#include "media_view.h"
+#include "media_capture.h"
 #ifdef MM_MEDIA_TESTING
 #include "media_internal.h"
 #endif
@@ -48,6 +52,9 @@ constexpr UINT clearMessage = WM_APP + 32;
 constexpr UINT showMessage = WM_APP + 33;
 constexpr UINT stopMessage = WM_APP + 34;
 constexpr UINT hideMessage = WM_APP + 35;
+constexpr UINT_PTR recordTimer = 1;
+constexpr int toolbarBaseHeight = 40;
+enum Button { ButtonView, ButtonSmooth, ButtonShot, ButtonRecord, ButtonCount };
 constexpr wchar_t windowClass[] = L"MirrorMe.NativeVideo.1";
 constexpr IID codecApiID = {0x901db4c7, 0x31ce, 0x41a2, {0x85, 0xdc, 0x8f, 0xa0, 0xbf, 0x41, 0xb8, 0xda}};
 
@@ -182,6 +189,7 @@ public:
 
 struct mm_media {
     mm_receiver_config config{};
+    std::string screenshotsFolder, videosFolder;
     mm_event_callback callback = nullptr;
     void *context = nullptr;
     std::thread worker, windowThread;
@@ -213,6 +221,14 @@ struct mm_media {
     std::atomic<uint64_t> streamingSession{0};
     unsigned lastWidth = 0, lastHeight = 0;
     PaintBuffer paintBuffer;
+    HWND tooltip = nullptr;
+    bool tooltipsAdded[ButtonCount]{};
+    mmview::Mode viewMode = mmview::Mode::Fit;
+    bool smooth = true, trackingMouse = false;
+    int hotButton = -1, pressedButton = -1;
+    std::wstring status;
+    uint64_t statusUntil = 0;
+    mmcapture::Recorder recorder;
 
     void emit(int kind, const std::string &message) {
         // Never hold a media lock over application callbacks.
@@ -312,6 +328,8 @@ void resetMedia(mm_media *media, bool closed = false) {
     }
 }
 
+int toolbarHeight(HWND window);
+
 void resizeForFrame(mm_media *media, HWND window, const Frame &frame) {
     const bool first = !media->lastWidth;
     const bool orientation = (media->lastWidth > media->lastHeight) != (frame.width > frame.height);
@@ -326,10 +344,13 @@ void resizeForFrame(mm_media *media, HWND window, const Frame &frame) {
     RECT work{0, 0, 1280, 800};
     if (GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &monitor))
         work = monitor.rcWork;
+    const int bar = toolbarHeight(window);
     double scale = std::min(1.0, std::min((work.right - work.left) * 0.8 / frame.width,
-        (work.bottom - work.top) * 0.8 / frame.height));
+        ((work.bottom - work.top) * 0.8 - bar) / frame.height));
+    scale = std::max(scale, 0.1);
     RECT bounds{0, 0, LONG(frame.width * scale), LONG(frame.height * scale)};
     AdjustWindowRectEx(&bounds, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, FALSE, 0);
+    bounds.bottom += toolbarHeight(window);
     SetWindowPos(window, nullptr, 0, 0, bounds.right - bounds.left, bounds.bottom - bounds.top,
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
@@ -348,6 +369,310 @@ BOOL CALLBACK loadEmbeddedIcon(HMODULE module, LPCWSTR, LPWSTR name, LONG_PTR co
     if (!large || !small) return TRUE;
     icons = {large, small};
     return FALSE;
+}
+
+int toolbarHeight(HWND window) {
+    const UINT dpi = GetDpiForWindow(window);
+    return MulDiv(toolbarBaseHeight, dpi ? int(dpi) : 96, 96);
+}
+
+void buttonRects(HWND window, RECT (&rects)[ButtonCount]) {
+    const UINT dpi = GetDpiForWindow(window) ? GetDpiForWindow(window) : 96;
+    auto px = [&](int value) { return MulDiv(value, int(dpi), 96); };
+    auto *media = reinterpret_cast<mm_media *>(GetWindowLongPtrW(window, GWLP_USERDATA));
+    const bool recording = media && media->recorder.recording();
+    RECT client{};
+    GetClientRect(window, &client);
+    const int top = px(6), bottom = toolbarHeight(window) - px(6);
+    int x = px(8);
+    for (int i = 0; i < ButtonCount; ++i) {
+        int width = px(0);
+        if (i == ButtonView) width = px(84);
+        if (i == ButtonSmooth) width = px(84);
+        if (i == ButtonShot) { x += px(8); width = px(32); }
+        if (i == ButtonRecord) width = recording ? px(76) : px(32);
+        rects[i] = {x, top, x + width, bottom};
+        x += width + px(4);
+    }
+    // Capture actions sit at the right edge when there is room.
+    const int right = client.right - px(8);
+    const int block = rects[ButtonRecord].right - rects[ButtonShot].left;
+    if (right - block > rects[ButtonSmooth].right + px(12)) {
+        const int shift = right - rects[ButtonRecord].right;
+        OffsetRect(&rects[ButtonShot], shift, 0);
+        OffsetRect(&rects[ButtonRecord], shift, 0);
+    }
+}
+
+void updateTooltips(mm_media *media, HWND window) {
+    if (!media->tooltip) return;
+    RECT rects[ButtonCount];
+    buttonRects(window, rects);
+    static const wchar_t *const hints[ButtonCount] = {
+        L"Choose Fit, Fill, 100%, 150%, or 200% viewing.",
+        L"Smooth blends pixels when resizing; off keeps them crisp.",
+        L"Save a screenshot (Ctrl+S).",
+        L"Start or stop video recording (Ctrl+R)."
+    };
+    for (int i = 0; i < ButtonCount; ++i) {
+        TOOLINFOW tool{};
+        tool.cbSize = sizeof(tool);
+        tool.hwnd = window;
+        tool.uId = UINT_PTR(i + 1);
+        tool.rect = rects[i];
+        SendMessageW(media->tooltip, TTM_NEWTOOLRECTW, 0, reinterpret_cast<LPARAM>(&tool));
+        if (!media->tooltipsAdded[i]) {
+            tool.uFlags = TTF_SUBCLASS;
+            tool.lpszText = const_cast<LPWSTR>(hints[i]);
+            media->tooltipsAdded[i] = SendMessageW(media->tooltip, TTM_ADDTOOLW, 0,
+                reinterpret_cast<LPARAM>(&tool)) != FALSE;
+        }
+    }
+}
+
+int hitButton(HWND window, int x, int y) {
+    RECT rects[ButtonCount];
+    buttonRects(window, rects);
+    const POINT point{x, y};
+    for (int i = 0; i < ButtonCount; ++i)
+        if (PtInRect(&rects[i], point)) return i;
+    return -1;
+}
+
+void chooseViewMode(mm_media *media, HWND window) {
+    static const int commandFirst = 100;
+    HMENU menu = CreatePopupMenu();
+    if (!menu) {
+        media->error(hrError("Creating the view menu failed", HRESULT_FROM_WIN32(GetLastError())));
+        return;
+    }
+    for (int i = 0; i < mmview::modeCount; ++i) {
+        AppendMenuW(menu, MF_STRING | (int(media->viewMode) == i ? MF_CHECKED : 0),
+            commandFirst + i, mmview::modeLabel(mmview::Mode(i)));
+    }
+    RECT rects[ButtonCount];
+    buttonRects(window, rects);
+    POINT point{rects[ButtonView].left, rects[ButtonView].bottom};
+    ClientToScreen(window, &point);
+    const UINT command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN,
+        point.x, point.y, 0, window, nullptr);
+    DestroyMenu(menu);
+    if (command >= commandFirst && command < commandFirst + mmview::modeCount) {
+        media->viewMode = mmview::Mode(command - commandFirst);
+        InvalidateRect(window, nullptr, FALSE);
+    }
+}
+
+int CALLBACK fontFound(const LOGFONTW *, const TEXTMETRICW *, DWORD, LPARAM found) {
+    *reinterpret_cast<bool *>(found) = true;
+    return 0;
+}
+
+// Windows 11 ships Segoe Fluent Icons; Windows 10 has the same code points in MDL2 Assets.
+const wchar_t *iconFontName() {
+    static const wchar_t *name = [] {
+        HDC screen = GetDC(nullptr);
+        LOGFONTW query{};
+        query.lfCharSet = DEFAULT_CHARSET;
+        wcscpy(query.lfFaceName, L"Segoe Fluent Icons");
+        bool found = false;
+        if (screen) {
+            EnumFontFamiliesExW(screen, &query, fontFound, reinterpret_cast<LPARAM>(&found), 0);
+            ReleaseDC(nullptr, screen);
+        }
+        return found ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
+    }();
+    return name;
+}
+
+void drawGlyph(HDC target, HFONT font, wchar_t glyph, RECT rect, COLORREF color) {
+    HGDIOBJ previous = SelectObject(target, font);
+    SetTextColor(target, color);
+    DrawTextW(target, &glyph, 1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    SelectObject(target, previous);
+}
+
+void setStatus(mm_media *media, HWND window, const std::wstring &text, uint64_t seconds = 4) {
+    media->status = text;
+    media->statusUntil = clockNs() + seconds * 1000000000ULL;
+    InvalidateRect(window, nullptr, FALSE);
+}
+
+std::string narrow(const std::wstring &text) {
+    if (text.empty()) return {};
+    const int size = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), int(text.size()), nullptr, 0, nullptr, nullptr);
+    std::string out(size > 0 ? size : 0, 0);
+    if (size > 0) WideCharToMultiByte(CP_UTF8, 0, text.c_str(), int(text.size()), &out[0], size, nullptr, nullptr);
+    return out;
+}
+
+[[maybe_unused]] std::wstring widen(const std::string &text) {
+    if (text.empty()) return {};
+    const int size = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), int(text.size()), nullptr, 0);
+    std::wstring out(size > 0 ? size : 0, 0);
+    if (size > 0) MultiByteToWideChar(CP_UTF8, 0, text.c_str(), int(text.size()), &out[0], size);
+    return out;
+}
+
+void notice(mm_media *media, const std::string &message) {
+    std::lock_guard<std::mutex> lock(media->mutex);
+    media->eventLocked(MM_EVENT_NOTICE, message);
+}
+
+// Screenshot/recording problems are reported but must not end the mirroring session.
+void captureFailed(mm_media *media, const std::string &message) {
+    notice(media, "Capture failed: " + message);
+}
+
+void stopRecording(mm_media *media, HWND window, const std::wstring &reason = L"") {
+    if (!media->recorder.recording()) return;
+    KillTimer(window, recordTimer);
+    const std::wstring file = media->recorder.file();
+    std::string error;
+    const bool ok = media->recorder.stop(error);
+    if (ok) {
+        setStatus(media, window, reason.empty() ? L"Saved recording" : reason, 6);
+        notice(media, "Recording saved to " + narrow(file));
+    } else {
+        setStatus(media, window, L"Recording failed", 6);
+        captureFailed(media, error);
+    }
+    updateTooltips(media, window);
+    InvalidateRect(window, nullptr, FALSE);
+}
+
+void takeScreenshot(mm_media *media, HWND window) {
+    std::shared_ptr<Frame> frame;
+    {
+        std::lock_guard<std::mutex> lock(media->frameMutex);
+        frame = media->displayedFrame;
+    }
+    if (!frame || frame->epoch != media->videoEpoch.load()) {
+        setStatus(media, window, L"No video to capture");
+        return;
+    }
+    mmcapture::Image image;
+    image.width = frame->width;
+    image.height = frame->height;
+    image.pixels = frame->pixels;
+    std::wstring folder;
+    std::string error;
+    if (!mmcapture::outputFolder(FOLDERID_Pictures, media->config.screenshots_folder, folder)) {
+        setStatus(media, window, L"Pictures folder unavailable");
+        captureFailed(media, "MirrorMe could not open the Pictures folder for screenshots.");
+        return;
+    }
+    const std::wstring path = folder + L"\\" + mmcapture::timestampName() + L".png";
+    if (!mmcapture::savePng(path, image, error)) {
+        setStatus(media, window, L"Screenshot failed");
+        captureFailed(media, error);
+        return;
+    }
+    mmcapture::copyToClipboard(window, image);
+    setStatus(media, window, L"Screenshot saved and copied");
+    notice(media, "Screenshot saved to " + narrow(path));
+}
+
+void toggleRecording(mm_media *media, HWND window) {
+    if (media->recorder.recording()) { stopRecording(media, window); return; }
+    std::shared_ptr<Frame> frame;
+    {
+        std::lock_guard<std::mutex> lock(media->frameMutex);
+        frame = media->displayedFrame;
+    }
+    if (!frame || frame->epoch != media->videoEpoch.load()) {
+        setStatus(media, window, L"No video to record");
+        return;
+    }
+    std::wstring folder;
+    std::string error;
+    if (!mmcapture::outputFolder(FOLDERID_Videos, media->config.videos_folder, folder) ||
+        !media->recorder.start(folder + L"\\" + mmcapture::timestampName() + L".mp4",
+            frame->width, frame->height, error)) {
+        setStatus(media, window, L"Cannot start recording");
+        captureFailed(media, error.empty() ? "MirrorMe could not open the Videos folder for recordings." : error);
+        return;
+    }
+    // The current frame starts the video even if the phone screen never changes.
+    std::string ignored;
+    media->recorder.push(frame->pixels.data(), frame->width, frame->height, ignored);
+    SetTimer(window, recordTimer, 500, nullptr);
+    updateTooltips(media, window);
+    InvalidateRect(window, nullptr, FALSE);
+}
+
+void paintToolbar(mm_media *media, HWND window, HDC target, const RECT &client) {
+    RECT bar{0, 0, client.right, std::min<LONG>(client.bottom, toolbarHeight(window))};
+    HBRUSH background = CreateSolidBrush(RGB(32, 32, 36));
+    FillRect(target, &bar, background);
+    DeleteObject(background);
+    RECT rects[ButtonCount];
+    buttonRects(window, rects);
+    const UINT dpi = GetDpiForWindow(window) ? GetDpiForWindow(window) : 96;
+    auto px = [&](int value) { return MulDiv(value, int(dpi), 96); };
+    HFONT font = CreateFontW(-MulDiv(9, int(dpi), 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    HFONT icons = CreateFontW(-px(16), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, iconFontName());
+    HFONT smallIcons = CreateFontW(-px(12), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, iconFontName());
+    HGDIOBJ previousFont = SelectObject(target, font);
+    SetBkMode(target, TRANSPARENT);
+    const bool recording = media->recorder.recording();
+    const COLORREF white = RGB(255, 255, 255);
+    for (int i = 0; i < ButtonCount; ++i) {
+        COLORREF fill = RGB(52, 52, 58);
+        if (i == ButtonRecord && recording) fill = RGB(196, 43, 28);
+        if (i == media->hotButton) fill = media->pressedButton == i ? RGB(40, 40, 46) :
+            RGB(std::min(255, GetRValue(fill) + 16), std::min(255, GetGValue(fill) + 16), std::min(255, GetBValue(fill) + 16));
+        HBRUSH brush = CreateSolidBrush(fill);
+        HGDIOBJ oldBrush = SelectObject(target, brush);
+        HGDIOBJ oldPen = SelectObject(target, GetStockObject(NULL_PEN));
+        RoundRect(target, rects[i].left, rects[i].top, rects[i].right + 1, rects[i].bottom + 1, px(8), px(8));
+        SelectObject(target, oldPen);
+        SelectObject(target, oldBrush);
+        DeleteObject(brush);
+        RECT box = rects[i];
+        if (i == ButtonShot) {
+            drawGlyph(target, icons, L'\uE722', box, white);
+        } else if (i == ButtonRecord && !recording) {
+            drawGlyph(target, smallIcons, L'\uE91F', box, RGB(255, 99, 88));
+        } else if (i == ButtonRecord) {
+            RECT glyph{box.left + px(6), box.top, box.left + px(24), box.bottom};
+            drawGlyph(target, smallIcons, L'\uE71A', glyph, white);
+            wchar_t text[16];
+            const uint64_t seconds = media->recorder.elapsedSeconds();
+            swprintf(text, 16, L"%02llu:%02llu", (unsigned long long)(seconds / 60), (unsigned long long)(seconds % 60));
+            RECT label{glyph.right, box.top, box.right - px(6), box.bottom};
+            SetTextColor(target, white);
+            DrawTextW(target, text, -1, &label, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        } else if (i == ButtonView) {
+            const wchar_t *label = mmview::modeLabel(media->viewMode);
+            RECT text{box.left + px(10), box.top, box.right - px(24), box.bottom};
+            SetTextColor(target, white);
+            DrawTextW(target, label, -1, &text, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+            RECT chevron{box.right - px(24), box.top, box.right - px(6), box.bottom};
+            drawGlyph(target, smallIcons, L'\uE70D', chevron, RGB(200, 200, 205));
+        } else if (i == ButtonSmooth) {
+            RECT check{box.left + px(6), box.top, box.left + px(24), box.bottom};
+            drawGlyph(target, icons, media->smooth ? L'\uE73A' : L'\uE739', check,
+                media->smooth ? RGB(96, 205, 255) : RGB(200, 200, 205));
+            RECT text{check.right + px(4), box.top, box.right - px(6), box.bottom};
+            SetTextColor(target, white);
+            DrawTextW(target, L"Smooth", -1, &text, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        }
+    }
+    if (!media->status.empty() && clockNs() < media->statusUntil) {
+        SetTextColor(target, RGB(200, 200, 205));
+        RECT text{rects[ButtonSmooth].right + px(12), bar.top, rects[ButtonShot].left - px(8), bar.bottom};
+        if (text.right > text.left)
+            DrawTextW(target, media->status.c_str(), int(media->status.size()), &text,
+                DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+    }
+    SelectObject(target, previousFont);
+    DeleteObject(font);
+    DeleteObject(icons);
+    DeleteObject(smallIcons);
 }
 
 LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -369,6 +694,13 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         }
         if (frame) {
             resizeForFrame(media, window, *frame);
+            if (media->recorder.recording()) {
+                std::string problem;
+                if (!media->recorder.push(frame->pixels.data(), frame->width, frame->height, problem)) {
+                    stopRecording(media, window, L"Recording stopped");
+                    if (!problem.empty()) notice(media, problem);
+                }
+            }
             if (!IsWindowVisible(window)) ShowWindow(window, SW_SHOWNOACTIVATE);
             InvalidateRect(window, nullptr, FALSE);
             UpdateWindow(window);
@@ -387,17 +719,16 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         }
         bool presented = false, failed = !haveClient;
         const bool drawable = haveClient && client.right > 0 && client.bottom > 0;
+        const int bar = std::min<int>(toolbarHeight(window), client.bottom);
         if (drawable) {
             failed = !media->paintBuffer.prepare(dc, client.right, client.bottom);
             if (!failed)
                 failed = !FillRect(media->paintBuffer.dc(), &client, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
         }
         const bool currentFrame = frame && frame->epoch == media->videoEpoch.load();
-        if (drawable && !failed && currentFrame) {
-            const double scale = std::min(double(client.right) / frame->width,
-                double(client.bottom) / frame->height);
-            const int width = std::max(1, int(frame->width * scale));
-            const int height = std::max(1, int(frame->height * scale));
+        if (drawable && !failed && currentFrame && client.bottom > bar) {
+            const auto layout = mmview::compute(media->viewMode, int(frame->width), int(frame->height),
+                int(client.right), int(client.bottom) - bar);
             BITMAPINFO bitmap{};
             bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
             bitmap.bmiHeader.biWidth = frame->width;
@@ -406,12 +737,15 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             bitmap.bmiHeader.biBitCount = 32;
             bitmap.bmiHeader.biCompression = BI_RGB;
             HDC target = media->paintBuffer.dc();
-            const bool stretchMode = SetStretchBltMode(target, COLORONCOLOR) != 0;
-            const int result = StretchDIBits(target, (client.right - width) / 2, (client.bottom - height) / 2,
-                width, height, 0, 0, frame->width, frame->height, frame->pixels.data(),
-                &bitmap, DIB_RGB_COLORS, SRCCOPY);
+            const bool smooth = media->smooth;
+            const bool stretchMode = SetStretchBltMode(target, smooth ? HALFTONE : COLORONCOLOR) != 0;
+            if (smooth) SetBrushOrgEx(target, 0, 0, nullptr);
+            const int result = StretchDIBits(target, layout.dstX, bar + layout.dstY,
+                layout.dstW, layout.dstH, layout.srcX, layout.srcY, layout.srcW, layout.srcH,
+                frame->pixels.data(), &bitmap, DIB_RGB_COLORS, SRCCOPY);
             failed = !stretchMode || result == int(GDI_ERROR) || result == 0;
         }
+        if (drawable && !failed) paintToolbar(media, window, media->paintBuffer.dc(), client);
         if (drawable && !failed) {
             // Publish the completed picture and letterboxing together. Erasing
             // the visible DC first exposes a black flash between video frames.
@@ -436,7 +770,48 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         return 0;
     }
     case WM_ERASEBKGND: return 1;
+    case WM_MOUSEMOVE: {
+        const int hit = hitButton(window, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        if (!media->trackingMouse) {
+            TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, window, 0};
+            media->trackingMouse = TrackMouseEvent(&track) != 0;
+        }
+        if (hit != media->hotButton) { media->hotButton = hit; InvalidateRect(window, nullptr, FALSE); }
+        return 0;
+    }
+    case WM_MOUSELEAVE:
+        media->trackingMouse = false;
+        media->hotButton = media->pressedButton = -1;
+        InvalidateRect(window, nullptr, FALSE);
+        return 0;
+    case WM_LBUTTONDOWN: {
+        media->pressedButton = hitButton(window, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        if (media->pressedButton >= 0) SetCapture(window);
+        InvalidateRect(window, nullptr, FALSE);
+        return 0;
+    }
+    case WM_LBUTTONUP: {
+        const int pressed = media->pressedButton;
+        media->pressedButton = -1;
+        if (GetCapture() == window) ReleaseCapture();
+        if (pressed >= 0 && pressed == hitButton(window, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam))) {
+            if (pressed == ButtonView) chooseViewMode(media, window);
+            else if (pressed == ButtonSmooth) media->smooth = !media->smooth;
+            else if (pressed == ButtonShot) takeScreenshot(media, window);
+            else if (pressed == ButtonRecord) toggleRecording(media, window);
+        }
+        InvalidateRect(window, nullptr, FALSE);
+        return 0;
+    }
+    case WM_TIMER:
+        if (wParam == recordTimer) InvalidateRect(window, nullptr, FALSE);
+        return 0;
+    case WM_KEYDOWN:
+        if (GetKeyState(VK_CONTROL) < 0 && wParam == 'S') takeScreenshot(media, window);
+        else if (GetKeyState(VK_CONTROL) < 0 && wParam == 'R') toggleRecording(media, window);
+        return 0;
     case WM_SIZE:
+        updateTooltips(media, window);
         InvalidateRect(window, nullptr, FALSE);
         return 0;
     case clearMessage:
@@ -447,6 +822,7 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
             if (media->displayedFrame && media->displayedFrame->epoch < wParam) media->displayedFrame.reset();
             if (media->displayedFrame) return 0;
         }
+        stopRecording(media, window, L"Recording saved");
         if (message == hideMessage) ShowWindow(window, SW_HIDE);
         else media->lastWidth = media->lastHeight = 0;
         InvalidateRect(window, nullptr, FALSE);
@@ -469,7 +845,12 @@ LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wParam, LPARAM lPa
         DestroyWindow(window);
         return 0;
     case WM_DESTROY:
+        stopRecording(media, window);
         media->paintBuffer.reset();
+        if (media->tooltip) {
+            DestroyWindow(media->tooltip);
+            media->tooltip = nullptr;
+        }
         media->window = nullptr;
         PostQuitMessage(0);
         return 0;
@@ -482,6 +863,8 @@ void windowMain(mm_media *media) {
     std::string error;
     HWND window = nullptr;
     HINSTANCE instance = GetModuleHandleW(nullptr);
+    INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_WIN95_CLASSES};
+    InitCommonControlsEx(&controls);
     WindowIcons icons;
     loadEmbeddedIcon(instance, RT_GROUP_ICON, MAKEINTRESOURCEW(101), reinterpret_cast<LONG_PTR>(&icons));
     if (!icons.large)
@@ -509,6 +892,10 @@ void windowMain(mm_media *media) {
                 SendMessageW(window, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(icons.large));
                 SendMessageW(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(icons.small));
                 media->window = window;
+                media->tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
+                    WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, CW_USEDEFAULT, CW_USEDEFAULT,
+                    CW_USEDEFAULT, CW_USEDEFAULT, window, nullptr, instance, nullptr);
+                updateTooltips(media, window);
             }
         }
     }
@@ -1263,8 +1650,11 @@ mm_media *mm_media_create(const mm_receiver_config *config, mm_event_callback ca
     try {
         media = std::make_unique<mm_media>();
         media->config = *config;
-        // The module only keeps numeric preferences, never caller-owned strings.
+        media->screenshotsFolder = config->screenshots_folder ? config->screenshots_folder : "";
+        media->videosFolder = config->videos_folder ? config->videos_folder : "";
         media->config.name = media->config.device_id = media->config.key_path = nullptr;
+        media->config.screenshots_folder = media->screenshotsFolder.c_str();
+        media->config.videos_folder = media->videosFolder.c_str();
         media->callback = callback;
         media->context = context;
         media->windowThread = std::thread(windowMain, media.get());

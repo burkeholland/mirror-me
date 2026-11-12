@@ -20,15 +20,17 @@ func TestAppPreferencesDoNotRestartReceiver(t *testing.T) {
 
 func TestReceiverSettingsRestartReceiver(t *testing.T) {
 	for name, change := range map[string]func(*Config){
-		"name":       func(c *Config) { c.DeviceName += " changed" },
-		"resolution": func(c *Config) { c.Resolution = Resolution720 },
-		"frame rate": func(c *Config) { c.MaxFPS = 30 },
-		"audio":      func(c *Config) { c.AudioEnabled = !c.AudioEnabled },
-		"decoder":    func(c *Config) { c.HardwareDecode = !c.HardwareDecode },
-		"codec":      func(c *Config) { c.H265 = !c.H265 },
-		"connection": func(c *Config) { c.PreferNewestConnection = !c.PreferNewestConnection },
-		"timeout":    func(c *Config) { c.IdleTimeoutSeconds++ },
-		"pairing":    func(c *Config) { c.RequirePin = true; c.PinCode = "1234" },
+		"name":              func(c *Config) { c.DeviceName += " changed" },
+		"resolution":        func(c *Config) { c.Resolution = Resolution720 },
+		"frame rate":        func(c *Config) { c.MaxFPS = 30 },
+		"audio":             func(c *Config) { c.AudioEnabled = !c.AudioEnabled },
+		"decoder":           func(c *Config) { c.HardwareDecode = !c.HardwareDecode },
+		"codec":             func(c *Config) { c.H265 = !c.H265 },
+		"connection":        func(c *Config) { c.PreferNewestConnection = !c.PreferNewestConnection },
+		"timeout":           func(c *Config) { c.IdleTimeoutSeconds++ },
+		"pairing":           func(c *Config) { c.RequirePin = true; c.PinCode = "1234" },
+		"screenshot folder": func(c *Config) { c.ScreenshotsFolder = `C:\Captures\Screenshots` },
+		"video folder":      func(c *Config) { c.VideosFolder = `C:\Captures\Videos` },
 	} {
 		t.Run(name, func(t *testing.T) {
 			current := DefaultConfig()

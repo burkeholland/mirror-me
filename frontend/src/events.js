@@ -3,6 +3,7 @@ import {
   revertDraft, saveDraft, regeneratePin, beginSetup, dismissFirstRun,
   startMirroring, stopMirroring, showMirroredScreen,
   openSettingsFolder, openLogsFolder, copyLogsPath, copySettingsFolder, copyDeviceName,
+  chooseCaptureFolder, resetCaptureFolder,
   openExternalURL, minimiseWindow, toggleMaximiseWindow, hideWindow, quitApp,
   openDialog, closeDialog, finishNavigation, dismissToast,
   discoverCastTargets, selectCastTarget, startDesktopCast, stopDesktopCast, submitCastPIN, forgetCastTarget,
@@ -59,6 +60,8 @@ export function bindEvents(app, render) {
       case 'quit': await quitApp(render); break;
       case 'open-logs-folder': await openLogsFolder(render); break;
       case 'copy-logs-path': await copyLogsPath(render); break;
+      case 'choose-capture-folder': await chooseCaptureFolder(control.dataset.field, render); break;
+      case 'reset-capture-folder': resetCaptureFolder(control.dataset.field, render); break;
     }
   });
 

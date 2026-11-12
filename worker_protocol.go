@@ -19,12 +19,15 @@ const (
 	workerProtocolVersion  = 1
 	workerMessageLimit     = 4096
 	workerShutdownDeadline = 5 * time.Second
+	maxCaptureFolderBytes  = 16000
 )
 
 type workerOptions struct {
 	Name               string `json:"name"`
 	DeviceID           string `json:"deviceId"`
 	KeyPath            string `json:"keyPath"`
+	ScreenshotsFolder  string `json:"screenshotsFolder,omitempty"`
+	VideosFolder       string `json:"videosFolder,omitempty"`
 	Width              uint32 `json:"width"`
 	Height             uint32 `json:"height"`
 	MaxFPS             uint32 `json:"maxFps"`
@@ -63,6 +66,7 @@ const (
 func makeWorkerOptions(config Config, deviceID, keyPath string) (workerOptions, error) {
 	options := workerOptions{
 		Name: config.DeviceName, DeviceID: deviceID, KeyPath: keyPath,
+		ScreenshotsFolder: config.ScreenshotsFolder, VideosFolder: config.VideosFolder,
 		MaxFPS: uint32(config.MaxFPS), IdleTimeoutSeconds: uint32(config.IdleTimeoutSeconds),
 		RequirePin: config.RequirePin, PreferNewest: config.PreferNewestConnection,
 		HardwareDecode: config.HardwareDecode, AllowH265: config.H265,
@@ -104,6 +108,12 @@ func (o workerOptions) validate() error {
 	}
 	if !filepath.IsAbs(o.KeyPath) || strings.ContainsRune(o.KeyPath, 0) {
 		return errors.New("the receiver key path must be an absolute local path")
+	}
+	for _, folder := range []string{o.ScreenshotsFolder, o.VideosFolder} {
+		if folder != "" && (!filepath.IsAbs(folder) || strings.ContainsRune(folder, 0) ||
+			len(folder) > maxCaptureFolderBytes) {
+			return errors.New("capture folders must be absolute paths within the supported length")
+		}
 	}
 	if !((o.Width == 1280 && o.Height == 720) ||
 		(o.Width == 1920 && o.Height == 1080) || (o.Width == 3840 && o.Height == 2160)) {

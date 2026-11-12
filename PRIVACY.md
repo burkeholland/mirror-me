@@ -91,3 +91,11 @@ Questions can be raised in the
 [MirrorMe issue tracker](https://github.com/burkeholland/mirror-me/issues).
 Issues are public: do not attach personal screen content, settings files,
 pairing keys, or PINs. Review any diagnostic logs before sharing them.
+
+## Screenshots and recordings
+
+Only when you press **Screenshot** or **Record** in the mirror window's
+toolbar, MirrorMe saves the phone picture to the folders chosen in
+**Settings > App > Capture folders**. By default these are `Pictures\MirrorMe`
+(PNG) and `Videos\MirrorMe` (MP4, no audio) on this PC. Screenshots are also copied to
+the clipboard. Files stay local; MirrorMe never uploads them.
